@@ -5,25 +5,47 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// TransLog Pro colors
+const primary = '#9b2321'; // RAL 3002 - Primary
+const secondary = '#5e5e5e'; // Dark gray - Secondary
+const tertiary = '#660000'; // Tertiary
+const orange = '#E67E22'; // Orange for OFFEN
+const blue = '#3498DB'; // Blue for UNTERWEGS
+const green = '#27AE60'; // Green for ABGESCHLOSSEN
+const lightGray = '#ECF0F1';
+const darkGray = '#5e5e5e';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: '#2C3E50',
+    background: '#FFFFFF',
+    tint: primary,
+    icon: darkGray,
+    tabIconDefault: darkGray,
+    tabIconSelected: primary,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: '#ECF0F1',
+    background: '#1A1A1A',
+    tint: '#E67E22',
+    icon: darkGray,
+    tabIconDefault: darkGray,
+    tabIconSelected: '#E67E22',
+  },
+  status: {
+    offen: orange,
+    unterwegs: blue,
+    erledigt: green,
+  },
+  ui: {
+    primary,
+    secondary,
+    tertiary,
+    orange,
+    blue,
+    green,
+    lightGray,
+    darkGray,
   },
 };
 
