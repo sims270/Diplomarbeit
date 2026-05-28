@@ -1,6 +1,6 @@
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function AboutScreen() {
   const router = useRouter();
@@ -16,9 +16,9 @@ export default function AboutScreen() {
       >
         <View style={styles.headerContent}>
           <Pressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← Back</Text>
+            <Text style={styles.backBtn}>← Zurück</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>About Us</Text>
+          <Text style={styles.headerTitle}>Über uns</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
@@ -31,45 +31,44 @@ export default function AboutScreen() {
         style={styles.content}
       >
         <View style={styles.section}>
-          <Text style={styles.title}>About Our Company</Text>
+          <Text style={styles.title}>Über dieses Projekt</Text>
           <Text style={styles.text}>
-            We are a leading logistics and delivery management platform dedicated
-            to revolutionizing how businesses manage their transportation and
-            delivery operations.
+            Dies ist ein Diplomarbeit-Projekt der HAK Judenburg, Österreich.
+            Unser Team entwickelt eine moderne Logistik- und
+            Liefermanagementplattform für unser abschließendes Schulprojekt.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.title}>Our Mission</Text>
+          <Text style={styles.title}>Unser Team</Text>
           <Text style={styles.text}>
-            To provide efficient, reliable, and user-friendly solutions for both
-            drivers and fleet managers, ensuring seamless coordination and
-            optimal delivery performance.
+            Dieses Projekt wird von drei Schülern der HAK Judenburg entwickelt:
+          </Text>
+          <Text style={styles.bulletPoint}>👤 Leon</Text>
+          <Text style={styles.bulletPoint}>👤 Simon</Text>
+          <Text style={styles.bulletPoint}>👤 Christian</Text>
+          <Text style={styles.bulletPoint}> Diese drei Schüler bilden das LSC ITSolutions Team.</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.title}>Projektziel</Text>
+          <Text style={styles.text}>
+            Entwicklung einer effizienten, modernen und benutzerfreundlichen
+            Logistik- und Liefermanagementplattform, die unsere Fähigkeiten
+            in der Full-Stack-Web- und Mobilentwicklung mit React Native
+            und Expo demonstriert.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.title}>Our Vision</Text>
-          <Text style={styles.text}>
-            To become the most trusted transportation management platform,
-            connecting drivers with opportunities and helping businesses scale
-            their delivery operations.
-          </Text>
-        </View>
+          <Text style={styles.title}>Technologie-Stack</Text>
+          <Text style={styles.bulletPoint}>✓ React Native & Expo</Text>
+          <Text style={styles.bulletPoint}>✓ TypeScript</Text>
+          <Text style={styles.bulletPoint}>✓ Modernes UI/UX Design</Text>
+          <Text style={styles.bulletPoint}>✓ Responsives Layout</Text>
+          <Text style={styles.bulletPoint}>✓ Plattformübergreifende Kompatibilität</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.title}>Why Choose Us?</Text>
-          <Text style={styles.bulletPoint}>
-            ✓ Real-time tracking and updates
-          </Text>
-          <Text style={styles.bulletPoint}>✓ Easy-to-use interface</Text>
-          <Text style={styles.bulletPoint}>
-            ✓ Comprehensive analytics and reports
-          </Text>
-          <Text style={styles.bulletPoint}>✓ 24/7 customer support</Text>
-          <Text style={styles.bulletPoint}>
-            ✓ Secure and reliable platform
-          </Text>
+
         </View>
       </LinearGradient>
     </ScrollView>

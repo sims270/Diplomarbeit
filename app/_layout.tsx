@@ -48,7 +48,7 @@ function RootContent() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ animationEnabled: false }}>
+      <Stack screenOptions={{ animationEnabled: false, headerShown: false }}>
         <Stack.Screen
           name="business"
           options={{

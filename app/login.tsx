@@ -44,10 +44,10 @@ export default function LoginScreen() {
     <ThemedView style={styles.container}>
       <ThemedView style={styles.contentContainer}>
         <ThemedText type="title" style={styles.title}>
-          Driver Login
+          Login
         </ThemedText>
 
-        <ThemedText style={styles.subtitle}>Sign in to your account</ThemedText>
+        <ThemedText style={styles.subtitle}>Melden Sie sich an</ThemedText>
 
         {error ? (
           <ThemedView style={[styles.errorBox, { backgroundColor: "#ffebee" }]}>

@@ -19,19 +19,19 @@ export default function WelcomeScreen() {
           <Text style={styles.logo}>your logo</Text>
           <View style={styles.navLinks}>
             <Pressable onPress={() => router.push("/business")}>
-              <Text style={styles.navLink}>Home</Text>
+              <Text style={styles.navLink}>Startseite</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/about")}>
-              <Text style={styles.navLink}>About Us</Text>
+              <Text style={styles.navLink}>Über uns</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/services")}>
-              <Text style={styles.navLink}>Services</Text>
+              <Text style={styles.navLink}>Ziele</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/contact")}>
-              <Text style={styles.navLink}>Contact us</Text>
+              <Text style={styles.navLink}>Kontakt</Text>
             </Pressable>
           </View>
         </View>
@@ -58,14 +58,14 @@ export default function WelcomeScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.mainTitle}>welcome</Text>
-          <Text style={styles.subtitle}>landing page design</Text>
+          <Text style={styles.mainTitle}>Willkommen</Text>
+          <Text style={styles.subtitle}> Klicke auf den Button, um loszulegen</Text>
 
           <Pressable
             style={styles.seeMoreBtn}
             onPress={() => router.push("/login")}
           >
-            <Text style={styles.seeMoreText}>see more</Text>
+            <Text style={styles.seeMoreText}>zum Login</Text>
           </Pressable>
         </View>
       </LinearGradient>

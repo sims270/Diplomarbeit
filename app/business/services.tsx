@@ -1,34 +1,37 @@
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ServicesScreen() {
   const router = useRouter();
 
   const services = [
     {
-      title: "Real-time Tracking",
-      description: "Monitor deliveries in real-time with live GPS tracking",
+      title: "Auftragsverteilung",
+      description:
+        "Der Disponist teilt Aufträge direkt an Fahrer in der App zu",
     },
     {
-      title: "Route Optimization",
-      description: "Automatically optimize delivery routes for efficiency",
+      title: "Fahrer-Dashboard",
+      description:
+        "Fahrer sehen ihre zugeteilten Aufträge mit Zieladresse und Details",
     },
     {
-      title: "Driver Management",
-      description: "Manage drivers, schedules, and performance metrics",
+      title: "Echtzeit-Benachrichtigungen",
+      description: "Sofortige Meldungen über neue Aufträge und Änderungen",
     },
     {
-      title: "Customer Notifications",
-      description: "Keep customers informed with automated delivery updates",
+      title: "Auftragsdetails",
+      description: "Alle wichtigen Informationen für jeden Auftrag auf einen Blick",
     },
     {
-      title: "Analytics Dashboard",
-      description: "Comprehensive reports and performance analytics",
+      title: "Automatisierte Disposition",
+      description:
+        "Effiziente und automatisierte Verwaltung der Auftragsverteilung",
     },
     {
-      title: "Mobile App",
-      description: "Full-featured mobile app for drivers and managers",
+      title: "Benutzerfreundliche Bedienung",
+      description: "Intuitive App-Oberfläche für Disponenten und Fahrer",
     },
   ];
 
@@ -43,9 +46,9 @@ export default function ServicesScreen() {
       >
         <View style={styles.headerContent}>
           <Pressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← Back</Text>
+            <Text style={styles.backBtn}>← Zurück</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Services</Text>
+          <Text style={styles.headerTitle}>Ziele</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
@@ -57,9 +60,9 @@ export default function ServicesScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.content}
       >
-        <Text style={styles.title}>Our Services</Text>
+        <Text style={styles.title}>Projektfeatures</Text>
         <Text style={styles.subtitle}>
-          Comprehensive solutions for your delivery and logistics needs
+          Automatisiertes Dispositionssystem für effiziente Auftragsverteilung
         </Text>
 
         <View style={styles.servicesGrid}>

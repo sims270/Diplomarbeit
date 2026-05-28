@@ -1,15 +1,15 @@
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-  Pressable,
   TextInput,
-  Alert,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
 
 export default function ContactScreen() {
   const router = useRouter();
@@ -19,11 +19,14 @@ export default function ContactScreen() {
 
   const handleSubmit = () => {
     if (!name.trim() || !email.trim() || !message.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
+      Alert.alert("Fehler", "Bitte füllen Sie alle Felder aus");
       return;
     }
 
-    Alert.alert("Success", "Thank you for your message. We will get back to you soon!");
+    Alert.alert(
+      "Erfolg",
+      "Vielen Dank für Ihre Nachricht. Wir werden Sie bald kontaktieren!",
+    );
     setName("");
     setEmail("");
     setMessage("");
@@ -40,9 +43,9 @@ export default function ContactScreen() {
       >
         <View style={styles.headerContent}>
           <Pressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← Back</Text>
+            <Text style={styles.backBtn}>← Zurück</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Contact Us</Text>
+          <Text style={styles.headerTitle}>Kontakt</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
@@ -54,65 +57,19 @@ export default function ContactScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.content}
       >
-        <Text style={styles.title}>Get in Touch</Text>
+        <Text style={styles.title}>Nehmen Sie Kontakt auf</Text>
         <Text style={styles.subtitle}>
-          Have questions? We'd love to hear from you.
+          Haben Sie Fragen? Wir würden gerne von Ihnen hören.
         </Text>
 
         <View style={styles.contactInfo}>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>contact@translogpro.com</Text>
-          </View>
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue}>+1 (555) 123-4567</Text>
-          </View>
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Address</Text>
-            <Text style={styles.infoValue}>
-              123 Business Street{"\n"}
-              City, State 12345
-            </Text>
+            <Text style={styles.infoLabel}>E-Mail</Text>
+            <Text style={styles.infoValue}>simon.reiter@hakju.at</Text>
           </View>
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.formTitle}>Send us a Message</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Your Name"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            value={name}
-            onChangeText={setName}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Your Email"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-          />
-
-          <TextInput
-            style={[styles.input, styles.messageInput]}
-            placeholder="Your Message"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            numberOfLines={5}
-          />
-
-          <Pressable style={styles.submitBtn} onPress={handleSubmit}>
-            <Text style={styles.submitBtnText}>Send Message</Text>
-          </Pressable>
-        </View>
+        
       </LinearGradient>
     </ScrollView>
   );
