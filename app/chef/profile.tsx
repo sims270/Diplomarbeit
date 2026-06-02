@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
-export default function ProfileScreen() {
+export default function ChefProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
@@ -43,7 +43,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle={user?.role === 'boss' ? 'BOSS' : 'FAHRER'} code="CH" />
+      <Header title="TRANSLOG PRO" subtitle="CHEF" code="CH" />
 
       <View style={styles.tabsContainer}>
         <Pressable
@@ -75,7 +75,7 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.profileName}>{user?.name || 'User'}</Text>
               <Text style={styles.profileRole}>
-                {user?.role === 'boss' ? '👔 Boss Account' : '🚗 Driver Account'}
+                👔 Chef Account
               </Text>
               <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
@@ -83,65 +83,63 @@ export default function ProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Trips</Text>
+                <Text style={styles.statLabel}>Fahrer</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statLabel}>Aufträge</Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>Distance</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0h</Text>
-                <Text style={styles.statLabel}>Duration</Text>
+                <Text style={styles.statLabel}>Total Distanz</Text>
               </View>
             </View>
           </>
         ) : (
           <>
-            {user?.role === 'boss' && (
-              <View style={styles.settingsSection}>
-                <Text style={styles.sectionTitle}>Create Driver</Text>
-                <Text style={styles.sectionDescription}>Add a new driver to your fleet</Text>
+            <View style={styles.settingsSection}>
+              <Text style={styles.sectionTitle}>Create Driver</Text>
+              <Text style={styles.sectionDescription}>Add a new driver to your fleet</Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Driver Name"
-                  value={driverName}
-                  onChangeText={setDriverName}
-                  editable={!isCreating}
-                />
+              <TextInput
+                style={styles.input}
+                placeholder="Driver Name"
+                value={driverName}
+                onChangeText={setDriverName}
+                editable={!isCreating}
+              />
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Username"
-                  value={driverUsername}
-                  onChangeText={setDriverUsername}
-                  editable={!isCreating}
-                  autoCapitalize="none"
-                />
+              <TextInput
+                style={styles.input}
+                placeholder="Username"
+                value={driverUsername}
+                onChangeText={setDriverUsername}
+                editable={!isCreating}
+                autoCapitalize="none"
+              />
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  value={driverPassword}
-                  onChangeText={setDriverPassword}
-                  secureTextEntry
-                  editable={!isCreating}
-                  autoCapitalize="none"
-                />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                value={driverPassword}
+                onChangeText={setDriverPassword}
+                secureTextEntry
+                editable={!isCreating}
+                autoCapitalize="none"
+              />
 
-                <Pressable
-                  style={[styles.createButton, isCreating && styles.buttonDisabled]}
-                  onPress={handleCreateDriver}
-                  disabled={isCreating}
-                >
-                  {isCreating ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={styles.createButtonText}>Create Driver</Text>
-                  )}
-                </Pressable>
-              </View>
-            )}
+              <Pressable
+                style={[styles.createButton, isCreating && styles.buttonDisabled]}
+                onPress={handleCreateDriver}
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.createButtonText}>Create Driver</Text>
+                )}
+              </Pressable>
+            </View>
 
             <View style={styles.settingsSection}>
               <Text style={styles.sectionTitle}>Account</Text>
@@ -151,9 +149,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.settingItem}>
                 <Text style={styles.settingLabel}>Role</Text>
-                <Text style={styles.settingValue}>
-                  {user?.role === 'boss' ? 'Boss' : 'Driver'}
-                </Text>
+                <Text style={styles.settingValue}>Chef</Text>
               </View>
             </View>
           </>
@@ -361,4 +357,3 @@ const styles = StyleSheet.create({
     color: 'white',
   },
 });
-

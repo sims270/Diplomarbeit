@@ -1,71 +1,40 @@
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
 import "react-native-reanimated";
 
-import { Colors } from "@/constants/theme";
-import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { ActivityIndicator, View } from "react-native";
+import { AuthProvider } from "@/contexts/auth-context";
 
 function RootContent() {
   const colorScheme = useColorScheme();
-  const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated) {
-        router.replace("/(tabs)");
-      } else {
-        router.replace("/business");
-      }
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  if (isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: Colors[colorScheme ?? "light"].background,
-        }}
-      >
-        <ActivityIndicator
-          size="large"
-          color={Colors[colorScheme ?? "light"].tint}
-        />
-      </View>
-    );
-  }
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ animationEnabled: false, headerShown: false }}>
         <Stack.Screen
-          name="business"
+          name="/business"
           options={{
             headerShown: false,
           }}
         />
         <Stack.Screen
-          name="login"
+          name="/chef"
           options={{
             headerShown: false,
           }}
         />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
+          name="/login"
+          options={{
+            headerShown: false,
+          }}
         />
+        <Stack.Screen name="/driver" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

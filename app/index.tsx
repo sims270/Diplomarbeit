@@ -1,10 +1,51 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import React from "react";
+import { Colors } from "@/constants/theme";
+import { useAuth } from "@/contexts/auth-context";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useEffect } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      if (user?.role === "boss") {
+        router.replace("/chef");
+      } else {
+        router.replace("/driver");
+      }
+    }
+  }, [isAuthenticated, isLoading, user, router]);
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: Colors[colorScheme ?? "light"].background,
+        }}
+      >
+        <ActivityIndicator
+          size="large"
+          color={Colors[colorScheme ?? "light"].tint}
+        />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} scrollEnabled={false}>
@@ -16,7 +57,11 @@ export default function WelcomeScreen() {
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <Text style={styles.logo}>your logo</Text>
+          <Image
+            source={require("@/assets/images/logo.jpg")}
+            style={styles.logoImage}
+          />{" "}
+          "Logo must be better sized"
           <View style={styles.navLinks}>
             <Pressable onPress={() => router.push("/business")}>
               <Text style={styles.navLink}>Startseite</Text>
@@ -54,12 +99,17 @@ export default function WelcomeScreen() {
           <View style={[styles.mountain, styles.mountain1]} />
           <View style={[styles.mountain, styles.mountain2]} />
           <View style={[styles.mountain, styles.mountain3]} />
+          <View style={[styles.mountain, styles.mountain4]} />
+          <View style={[styles.mountain, styles.mountain5]} />
         </View>
 
         {/* Content */}
         <View style={styles.content}>
           <Text style={styles.mainTitle}>Willkommen</Text>
-          <Text style={styles.subtitle}> Klicke auf den Button, um loszulegen</Text>
+          <Text style={styles.subtitle}>
+            {" "}
+            Klicke auf den Button, um loszulegen
+          </Text>
 
           <Pressable
             style={styles.seeMoreBtn}
@@ -89,10 +139,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  logo: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
+  logoImage: {
+    width: 80,
+    height: 80,
+    resizeMode: "contain",
   },
   navLinks: {
     flexDirection: "row",
@@ -165,6 +215,22 @@ const styles = StyleSheet.create({
     height: 220,
     borderTopLeftRadius: 500,
     borderTopRightRadius: 500,
+  },
+  mountain4: {
+    left: 150,
+    width: 220,
+    height: 180,
+    borderTopLeftRadius: 500,
+    borderTopRightRadius: 500,
+    opacity: 0.8,
+  },
+  mountain5: {
+    right: 150,
+    width: 200,
+    height: 200,
+    borderTopLeftRadius: 500,
+    borderTopRightRadius: 500,
+    opacity: 0.8,
   },
   content: {
     alignItems: "center",

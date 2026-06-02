@@ -5,12 +5,9 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/contexts/auth-context';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { user } = useAuth();
-  const isBoss = user?.role === 'boss';
 
   return (
     <Tabs
@@ -19,15 +16,13 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
       }}>
-      {isBoss && (
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Dashboard',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="square.grid.2x2" color={color} />,
-          }}
-        />
-      )}
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Dashboard',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="square.grid.2x2" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="explore"
         options={{

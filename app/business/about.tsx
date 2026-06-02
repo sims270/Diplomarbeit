@@ -47,16 +47,18 @@ export default function AboutScreen() {
           <Text style={styles.bulletPoint}>👤 Leon</Text>
           <Text style={styles.bulletPoint}>👤 Simon</Text>
           <Text style={styles.bulletPoint}>👤 Christian</Text>
-          <Text style={styles.bulletPoint}> Diese drei Schüler bilden das LSC ITSolutions Team.</Text>
+          <Text style={styles.bulletPoint}>
+            Diese drei Schüler bilden das LSC ITSolutions Team.
+          </Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.title}>Projektziel</Text>
           <Text style={styles.text}>
             Entwicklung einer effizienten, modernen und benutzerfreundlichen
-            Logistik- und Liefermanagementplattform, die unsere Fähigkeiten
-            in der Full-Stack-Web- und Mobilentwicklung mit React Native
-            und Expo demonstriert.
+            Logistik- und Liefermanagementplattform, die unsere Fähigkeiten in
+            der Full-Stack-Web- und Mobilentwicklung mit React Native und Expo
+            demonstriert.
           </Text>
         </View>
 
@@ -66,9 +68,9 @@ export default function AboutScreen() {
           <Text style={styles.bulletPoint}>✓ TypeScript</Text>
           <Text style={styles.bulletPoint}>✓ Modernes UI/UX Design</Text>
           <Text style={styles.bulletPoint}>✓ Responsives Layout</Text>
-          <Text style={styles.bulletPoint}>✓ Plattformübergreifende Kompatibilität</Text>
-
-
+          <Text style={styles.bulletPoint}>
+            ✓ Plattformübergreifende Kompatibilität
+          </Text>
         </View>
       </LinearGradient>
     </ScrollView>

@@ -1,13 +1,10 @@
 import { StyleSheet, ScrollView, View, Text, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Header } from '@/components/header';
 import { StatusCard } from '@/components/status-card';
-import { OrderCard } from '@/components/order-card';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
 import { useState } from 'react';
 
-export default function DashboardScreen() {
-  const { user } = useAuth();
+export default function ChefDashboardScreen() {
   const [showAddDriverModal, setShowAddDriverModal] = useState(false);
   const [driverForm, setDriverForm] = useState({ username: '', password: '', name: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,7 +17,6 @@ export default function DashboardScreen() {
 
     setIsSubmitting(true);
     try {
-      // TODO: Call backend API to create driver
       console.log('Creating driver:', driverForm);
       alert(`Driver "${driverForm.name}" created successfully!`);
       setDriverForm({ username: '', password: '', name: '' });
@@ -30,85 +26,65 @@ export default function DashboardScreen() {
     }
   };
 
-  const isBoss = user?.role === 'boss';
-
   return (
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
-        subtitle={isBoss ? 'BOSS-DASHBOARD' : 'DRIVER-DASHBOARD'}
+        subtitle="CHEF-DASHBOARD"
         code="CH"
       />
 
-      {isBoss ? (
-        // Boss Dashboard - Show orders and driver management
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.statusContainer}>
-            <StatusCard
-              count={0}
-              label="OFFEN"
-              color={Colors.ui.orange}
-            />
-            <StatusCard
-              count={0}
-              label="UNTERWEGS"
-              color={Colors.ui.blue}
-            />
-            <StatusCard
-              count={0}
-              label="ERLEDIGT"
-              color={Colors.ui.green}
-            />
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.statusContainer}>
+          <StatusCard
+            count={0}
+            label="OFFEN"
+            color={Colors.ui.orange}
+          />
+          <StatusCard
+            count={0}
+            label="UNTERWEGS"
+            color={Colors.ui.blue}
+          />
+          <StatusCard
+            count={0}
+            label="ERLEDIGT"
+            color={Colors.ui.green}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>AUFTRÄGE HEUTE</Text>
+            <Pressable style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ Neu</Text>
+            </Pressable>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>AUFTRÄGE HEUTE</Text>
-              <Pressable style={styles.addButton}>
-                <Text style={styles.addButtonText}>+ Neu</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Keine Aufträge vorhanden</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Aufträge werden später mit der Datenbank verbunden
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>FAHRER VERWALTEN</Text>
-              <Pressable
-                style={styles.addButton}
-                onPress={() => setShowAddDriverModal(true)}
-              >
-                <Text style={styles.addButtonText}>+ Fahrer</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.driverText}>
-              Füge hier neue Fahrer hinzu und verwalte bestehende Fahrer.
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Keine Aufträge vorhanden</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Aufträge werden später mit der Datenbank verbunden
             </Text>
           </View>
-        </ScrollView>
-      ) : (
-        // Driver Dashboard - Show their orders
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>MEINE AUFTRÄGE</Text>
+        </View>
 
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Keine zugeteilten Aufträge</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Aufträge werden von deinem Chef zugewiesen
-              </Text>
-            </View>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>FAHRER VERWALTEN</Text>
+            <Pressable
+              style={styles.addButton}
+              onPress={() => setShowAddDriverModal(true)}
+            >
+              <Text style={styles.addButtonText}>+ Fahrer</Text>
+            </Pressable>
           </View>
-        </ScrollView>
-      )}
+          <Text style={styles.driverText}>
+            Füge hier neue Fahrer hinzu und verwalte bestehende Fahrer.
+          </Text>
+        </View>
+      </ScrollView>
 
-      {/* Add Driver Modal */}
       <Modal
         visible={showAddDriverModal}
         transparent
@@ -218,16 +194,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  orderSection: {
-    marginBottom: 16,
-  },
-  orderSectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
   driverText: {
     fontSize: 14,
     color: Colors.ui.mediumGray,
@@ -318,4 +284,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
