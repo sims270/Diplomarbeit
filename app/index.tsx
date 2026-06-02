@@ -61,7 +61,7 @@ export default function WelcomeScreen() {
             source={require("@/assets/images/logo.jpg")}
             style={styles.logoImage}
           />{" "}
-          "Logo must be better sized"
+          {/* Logo besser machen */}
           <View style={styles.navLinks}>
             <Pressable onPress={() => router.push("/business")}>
               <Text style={styles.navLink}>Startseite</Text>
