@@ -1,0 +1,360 @@
+{
+  "users": [
+    {
+      "id": "user_001",
+      "name": "Hans Müller",
+      "email": "hans.mueller@company.de",
+      "role": "chef",
+      "phone": "+49123456789",
+      "status": "online",
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_002",
+      "name": "Klaus Weber",
+      "email": "klaus.weber@company.de",
+      "role": "fahrer",
+      "phone": "+49123456790",
+      "status": "online",
+      "vehicle": {
+        "id": "vehicle_001",
+        "type": "Transporter",
+        "licensePlate": "BE-MA-2024",
+        "capacity": "500kg"
+      },
+      "assignedOrders": ["order_001"],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_003",
+      "name": "Thomas Schmidt",
+      "email": "thomas.schmidt@company.de",
+      "role": "fahrer",
+      "phone": "+49123456791",
+      "status": "online",
+      "vehicle": {
+        "id": "vehicle_002",
+        "type": "Lieferwagen",
+        "licensePlate": "BE-MA-2025",
+        "capacity": "300kg"
+      },
+      "assignedOrders": [],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_004",
+      "name": "Michael Bauer",
+      "email": "michael.bauer@company.de",
+      "role": "fahrer",
+      "phone": "+49123456792",
+      "status": "offline",
+      "vehicle": {
+        "id": "vehicle_003",
+        "type": "Transporter",
+        "licensePlate": "BE-MA-2026",
+        "capacity": "600kg"
+      },
+      "assignedOrders": ["order_002"],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_005",
+      "name": "Andreas Fischer",
+      "email": "andreas.fischer@company.de",
+      "role": "fahrer",
+      "phone": "+49123456793",
+      "status": "online",
+      "vehicle": {
+        "id": "vehicle_004",
+        "type": "Kurierrad",
+        "licensePlate": "BE-MA-2027",
+        "capacity": "50kg"
+      },
+      "assignedOrders": [],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_006",
+      "name": "Daniel Hoffmann",
+      "email": "daniel.hoffmann@company.de",
+      "role": "fahrer",
+      "phone": "+49123456794",
+      "status": "online",
+      "vehicle": {
+        "id": "vehicle_005",
+        "type": "Lieferwagen",
+        "licensePlate": "BE-MA-2028",
+        "capacity": "400kg"
+      },
+      "assignedOrders": ["order_003"],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_007",
+      "name": "Christian Ruiz",
+      "email": "christian.ruiz@company.de",
+      "role": "fahrer",
+      "phone": "+49123456795",
+      "status": "online",
+      "vehicle": {
+        "id": "vehicle_006",
+        "type": "Transporter",
+        "licensePlate": "BE-MA-2029",
+        "capacity": "550kg"
+      },
+      "assignedOrders": [],
+      "createdAt": "2026-01-15T08:00:00Z"
+    },
+    {
+      "id": "user_008",
+      "name": "Stefan Novak",
+      "email": "stefan.novak@company.de",
+      "role": "fahrer",
+      "phone": "+49123456796",
+      "status": "away",
+      "vehicle": {
+        "id": "vehicle_007",
+        "type": "Lieferwagen",
+        "licensePlate": "BE-MA-2030",
+        "capacity": "350kg"
+      },
+      "assignedOrders": [],
+      "createdAt": "2026-01-15T08:00:00Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "order_001",
+      "orderNumber": "AUFT-20260605-001",
+      "customer": {
+        "name": "Müller GmbH",
+        "email": "kontakt@mueller-gmbh.de",
+        "phone": "+49987654321"
+      },
+      "pickupLocation": {
+        "address": "Hauptstraße 42",
+        "city": "Berlin",
+        "zipCode": "10115",
+        "coordinates": {
+          "latitude": 52.5200,
+          "longitude": 13.4050
+        }
+      },
+      "deliveryLocation": {
+        "address": "Friedrichstraße 100",
+        "city": "Berlin",
+        "zipCode": "10117",
+        "coordinates": {
+          "latitude": 52.5190,
+          "longitude": 13.3850
+        }
+      },
+      "package": {
+        "description": "5 Kartons mit Elektronik",
+        "weight": "25kg",
+        "volume": "0.5m³",
+        "fragile": true,
+        "value": 500
+      },
+      "assignedTo": "user_002",
+      "status": "assigned",
+      "priority": "normal",
+      "scheduledPickupTime": "2026-06-05T10:00:00Z",
+      "scheduledDeliveryTime": "2026-06-05T12:00:00Z",
+      "createdAt": "2026-06-05T08:30:00Z",
+      "createdBy": "user_001"
+    },
+    {
+      "id": "order_002",
+      "orderNumber": "AUFT-20260605-002",
+      "customer": {
+        "name": "Tech Solutions AG",
+        "email": "logistics@techsolutions.de",
+        "phone": "+49777654321"
+      },
+      "pickupLocation": {
+        "address": "Technologiepark 1",
+        "city": "Berlin",
+        "zipCode": "12489",
+        "coordinates": {
+          "latitude": 52.4500,
+          "longitude": 13.6050
+        }
+      },
+      "deliveryLocation": {
+        "address": "Industriegelände West 15",
+        "city": "Potsdam",
+        "zipCode": "14467",
+        "coordinates": {
+          "latitude": 52.3900,
+          "longitude": 13.1000
+        }
+      },
+      "package": {
+        "description": "Server-Hardware",
+        "weight": "120kg",
+        "volume": "2.0m³",
+        "fragile": true,
+        "value": 15000
+      },
+      "assignedTo": "user_004",
+      "status": "in_progress",
+      "priority": "high",
+      "scheduledPickupTime": "2026-06-05T09:00:00Z",
+      "scheduledDeliveryTime": "2026-06-05T14:00:00Z",
+      "actualPickupTime": "2026-06-05T09:15:00Z",
+      "createdAt": "2026-06-05T07:45:00Z",
+      "createdBy": "user_001"
+    },
+    {
+      "id": "order_003",
+      "orderNumber": "AUFT-20260605-003",
+      "customer": {
+        "name": "Premium Catering",
+        "email": "service@premium-catering.de",
+        "phone": "+49555123456"
+      },
+      "pickupLocation": {
+        "address": "Kurfürstendamm 25",
+        "city": "Berlin",
+        "zipCode": "10719",
+        "coordinates": {
+          "latitude": 52.5030,
+          "longitude": 13.3280
+        }
+      },
+      "deliveryLocation": {
+        "address": "Congress Center Berlin",
+        "city": "Berlin",
+        "zipCode": "14055",
+        "coordinates": {
+          "latitude": 52.3205,
+          "longitude": 13.0800
+        }
+      },
+      "package": {
+        "description": "Catering für 150 Personen",
+        "weight": "80kg",
+        "volume": "1.2m³",
+        "fragile": false,
+        "value": 2000,
+        "temperature": "cool"
+      },
+      "assignedTo": "user_006",
+      "status": "assigned",
+      "priority": "urgent",
+      "scheduledPickupTime": "2026-06-05T11:30:00Z",
+      "scheduledDeliveryTime": "2026-06-05T13:00:00Z",
+      "createdAt": "2026-06-05T09:00:00Z",
+      "createdBy": "user_001"
+    },
+    {
+      "id": "order_004",
+      "orderNumber": "AUFT-20260605-004",
+      "customer": {
+        "name": "Online Shop AG",
+        "email": "fulfillment@onlineshop.de",
+        "phone": "+49111222333"
+      },
+      "pickupLocation": {
+        "address": "Lagerstraße 12",
+        "city": "Berlin",
+        "zipCode": "12055",
+        "coordinates": {
+          "latitude": 52.5100,
+          "longitude": 13.4550
+        }
+      },
+      "deliveryLocation": {
+        "address": "Tempelhofer Weg 5",
+        "city": "Berlin",
+        "zipCode": "12101",
+        "coordinates": {
+          "latitude": 52.4930,
+          "longitude": 13.3850
+        }
+      },
+      "package": {
+        "description": "Paket für Privatkundin",
+        "weight": "5kg",
+        "volume": "0.2m³",
+        "fragile": false,
+        "value": 150
+      },
+      "assignedTo": null,
+      "status": "pending",
+      "priority": "normal",
+      "scheduledPickupTime": "2026-06-05T14:00:00Z",
+      "scheduledDeliveryTime": "2026-06-05T16:30:00Z",
+      "createdAt": "2026-06-05T09:30:00Z",
+      "createdBy": "user_001"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif_001",
+      "userId": "user_002",
+      "type": "order_assigned",
+      "title": "Neuer Auftrag zugewiesen",
+      "message": "Sie haben einen neuen Auftrag erhalten: AUFT-20260605-001 (Müller GmbH)",
+      "orderId": "order_001",
+      "status": "unread",
+      "priority": "normal",
+      "createdAt": "2026-06-05T08:35:00Z",
+      "readAt": null,
+      "actionUrl": "/orders/order_001"
+    },
+    {
+      "id": "notif_002",
+      "userId": "user_004",
+      "type": "order_assigned",
+      "title": "Neuer Auftrag zugewiesen",
+      "message": "Sie haben einen neuen Auftrag erhalten: AUFT-20260605-002 (Tech Solutions AG) - DRINGEND",
+      "orderId": "order_002",
+      "status": "read",
+      "priority": "high",
+      "createdAt": "2026-06-05T07:50:00Z",
+      "readAt": "2026-06-05T07:52:00Z",
+      "actionUrl": "/orders/order_002"
+    },
+    {
+      "id": "notif_003",
+      "userId": "user_006",
+      "type": "order_assigned",
+      "title": "Neuer Auftrag zugewiesen",
+      "message": "Sie haben einen neuen Auftrag erhalten: AUFT-20260605-003 (Premium Catering) - URGENT",
+      "orderId": "order_003",
+      "status": "unread",
+      "priority": "urgent",
+      "createdAt": "2026-06-05T09:05:00Z",
+      "readAt": null,
+      "actionUrl": "/orders/order_003"
+    }
+  ],
+  "assignmentLog": [
+    {
+      "id": "log_001",
+      "orderId": "order_001",
+      "assignedTo": "user_002",
+      "assignedBy": "user_001",
+      "timestamp": "2026-06-05T08:35:00Z",
+      "reason": "Verfügbar in der Nähe des Pickup-Standorts"
+    },
+    {
+      "id": "log_002",
+      "orderId": "order_002",
+      "assignedTo": "user_004",
+      "assignedBy": "user_001",
+      "timestamp": "2026-06-05T07:50:00Z",
+      "reason": "Großes Transportvolumen, hohe Priorität"
+    },
+    {
+      "id": "log_003",
+      "orderId": "order_003",
+      "assignedTo": "user_006",
+      "assignedBy": "user_001",
+      "timestamp": "2026-06-05T09:05:00Z",
+      "reason": "Temperaturkontrollierter Transport erforderlich"
+    }
+  ]
+}

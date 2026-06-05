@@ -63,8 +63,8 @@ export default function WelcomeScreen() {
           />{" "}
           {/* Logo besser machen */}
           <View style={styles.navLinks}>
-            <Pressable onPress={() => router.push("/business")}>
-              <Text style={styles.navLink}>Startseite</Text>
+            <Pressable onPress={() => router.push("/login")}>
+              <Text style={styles.navLink}>Login</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/about")}>

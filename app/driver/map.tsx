@@ -5,7 +5,7 @@ import { Colors } from '@/constants/theme';
 export default function MapScreen() {
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle="KARTE" code="CH" />
+      
       <View style={styles.placeholder}>
         <Text style={styles.placeholderText}>🗺️ Map View</Text>
         <Text style={styles.placeholderSubtext}>Map integration coming soon</Text>
