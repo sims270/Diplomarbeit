@@ -58,10 +58,9 @@ export default function WelcomeScreen() {
       >
         <View style={styles.headerContent}>
           <Image
-            source={require("@/assets/images/logo.jpg")}
+            source={require("@/assets/images/logo_bg.png")}
             style={styles.logoImage}
           />{" "}
-          {/* Logo besser machen */}
           <View style={styles.navLinks}>
             <Pressable onPress={() => router.push("/login")}>
               <Text style={styles.navLink}>Login</Text>
@@ -140,8 +139,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoImage: {
-    width: 80,
-    height: 80,
+    width: 40,
+    height: 40,
     resizeMode: "contain",
   },
   navLinks: {
