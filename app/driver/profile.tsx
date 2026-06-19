@@ -17,7 +17,11 @@ export default function DriverProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle="FAHRER" code="CH" />
+      <Header
+        title="TRANSLOG PRO"
+        subtitle={`FAHRER - ${user?.name || 'Unbekannt'}`}
+        code={user?.username?.[0]?.toUpperCase() || 'U'}
+      />
 
       <View style={styles.tabsContainer}>
         <Pressable
@@ -116,7 +120,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: Colors.ui.tint || '#007AFF',
+    borderBottomColor: Colors.ui.primary || '#007AFF',
   },
   tabText: {
     fontSize: 16,
@@ -124,7 +128,7 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   tabTextActive: {
-    color: Colors.ui.tint || '#007AFF',
+    color: Colors.ui.primary || '#007AFF',
   },
   content: {
     flex: 1,
@@ -149,7 +153,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.ui.tint || '#007AFF',
+    backgroundColor: Colors.ui.primary || '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -196,7 +200,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.ui.tint || '#007AFF',
+    color: Colors.ui.primary || '#007AFF',
     marginBottom: 4,
   },
   statLabel: {
