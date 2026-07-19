@@ -1,6 +1,7 @@
-import { Colors } from "@/constants/theme";
+import { Colors, Gradients } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
@@ -18,6 +19,7 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuth();
   const colorScheme = useColorScheme();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -51,7 +53,7 @@ export default function WelcomeScreen() {
     <ScrollView style={styles.container} scrollEnabled={false}>
       {/* Header Navigation */}
       <LinearGradient
-        colors={["#1a1a3e", "#0f0f2e"]}
+        colors={Gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -63,19 +65,19 @@ export default function WelcomeScreen() {
           />{" "}
           <View style={styles.navLinks}>
             <Pressable onPress={() => router.push("/login")}>
-              <Text style={styles.navLink}>Login</Text>
+              <Text style={styles.navLink}>{t("home", "navLogin")}</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/about")}>
-              <Text style={styles.navLink}>Über uns</Text>
+              <Text style={styles.navLink}>{t("home", "navAbout")}</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/services")}>
-              <Text style={styles.navLink}>Ziele</Text>
+              <Text style={styles.navLink}>{t("home", "navGoals")}</Text>
             </Pressable>
             <Text style={styles.navDivider}>|</Text>
             <Pressable onPress={() => router.push("/business/contact")}>
-              <Text style={styles.navLink}>Kontakt</Text>
+              <Text style={styles.navLink}>{t("home", "navContact")}</Text>
             </Pressable>
           </View>
         </View>
@@ -83,7 +85,7 @@ export default function WelcomeScreen() {
 
       {/* Hero Section */}
       <LinearGradient
-        colors={["#1a1a3e", "#2d1b4e", "#8b4789", "#d946a6", "#f97316"]}
+        colors={Gradients.hero}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.hero}
@@ -104,17 +106,17 @@ export default function WelcomeScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.mainTitle}>Willkommen</Text>
+          <Text style={styles.mainTitle}>{t("home", "heroTitle")}</Text>
           <Text style={styles.subtitle}>
             {" "}
-            Klicke auf den Button, um loszulegen
+            {t("home", "heroSubtitle")}
           </Text>
 
           <Pressable
             style={styles.seeMoreBtn}
             onPress={() => router.push("/login")}
           >
-            <Text style={styles.seeMoreText}>zum Login</Text>
+            <Text style={styles.seeMoreText}>{t("home", "heroButton")}</Text>
           </Pressable>
         </View>
       </LinearGradient>
@@ -125,7 +127,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a3e",
+    backgroundColor: "#1A1A1A",
   },
   header: {
     paddingHorizontal: 20,
@@ -174,9 +176,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#fbbf24",
+    backgroundColor: "#9b2321",
     opacity: 0.9,
-    shadowColor: "#fbbf24",
+    shadowColor: "#9b2321",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 30,
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
   mountain: {
     position: "absolute",
     bottom: 0,
-    backgroundColor: "#1a1a3e",
+    backgroundColor: "#1A1A1A",
   },
   mountain1: {
     left: -50,

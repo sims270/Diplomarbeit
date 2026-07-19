@@ -2,11 +2,14 @@ import { StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
+import { useTranslation } from '@/hooks/use-translation';
 import { useState, useEffect } from 'react';
 import { orderService, Order } from '../services/orderService';
 
 export default function DriverDashboardScreen() {
   const { user } = useAuth();
+  const { t, language } = useTranslation();
+  const timeLocale = language === 'de' ? 'de-DE' : 'en-US';
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
 
   useEffect(() => {
@@ -37,10 +40,10 @@ export default function DriverDashboardScreen() {
 
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
-      assigned: 'ZUGEWIESEN',
-      in_progress: 'UNTERWEGS',
-      completed: 'ERLEDIGT',
-      cancelled: 'STORNIERT',
+      assigned: t('driverDashboard', 'statusAssigned'),
+      in_progress: t('driverDashboard', 'statusInProgress'),
+      completed: t('driverDashboard', 'statusCompleted'),
+      cancelled: t('driverDashboard', 'statusCancelled'),
     };
     return statusMap[status] || status;
   };
@@ -49,19 +52,19 @@ export default function DriverDashboardScreen() {
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
-        subtitle={`FAHRER - ${user?.name || 'Unbekannt'}`}
+        subtitle={`${t('driverDashboard', 'headerSubtitle')} - ${user?.name || t('common', 'unknown')}`}
         code={user?.username?.[0]?.toUpperCase() || 'U'}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MEINE AUFTRÄGE ({assignedOrders.length})</Text>
+          <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({assignedOrders.length})</Text>
 
           {assignedOrders.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Keine zugeteilten Aufträge</Text>
+              <Text style={styles.emptyStateText}>{t('driverDashboard', 'emptyOrders')}</Text>
               <Text style={styles.emptyStateSubtext}>
-                Aufträge werden von deinem Chef zugewiesen
+                {t('driverDashboard', 'emptyOrdersSub')}
               </Text>
             </View>
           ) : (
@@ -88,13 +91,13 @@ export default function DriverDashboardScreen() {
                   <Text style={styles.packageDesc}>{item.package.description}</Text>
                   <View style={styles.locationContainer}>
                     <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>Abholen:</Text>
+                      <Text style={styles.locationLabel}>{t('driverDashboard', 'pickup')}:</Text>
                       <Text style={styles.locationText}>
                         {item.pickupLocation.city}
                       </Text>
                     </View>
                     <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>Liefern:</Text>
+                      <Text style={styles.locationLabel}>{t('driverDashboard', 'delivery')}:</Text>
                       <Text style={styles.locationText}>
                         {item.deliveryLocation.city}
                       </Text>
@@ -102,15 +105,15 @@ export default function DriverDashboardScreen() {
                   </View>
                   <View style={styles.timeContainer}>
                     <Text style={styles.timeText}>
-                      ⏱ {new Date(item.scheduledPickupTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - {new Date(item.scheduledDeliveryTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                      ⏱ {new Date(item.scheduledPickupTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })} - {new Date(item.scheduledDeliveryTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
                   <View style={styles.priorityContainer}>
                     {item.priority === 'urgent' && (
-                      <Text style={styles.priorityUrgent}>🚨 DRINGEND</Text>
+                      <Text style={styles.priorityUrgent}>{t('driverDashboard', 'priorityUrgent')}</Text>
                     )}
                     {item.priority === 'high' && (
-                      <Text style={styles.priorityHigh}>⚠ HOCH</Text>
+                      <Text style={styles.priorityHigh}>{t('driverDashboard', 'priorityHigh')}</Text>
                     )}
                   </View>
                 </View>
@@ -126,7 +129,7 @@ export default function DriverDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: Colors.ui.lightGray,
   },
   content: {
     flex: 1,

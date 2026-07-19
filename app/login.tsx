@@ -3,6 +3,7 @@ import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTranslation } from "@/hooks/use-translation";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +15,7 @@ import {
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
   const { login, isLoading } = useAuth();
+  const { t } = useTranslation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -22,14 +24,14 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      setError("Please enter both username and password");
+      setError(t("login", "errorFillFields"));
       return;
     }
 
     const result = await login(username, password, rememberMe);
 
     if (!result.success) {
-      setError(result.error || "Login failed. Please try again.");
+      setError(t("login", "errorInvalid"));
       setPassword("");
     } else {
       setError("");
@@ -44,10 +46,10 @@ export default function LoginScreen() {
     <ThemedView style={styles.container}>
       <ThemedView style={styles.contentContainer}>
         <ThemedText type="title" style={styles.title}>
-          Login
+          {t("login", "title")}
         </ThemedText>
 
-        <ThemedText style={styles.subtitle}>Melden Sie sich an</ThemedText>
+        <ThemedText style={styles.subtitle}>{t("login", "subtitle")}</ThemedText>
 
         {error ? (
           <ThemedView style={[styles.errorBox, { backgroundColor: "#ffebee" }]}>
@@ -64,7 +66,7 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder="Username"
+          placeholder={t("login", "usernamePlaceholder")}
           placeholderTextColor={themeColors.tabIconDefault}
           value={username}
           onChangeText={setUsername}
@@ -81,7 +83,7 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder="Password"
+          placeholder={t("login", "passwordPlaceholder")}
           placeholderTextColor={themeColors.tabIconDefault}
           value={password}
           onChangeText={setPassword}
@@ -108,7 +110,7 @@ export default function LoginScreen() {
               <ThemedText style={{ color: "white" }}>✓</ThemedText>
             )}
           </ThemedView>
-          <ThemedText style={styles.checkboxLabel}>Remember me</ThemedText>
+          <ThemedText style={styles.checkboxLabel}>{t("login", "rememberMe")}</ThemedText>
         </Pressable>
 
         <Pressable

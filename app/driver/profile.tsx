@@ -1,25 +1,20 @@
-import { StyleSheet, View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
-import { useRouter } from 'expo-router';
+import { useTranslation } from '@/hooks/use-translation';
 import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function DriverProfileScreen() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
+  const { user } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
-
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/login');
-  };
 
   return (
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
-        subtitle={`FAHRER - ${user?.name || 'Unbekannt'}`}
+        subtitle={`${t('driverProfile', 'headerSubtitle')} - ${user?.name || t('common', 'unknown')}`}
         code={user?.username?.[0]?.toUpperCase() || 'U'}
       />
 
@@ -29,7 +24,7 @@ export default function DriverProfileScreen() {
           onPress={() => setActiveTab('profile')}
         >
           <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
-            Profile
+            {t('driverProfile', 'tabProfile')}
           </Text>
         </Pressable>
         <Pressable
@@ -37,7 +32,7 @@ export default function DriverProfileScreen() {
           onPress={() => setActiveTab('settings')}
         >
           <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
-            Settings
+            {t('driverProfile', 'tabSettings')}
           </Text>
         </Pressable>
       </View>
@@ -51,9 +46,9 @@ export default function DriverProfileScreen() {
                   {user?.name?.charAt(0).toUpperCase() || '?'}
                 </Text>
               </View>
-              <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+              <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
               <Text style={styles.profileRole}>
-                🚗 Driver Account
+                {t('driverProfile', 'accountBadge')}
               </Text>
               <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
@@ -61,42 +56,32 @@ export default function DriverProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Trips</Text>
+                <Text style={styles.statLabel}>{t('driverProfile', 'statsTrips')}</Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>Distance</Text>
+                <Text style={styles.statLabel}>{t('driverProfile', 'statsDistance')}</Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0h</Text>
-                <Text style={styles.statLabel}>Duration</Text>
+                <Text style={styles.statLabel}>{t('driverProfile', 'statsDuration')}</Text>
               </View>
             </View>
           </>
         ) : (
           <View style={styles.settingsSection}>
-            <Text style={styles.sectionTitle}>Account</Text>
+            <Text style={styles.sectionTitle}>{t('driverProfile', 'accountSection')}</Text>
             <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>Username</Text>
+              <Text style={styles.settingLabel}>{t('driverProfile', 'usernameLabel')}</Text>
               <Text style={styles.settingValue}>{user?.username}</Text>
             </View>
             <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>Role</Text>
-              <Text style={styles.settingValue}>Driver</Text>
+              <Text style={styles.settingLabel}>{t('driverProfile', 'roleLabel')}</Text>
+              <Text style={styles.settingValue}>{t('driverProfile', 'roleValue')}</Text>
             </View>
           </View>
         )}
       </ScrollView>
-
-      <Pressable
-        style={({ pressed }) => [
-          styles.logoutButton,
-          { opacity: pressed ? 0.7 : 1 },
-        ]}
-        onPress={handleLogout}
-      >
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </Pressable>
     </View>
   );
 }
@@ -104,13 +89,13 @@ export default function DriverProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.ui.lightGray,
   },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: Colors.light.border,
   },
   tab: {
     flex: 1,
@@ -120,15 +105,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: Colors.ui.primary || '#007AFF',
+    borderBottomColor: Colors.ui.primary,
   },
   tabText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#999',
+    color: Colors.ui.darkGray,
   },
   tabTextActive: {
-    color: Colors.ui.primary || '#007AFF',
+    color: Colors.ui.primary,
   },
   content: {
     flex: 1,
@@ -153,7 +138,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.ui.primary || '#007AFF',
+    backgroundColor: Colors.ui.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -167,16 +152,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 4,
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   profileRole: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.ui.darkGray,
     marginBottom: 8,
   },
   profileUsername: {
     fontSize: 13,
-    color: '#999',
+    color: Colors.ui.darkGray,
     fontStyle: 'italic',
   },
   statsContainer: {
@@ -200,12 +185,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.ui.primary || '#007AFF',
+    color: Colors.ui.primary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: Colors.ui.darkGray,
   },
   settingsSection: {
     backgroundColor: 'white',
@@ -222,41 +207,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 4,
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   settingItem: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Colors.light.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   settingLabel: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.ui.darkGray,
   },
   settingValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  logoutButton: {
-    backgroundColor: '#FF6B6B',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
+    color: Colors.ui.charcoal,
   },
 });

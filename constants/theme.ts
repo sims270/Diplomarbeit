@@ -5,32 +5,37 @@
 
 import { Platform } from 'react-native';
 
-// TransLog Pro colors
-const primary = '#9b2321'; // RAL 3002 - Primary
+// TransLog Pro colors — corporate palette: red, gray, white
+const primary = '#9b2321'; // RAL 3002 - Primary red
 const secondary = '#5e5e5e'; // Dark gray - Secondary
-const tertiary = '#660000'; // Tertiary
-const orange = '#E67E22'; // Orange for OFFEN
-const blue = '#3498DB'; // Blue for UNTERWEGS
-const green = '#27AE60'; // Green for ABGESCHLOSSEN
+const tertiary = '#660000'; // Tertiary (dark red)
+const darkModeRed = '#E63946'; // Brighter red for accents on dark backgrounds
+const orange = '#E67E22'; // Status color for OFFEN (kept — semantic, not brand)
+const blue = '#3498DB'; // Status color for UNTERWEGS
+const green = '#27AE60'; // Status color for ABGESCHLOSSEN
 const lightGray = '#ECF0F1';
 const darkGray = '#5e5e5e';
+const charcoal = '#1A1A1A';
+const white = '#FFFFFF';
 
 export const Colors = {
   light: {
-    text: '#2C3E50',
-    background: '#FFFFFF',
+    text: '#262626',
+    background: white,
+    border: '#E0E0E0',
     tint: primary,
     icon: darkGray,
     tabIconDefault: darkGray,
     tabIconSelected: primary,
   },
   dark: {
-    text: '#ECF0F1',
-    background: '#1A1A1A',
-    tint: '#E67E22',
-    icon: darkGray,
-    tabIconDefault: darkGray,
-    tabIconSelected: '#E67E22',
+    text: '#F5F5F5',
+    background: charcoal,
+    border: '#3A3A3A',
+    tint: darkModeRed,
+    icon: '#B5B5B5',
+    tabIconDefault: '#B5B5B5',
+    tabIconSelected: darkModeRed,
   },
   status: {
     offen: orange,
@@ -46,7 +51,17 @@ export const Colors = {
     green,
     lightGray,
     darkGray,
+    white,
+    charcoal,
+    darkModeRed,
   },
+};
+
+// Reusable red/gray-tinted gradients for hero-style screens (landing page, business pages)
+export const Gradients = {
+  header: [charcoal, '#2b2b2b'] as const,
+  hero: [charcoal, '#3a1414', primary] as const,
+  content: [charcoal, '#3a1414'] as const,
 };
 
 export const Fonts = Platform.select({

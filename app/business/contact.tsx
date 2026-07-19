@@ -1,75 +1,49 @@
+import { Gradients } from "@/constants/theme";
+import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ContactScreen() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-
-  const handleSubmit = () => {
-    if (!name.trim() || !email.trim() || !message.trim()) {
-      Alert.alert("Fehler", "Bitte füllen Sie alle Felder aus");
-      return;
-    }
-
-    Alert.alert(
-      "Erfolg",
-      "Vielen Dank für Ihre Nachricht. Wir werden Sie bald kontaktieren!",
-    );
-    setName("");
-    setEmail("");
-    setMessage("");
-  };
+  const { t } = useTranslation();
 
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={["#1a1a3e", "#0f0f2e"]}
+        colors={Gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
           <Pressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← Zurück</Text>
+            <Text style={styles.backBtn}>← {t("common", "back")}</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Kontakt</Text>
+          <Text style={styles.headerTitle}>{t("contact", "headerTitle")}</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
 
       {/* Content */}
       <LinearGradient
-        colors={["#1a1a3e", "#2d1b4e"]}
+        colors={Gradients.content}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.content}
       >
-        <Text style={styles.title}>Nehmen Sie Kontakt auf</Text>
+        <Text style={styles.title}>{t("contact", "title")}</Text>
         <Text style={styles.subtitle}>
-          Haben Sie Fragen? Wir würden gerne von Ihnen hören.
+          {t("contact", "subtitle")}
         </Text>
 
         <View style={styles.contactInfo}>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>E-Mail</Text>
+            <Text style={styles.infoLabel}>{t("contact", "emailLabel")}</Text>
             <Text style={styles.infoValue}>simon.reiter@hakju.at</Text>
           </View>
         </View>
-
-        
       </LinearGradient>
     </ScrollView>
   );
@@ -78,7 +52,7 @@ export default function ContactScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a3e",
+    backgroundColor: "#1A1A1A",
   },
   header: {
     paddingHorizontal: 20,
@@ -134,41 +108,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#fff",
     fontWeight: "500",
-  },
-  formSection: {
-    marginTop: 24,
-  },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#fff",
-    marginBottom: 16,
-  },
-  input: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: "#fff",
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  messageInput: {
-    height: 120,
-    textAlignVertical: "top",
-  },
-  submitBtn: {
-    backgroundColor: "#d946a6",
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  submitBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
   },
 });
