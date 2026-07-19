@@ -52,6 +52,36 @@ class OrderService {
     return this.orders;
   }
 
+  getOrderById(orderId: string): Order | undefined {
+    return this.orders.find(order => order.id === orderId);
+  }
+
+  addOrder(data: {
+    customer: Order['customer'];
+    pickupLocation: Order['pickupLocation'];
+    deliveryLocation: Order['deliveryLocation'];
+    package: Order['package'];
+    priority: Order['priority'];
+    scheduledPickupTime: string;
+    scheduledDeliveryTime: string;
+    createdBy: string;
+  }): Order {
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const orderNumber = `AUFT-${today}-${String(this.orders.length + 1).padStart(3, '0')}`;
+
+    const newOrder: Order = {
+      id: `order_${Date.now()}`,
+      orderNumber,
+      ...data,
+      assignedTo: null,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.orders.unshift(newOrder);
+    return newOrder;
+  }
+
   getOrdersByDriver(driverId: string): Order[] {
     return this.orders.filter(order => order.assignedTo === driverId);
   }

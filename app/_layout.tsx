@@ -9,6 +9,7 @@ import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider } from "@/contexts/auth-context";
+import { SettingsProvider } from "@/contexts/settings-context";
 
 function RootContent() {
   const colorScheme = useColorScheme();
@@ -44,7 +45,9 @@ function RootContent() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootContent />
+      <SettingsProvider>
+        <RootContent />
+      </SettingsProvider>
     </AuthProvider>
   );
 }

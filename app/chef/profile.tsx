@@ -2,12 +2,14 @@ import { StyleSheet, View, Text, Pressable, ScrollView, TextInput, Alert, Activi
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
+import { useTranslation } from '@/hooks/use-translation';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 export default function ChefProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
   const [driverName, setDriverName] = useState('');
   const [driverUsername, setDriverUsername] = useState('');
@@ -21,7 +23,7 @@ export default function ChefProfileScreen() {
 
   const handleCreateDriver = async () => {
     if (!driverName.trim() || !driverUsername.trim() || !driverPassword.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('common', 'error'), t('chefProfile', 'alertFillFields'));
       return;
     }
 
@@ -30,12 +32,12 @@ export default function ChefProfileScreen() {
       // TODO: Replace with actual API call
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      Alert.alert('Success', `Driver "${driverName}" created successfully`);
+      Alert.alert(t('common', 'success'), `"${driverName}" ${t('chefProfile', 'alertDriverCreated')}`);
       setDriverName('');
       setDriverUsername('');
       setDriverPassword('');
     } catch (error) {
-      Alert.alert('Error', 'Failed to create driver');
+      Alert.alert(t('common', 'error'), t('chefProfile', 'alertCreateFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -43,7 +45,7 @@ export default function ChefProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle="CHEF" code="CH" />
+      <Header title="TRANSLOG PRO" subtitle={t('chefProfile', 'headerSubtitle')} code="CH" />
 
       <View style={styles.tabsContainer}>
         <Pressable
@@ -51,7 +53,7 @@ export default function ChefProfileScreen() {
           onPress={() => setActiveTab('profile')}
         >
           <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
-            Profile
+            {t('chefProfile', 'tabProfile')}
           </Text>
         </Pressable>
         <Pressable
@@ -59,7 +61,7 @@ export default function ChefProfileScreen() {
           onPress={() => setActiveTab('settings')}
         >
           <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
-            Settings
+            {t('chefProfile', 'tabManagement')}
           </Text>
         </Pressable>
       </View>
@@ -73,9 +75,9 @@ export default function ChefProfileScreen() {
                   {user?.name?.charAt(0).toUpperCase() || '?'}
                 </Text>
               </View>
-              <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+              <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
               <Text style={styles.profileRole}>
-                👔 Chef Account
+                {t('chefProfile', 'accountBadge')}
               </Text>
               <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
@@ -83,27 +85,27 @@ export default function ChefProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Fahrer</Text>
+                <Text style={styles.statLabel}>{t('chefProfile', 'statsDrivers')}</Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Aufträge</Text>
+                <Text style={styles.statLabel}>{t('chefProfile', 'statsOrders')}</Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>Total Distanz</Text>
+                <Text style={styles.statLabel}>{t('chefProfile', 'statsDistance')}</Text>
               </View>
             </View>
           </>
         ) : (
           <>
             <View style={styles.settingsSection}>
-              <Text style={styles.sectionTitle}>Create Driver</Text>
-              <Text style={styles.sectionDescription}>Add a new driver to your fleet</Text>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'createDriverTitle')}</Text>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'createDriverDesc')}</Text>
 
               <TextInput
                 style={styles.input}
-                placeholder="Driver Name"
+                placeholder={t('chefProfile', 'driverNamePlaceholder')}
                 value={driverName}
                 onChangeText={setDriverName}
                 editable={!isCreating}
@@ -111,7 +113,7 @@ export default function ChefProfileScreen() {
 
               <TextInput
                 style={styles.input}
-                placeholder="Username"
+                placeholder={t('chefProfile', 'usernamePlaceholder')}
                 value={driverUsername}
                 onChangeText={setDriverUsername}
                 editable={!isCreating}
@@ -120,7 +122,7 @@ export default function ChefProfileScreen() {
 
               <TextInput
                 style={styles.input}
-                placeholder="Password"
+                placeholder={t('chefProfile', 'passwordPlaceholder')}
                 value={driverPassword}
                 onChangeText={setDriverPassword}
                 secureTextEntry
@@ -136,20 +138,20 @@ export default function ChefProfileScreen() {
                 {isCreating ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={styles.createButtonText}>Create Driver</Text>
+                  <Text style={styles.createButtonText}>{t('chefProfile', 'createDriverButton')}</Text>
                 )}
               </Pressable>
             </View>
 
             <View style={styles.settingsSection}>
-              <Text style={styles.sectionTitle}>Account</Text>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'accountSection')}</Text>
               <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>Username</Text>
+                <Text style={styles.settingLabel}>{t('chefProfile', 'usernameLabel')}</Text>
                 <Text style={styles.settingValue}>{user?.username}</Text>
               </View>
               <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>Role</Text>
-                <Text style={styles.settingValue}>Chef</Text>
+                <Text style={styles.settingLabel}>{t('chefProfile', 'roleLabel')}</Text>
+                <Text style={styles.settingValue}>{t('chefProfile', 'roleValue')}</Text>
               </View>
             </View>
           </>
@@ -163,7 +165,7 @@ export default function ChefProfileScreen() {
         ]}
         onPress={handleLogout}
       >
-        <Text style={styles.logoutButtonText}>Logout</Text>
+        <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
       </Pressable>
     </View>
   );
@@ -172,13 +174,13 @@ export default function ChefProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: Colors.ui.lightGray,
   },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: Colors.light.border,
   },
   tab: {
     flex: 1,
@@ -188,15 +190,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: Colors.ui.primary || '#007AFF',
+    borderBottomColor: Colors.ui.primary,
   },
   tabText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#999',
+    color: Colors.ui.darkGray,
   },
   tabTextActive: {
-    color: Colors.ui.primary || '#007AFF',
+    color: Colors.ui.primary,
   },
   content: {
     flex: 1,
@@ -221,7 +223,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.ui.primary || '#007AFF',
+    backgroundColor: Colors.ui.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -235,16 +237,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 4,
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   profileRole: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.ui.darkGray,
     marginBottom: 8,
   },
   profileUsername: {
     fontSize: 13,
-    color: '#999',
+    color: Colors.ui.darkGray,
     fontStyle: 'italic',
   },
   statsContainer: {
@@ -268,12 +270,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.ui.primary || '#007AFF',
+    color: Colors.ui.primary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: Colors.ui.darkGray,
   },
   settingsSection: {
     backgroundColor: 'white',
@@ -290,24 +292,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 4,
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   sectionDescription: {
     fontSize: 13,
-    color: '#999',
+    color: Colors.ui.darkGray,
     marginBottom: 16,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Colors.light.border,
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
     fontSize: 14,
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   createButton: {
-    backgroundColor: Colors.ui.primary || '#007AFF',
+    backgroundColor: Colors.ui.primary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -324,28 +326,28 @@ const styles = StyleSheet.create({
   settingItem: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Colors.light.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   settingLabel: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.ui.darkGray,
   },
   settingValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: Colors.ui.charcoal,
   },
   logoutButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: Colors.ui.primary,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 20,
-    shadowColor: '#FF6B6B',
+    shadowColor: Colors.ui.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

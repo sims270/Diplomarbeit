@@ -1,15 +1,18 @@
 import { Header } from "@/components/header";
 import { Colors } from "@/constants/theme";
+import { useTranslation } from "@/hooks/use-translation";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function MapScreen() {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle="KARTE" code="CH" />
+      <Header title="TRANSLOG PRO" subtitle={t("chefMap", "headerSubtitle")} code="CH" />
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>🗺️ Map View</Text>
+        <Text style={styles.placeholderText}>{t("chefMap", "placeholderTitle")}</Text>
         <Text style={styles.placeholderSubtext}>
-          Map integration coming soon
+          {t("chefMap", "placeholderSubtext")}
         </Text>
       </View>
     </View>
@@ -19,7 +22,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: Colors.ui.lightGray,
   },
   placeholder: {
     flex: 1,

@@ -1,6 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/contexts/auth-context';
+import { useTranslation } from '@/hooks/use-translation';
 
 export interface HeaderProps {
   title: string;
@@ -9,13 +12,33 @@ export interface HeaderProps {
 }
 
 export function Header({ title, subtitle, code }: HeaderProps) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const { t } = useTranslation();
+
   return (
     <View style={styles.header}>
       <View style={styles.titleContainer}>
         <Text style={styles.title}>{title}</Text>
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       </View>
-      {code && <Text style={styles.code}>{code}</Text>}
+      <View style={styles.rightContainer}>
+        {code && <Text style={styles.code}>{code}</Text>}
+        <Pressable
+          style={styles.settingsButton}
+          onPress={() => router.push('/settings')}
+        >
+          <Text style={styles.settingsButtonText}>⚙</Text>
+        </Pressable>
+        {isAuthenticated && (
+          <Pressable
+            style={styles.logoutButton}
+            onPress={() => router.push('/logout')}
+          >
+            <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -45,6 +68,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: 'uppercase',
   },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   code: {
     fontSize: 14,
     fontWeight: '700',
@@ -53,5 +81,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
+  },
+  settingsButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  settingsButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
+  },
+  logoutButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  logoutButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'white',
   },
 });

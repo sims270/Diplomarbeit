@@ -1,68 +1,50 @@
+import { Gradients } from "@/constants/theme";
+import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ServicesScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const services = [
-    {
-      title: "Auftragsverteilung",
-      description:
-        "Der Disponist teilt Aufträge direkt an Fahrer in der App zu",
-    },
-    {
-      title: "Fahrer-Dashboard",
-      description:
-        "Fahrer sehen ihre zugeteilten Aufträge mit Zieladresse und Details",
-    },
-    {
-      title: "Echtzeit-Benachrichtigungen",
-      description: "Sofortige Meldungen über neue Aufträge und Änderungen",
-    },
-    {
-      title: "Auftragsdetails",
-      description: "Alle wichtigen Informationen für jeden Auftrag auf einen Blick",
-    },
-    {
-      title: "Automatisierte Disposition",
-      description:
-        "Effiziente und automatisierte Verwaltung der Auftragsverteilung",
-    },
-    {
-      title: "Benutzerfreundliche Bedienung",
-      description: "Intuitive App-Oberfläche für Disponenten und Fahrer",
-    },
+    { title: t("services", "service1Title"), description: t("services", "service1Desc") },
+    { title: t("services", "service2Title"), description: t("services", "service2Desc") },
+    { title: t("services", "service3Title"), description: t("services", "service3Desc") },
+    { title: t("services", "service4Title"), description: t("services", "service4Desc") },
+    { title: t("services", "service5Title"), description: t("services", "service5Desc") },
+    { title: t("services", "service6Title"), description: t("services", "service6Desc") },
   ];
 
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={["#1a1a3e", "#0f0f2e"]}
+        colors={Gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerContent}>
           <Pressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← Zurück</Text>
+            <Text style={styles.backBtn}>← {t("common", "back")}</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Ziele</Text>
+          <Text style={styles.headerTitle}>{t("services", "headerTitle")}</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
 
       {/* Content */}
       <LinearGradient
-        colors={["#1a1a3e", "#2d1b4e"]}
+        colors={Gradients.content}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.content}
       >
-        <Text style={styles.title}>Projektfeatures</Text>
+        <Text style={styles.title}>{t("services", "title")}</Text>
         <Text style={styles.subtitle}>
-          Automatisiertes Dispositionssystem für effiziente Auftragsverteilung
+          {t("services", "subtitle")}
         </Text>
 
         <View style={styles.servicesGrid}>
@@ -83,7 +65,7 @@ export default function ServicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a3e",
+    backgroundColor: "#1A1A1A",
   },
   header: {
     paddingHorizontal: 20,
