@@ -3,17 +3,37 @@ import { Colors } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect } from "react";
+import {
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 export default function DriverProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/login");
-  };
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -21,7 +41,7 @@ export default function DriverProfileScreen() {
         title="TRANSLOG PRO"
         subtitle={`${t("driverProfile", "headerSubtitle")} - ${user?.name || t("common", "unknown")}`}
         code={user?.username?.[0]?.toUpperCase() || "U"}
-        onCodePress={() => router.push('/driver/profile')}
+        onCodePress={() => router.push("/driver/profile")}
         showLogout={true}
       />
 
@@ -146,6 +166,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ui.darkGray,
     fontStyle: "italic",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.ui.lightGray,
   },
   statsContainer: {
     flexDirection: "row",

@@ -4,7 +4,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Image,
@@ -17,19 +17,9 @@ import {
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isLoading } = useAuth();
   const colorScheme = useColorScheme();
   const { t } = useTranslation();
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      if (user?.role === "boss") {
-        router.replace("/chef");
-      } else {
-        router.replace("/driver");
-      }
-    }
-  }, [isAuthenticated, isLoading, user, router]);
 
   if (isLoading) {
     return (

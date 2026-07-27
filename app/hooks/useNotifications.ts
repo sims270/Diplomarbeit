@@ -1,21 +1,24 @@
-import { useCallback, useState, useEffect } from 'react';
-import { useNotifications } from '../context/NotificationContext';
-import { Notification, OrderStatusUpdate } from '../services/notificationService';
+import { useCallback, useEffect, useState } from "react";
+import { useNotifications } from "../context/NotificationContext";
+import {
+    Notification,
+    OrderStatusUpdate,
+} from "../services/notificationService";
 
 /**
  * Hook für Filtern und Verwalten von Benachrichtigungen
  */
-export const useNotificationFilter = (filter?: 'unread' | 'read' | string) => {
+export const useNotificationFilter = (filter?: "unread" | "read" | string) => {
   const { notifications } = useNotifications();
   const [filtered, setFiltered] = useState<Notification[]>([]);
 
   useEffect(() => {
     let result = notifications;
 
-    if (filter === 'unread') {
-      result = notifications.filter((n) => n.status === 'unread');
-    } else if (filter === 'read') {
-      result = notifications.filter((n) => n.status === 'read');
+    if (filter === "unread") {
+      result = notifications.filter((n) => n.status === "unread");
+    } else if (filter === "read") {
+      result = notifications.filter((n) => n.status === "read");
     } else if (filter) {
       result = notifications.filter((n) => n.type === filter);
     }
@@ -29,7 +32,10 @@ export const useNotificationFilter = (filter?: 'unread' | 'read' | string) => {
 /**
  * Hook für Auftrag-Status-Updates mit lokaler State
  */
-export const useOrderStatusTracking = (orderId: string, initialStatus: string) => {
+export const useOrderStatusTracking = (
+  orderId: string,
+  initialStatus: string,
+) => {
   const { updateOrderStatus } = useNotifications();
   const [status, setStatus] = useState(initialStatus);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -39,7 +45,7 @@ export const useOrderStatusTracking = (orderId: string, initialStatus: string) =
     async (
       newStatus: string,
       driverId: string,
-      location?: { latitude: number; longitude: number }
+      location?: { latitude: number; longitude: number },
     ) => {
       setIsUpdating(true);
 
@@ -57,13 +63,13 @@ export const useOrderStatusTracking = (orderId: string, initialStatus: string) =
         setLastUpdate(update);
         return true;
       } catch (error) {
-        console.error('Status update failed:', error);
+        console.error("Status update failed:", error);
         return false;
       } finally {
         setIsUpdating(false);
       }
     },
-    [orderId, updateOrderStatus]
+    [orderId, updateOrderStatus],
   );
 
   return {
@@ -77,21 +83,21 @@ export const useOrderStatusTracking = (orderId: string, initialStatus: string) =
 /**
  * Hook für Benachrichtigungen nach Priorität sortieren
  */
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+};
+
 export const useNotificationsSorted = (ascending = false) => {
   const { notifications } = useNotifications();
   const [sorted, setSorted] = useState<Notification[]>([]);
 
-  const priorityOrder: Record<string, number> = {
-    urgent: 0,
-    high: 1,
-    normal: 2,
-    low: 3,
-  };
-
   useEffect(() => {
     const result = [...notifications].sort((a, b) => {
-      const aPriority = priorityOrder[a.priority] || 999;
-      const bPriority = priorityOrder[b.priority] || 999;
+      const aPriority = PRIORITY_ORDER[a.priority] || 999;
+      const bPriority = PRIORITY_ORDER[b.priority] || 999;
 
       if (ascending) {
         return aPriority - bPriority;
@@ -110,7 +116,9 @@ export const useNotificationsSorted = (ascending = false) => {
  */
 export const useOrderNotifications = (orderId: string) => {
   const notifications = useNotificationFilter();
-  const [orderNotifications, setOrderNotifications] = useState<Notification[]>([]);
+  const [orderNotifications, setOrderNotifications] = useState<Notification[]>(
+    [],
+  );
 
   useEffect(() => {
     const filtered = notifications.filter((n) => n.orderId === orderId);
@@ -125,14 +133,14 @@ export const useOrderNotifications = (orderId: string) => {
  */
 export const useOrderStatusUpdates = (
   orderId: string,
-  onStatusChange?: (status: string) => void
+  onStatusChange?: (status: string) => void,
 ) => {
   const { notifications } = useNotifications();
   const [latestUpdate, setLatestUpdate] = useState<Notification | null>(null);
 
   useEffect(() => {
     const statusNotifications = notifications.filter(
-      (n) => n.orderId === orderId && n.type === 'order_status_changed'
+      (n) => n.orderId === orderId && n.type === "order_status_changed",
     );
 
     if (statusNotifications.length > 0) {

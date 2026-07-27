@@ -4,17 +4,19 @@ import { Colors } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
-import React, { useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  TextInput,
+    ActivityIndicator,
+    Pressable,
+    StyleSheet,
+    TextInput,
 } from "react-native";
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
-  const { login, isLoading } = useAuth();
+  const router = useRouter();
+  const { login, isLoading, isAuthenticated, user } = useAuth();
   const { t } = useTranslation();
 
   const [username, setUsername] = useState("");
@@ -37,10 +39,25 @@ export default function LoginScreen() {
       setError("");
       setUsername("");
       setPassword("");
+      if (result.user?.role === "boss") {
+        router.replace("/chef");
+      } else {
+        router.replace("/driver");
+      }
     }
   };
 
   const themeColors = Colors[colorScheme ?? "light"];
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      if (user?.role === "boss") {
+        router.replace("/chef");
+      } else {
+        router.replace("/driver");
+      }
+    }
+  }, [isLoading, isAuthenticated, user, router]);
 
   return (
     <ThemedView style={styles.container}>
@@ -49,7 +66,9 @@ export default function LoginScreen() {
           {t("login", "title")}
         </ThemedText>
 
-        <ThemedText style={styles.subtitle}>{t("login", "subtitle")}</ThemedText>
+        <ThemedText style={styles.subtitle}>
+          {t("login", "subtitle")}
+        </ThemedText>
 
         {error ? (
           <ThemedView style={[styles.errorBox, { backgroundColor: "#ffebee" }]}>
@@ -110,7 +129,9 @@ export default function LoginScreen() {
               <ThemedText style={{ color: "white" }}>✓</ThemedText>
             )}
           </ThemedView>
-          <ThemedText style={styles.checkboxLabel}>{t("login", "rememberMe")}</ThemedText>
+          <ThemedText style={styles.checkboxLabel}>
+            {t("login", "rememberMe")}
+          </ThemedText>
         </Pressable>
 
         <Pressable

@@ -15,7 +15,13 @@ export interface HeaderProps {
   showLogout?: boolean;
 }
 
-export function Header({ title, subtitle, code, onCodePress, showLogout }: HeaderProps) {
+export function Header({
+  title,
+  subtitle,
+  code,
+  onCodePress,
+  showLogout,
+}: HeaderProps) {
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
   const { t } = useTranslation();
@@ -24,36 +30,40 @@ export function Header({ title, subtitle, code, onCodePress, showLogout }: Heade
     if (onCodePress) return onCodePress();
 
     try {
-      if (user?.role === 'driver') {
-        router.push('/driver/profile');
+      if (user?.role === "driver") {
+        router.push("/driver/profile");
         return;
       }
-      if (user?.role === 'boss' || user?.role === 'chef') {
-        router.push('/chef/profile');
+      if (user?.role === "boss" || user?.role === "chef") {
+        router.push("/chef/profile");
         return;
       }
 
       // Fallback: try to infer route from current location (web) so reloads still work
       try {
-        if (typeof window !== 'undefined' && window.location && window.location.pathname) {
+        if (
+          typeof window !== "undefined" &&
+          window.location &&
+          window.location.pathname
+        ) {
           const p = window.location.pathname.toLowerCase();
-          if (p.startsWith('/driver')) {
-            router.push('/driver/profile');
+          if (p.startsWith("/driver")) {
+            router.push("/driver/profile");
             return;
           }
-          if (p.startsWith('/chef') || p.startsWith('/business')) {
-            router.push('/chef/profile');
+          if (p.startsWith("/chef") || p.startsWith("/business")) {
+            router.push("/chef/profile");
             return;
           }
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
 
       // final fallback
-      router.push('/profile');
-    } catch (e) {
-      router.push('/logout');
+      router.push("/profile");
+    } catch {
+      router.push("/logout");
     }
   };
 
@@ -71,16 +81,16 @@ export function Header({ title, subtitle, code, onCodePress, showLogout }: Heade
         )}
         <Pressable
           style={styles.settingsButton}
-          onPress={() => router.push('/settings')}
+          onPress={() => router.push("/settings")}
         >
           <Text style={styles.settingsButtonText}>⚙</Text>
         </Pressable>
         {(showLogout || user || isAuthenticated) && (
           <Pressable
             style={styles.logoutButton}
-            onPress={() => router.push('/logout')}
+            onPress={() => router.push("/logout")}
           >
-            <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
+            <Text style={styles.logoutButtonText}>{t("common", "logout")}</Text>
           </Pressable>
         )}
       </View>
@@ -129,7 +139,7 @@ const styles = StyleSheet.create({
   },
   codeButton: {
     borderRadius: 6,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   settingsButton: {
     backgroundColor: "rgba(0, 0, 0, 0.2)",

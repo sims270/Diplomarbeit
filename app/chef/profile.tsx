@@ -3,7 +3,7 @@ import { Colors } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -16,7 +16,7 @@ import {
 } from "react-native";
 
 export default function ChefProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"profile" | "settings">("profile");
@@ -25,10 +25,23 @@ export default function ChefProfileScreen() {
   const [driverPassword, setDriverPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/login");
-  };
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const handleCreateDriver = async () => {
     if (
@@ -52,7 +65,7 @@ export default function ChefProfileScreen() {
       setDriverName("");
       setDriverUsername("");
       setDriverPassword("");
-    } catch (error) {
+    } catch {
       Alert.alert(t("common", "error"), t("chefProfile", "alertCreateFailed"));
     } finally {
       setIsCreating(false);
@@ -65,7 +78,7 @@ export default function ChefProfileScreen() {
         title="TRANSLOG PRO"
         subtitle={t("chefProfile", "headerSubtitle")}
         code="CH"
-        onCodePress={() => router.push('/chef/profile')}
+        onCodePress={() => router.push("/chef/profile")}
         showLogout={true}
       />
 
@@ -298,6 +311,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ui.darkGray,
     fontStyle: "italic",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.ui.lightGray,
   },
   statsContainer: {
     flexDirection: "row",

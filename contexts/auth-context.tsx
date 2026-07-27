@@ -90,20 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkStoredAuth = async () => {
       try {
-        const rememberMe = await AsyncStorage.getItem(AUTH_REMEMBER_ME_KEY);
-        const shouldRestoreAuth = rememberMe === "true";
-
-        if (!shouldRestoreAuth) {
-          await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
-          try {
-            await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-          } catch (e) {
-            // ignore if SecureStore not available
-          }
-          setUser(null);
-          return;
-        }
-
         // Try SecureStore first (native), fall back to AsyncStorage (web)
         let storedToken = null as string | null;
         try {
@@ -159,22 +145,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.user) {
         setUser(result.user);
 
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, result.user.token);
+        await AsyncStorage.setItem(AUTH_USERNAME_KEY, result.user.username);
+
         if (rememberMe) {
           try {
             await SecureStore.setItemAsync(AUTH_TOKEN_KEY, result.user.token);
           } catch (e) {
             // ignore if SecureStore not available
           }
-          await AsyncStorage.setItem(AUTH_TOKEN_KEY, result.user.token);
-          await AsyncStorage.setItem(AUTH_USERNAME_KEY, result.user.username);
           await AsyncStorage.setItem(AUTH_REMEMBER_ME_KEY, "true");
         } else {
+          await AsyncStorage.removeItem(AUTH_REMEMBER_ME_KEY);
           try {
             await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
           } catch (e) {
             // ignore if SecureStore not available
           }
-          await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
         }
 
         return {
@@ -201,7 +188,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         // ignore if not available
       }
-      await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
+      await AsyncStorage.multiRemove([
+        AUTH_TOKEN_KEY,
+        AUTH_USERNAME_KEY,
+        AUTH_REMEMBER_ME_KEY,
+      ]);
     } catch (error) {
       console.error("Error logging out:", error);
     } finally {
