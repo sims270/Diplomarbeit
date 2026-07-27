@@ -56,13 +56,13 @@ export function Header({
             return;
           }
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
 
       // final fallback
       router.push("/profile");
-    } catch (e) {
+    } catch {
       router.push("/logout");
     }
   };

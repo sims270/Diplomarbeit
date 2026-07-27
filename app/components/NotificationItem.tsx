@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Notification } from '../services/notificationService';
 import { useNotifications } from '../context/NotificationContext';
@@ -21,19 +21,6 @@ const getPriorityColor = (priority: string): string => {
       return '#8E8E93';
     default:
       return '#007AFF';
-  }
-};
-
-const getPriorityIcon = (priority: string): string => {
-  switch (priority) {
-    case 'urgent':
-      return 'alert-circle';
-    case 'high':
-      return 'alert';
-    case 'normal':
-      return 'information';
-    default:
-      return 'information-outline';
   }
 };
 

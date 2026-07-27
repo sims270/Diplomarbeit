@@ -3,7 +3,7 @@ import { Colors } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth-context";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -21,6 +21,13 @@ export default function DriverDashboardScreen() {
   const timeLocale = language === "de" ? "de-DE" : "en-US";
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
 
+  const loadDriverOrders = useCallback(() => {
+    if (user?.id) {
+      const orders = orderService.getOrdersByDriver(user.id);
+      setAssignedOrders(orders);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace("/login");
@@ -30,14 +37,7 @@ export default function DriverDashboardScreen() {
     if (user?.id) {
       loadDriverOrders();
     }
-  }, [isLoading, isAuthenticated, user?.id, router]);
-
-  const loadDriverOrders = () => {
-    if (user?.id) {
-      const orders = orderService.getOrdersByDriver(user.id);
-      setAssignedOrders(orders);
-    }
-  };
+  }, [isLoading, isAuthenticated, user?.id, router, loadDriverOrders]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

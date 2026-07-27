@@ -2,7 +2,7 @@ import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Order, orderService } from '../../services/orderService';
 
@@ -15,16 +15,16 @@ export default function ChefOrderDetailScreen() {
   const [order, setOrder] = useState<Order | undefined>(undefined);
   const [drivers, setDrivers] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
-
-  const loadData = () => {
+  const loadData = useCallback(() => {
     if (id) {
       setOrder(orderService.getOrderById(id));
     }
     setDrivers(orderService.getDrivers());
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
