@@ -7,9 +7,9 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider } from "@/contexts/auth-context";
 import { SettingsProvider } from "@/contexts/settings-context";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 function RootContent() {
   const colorScheme = useColorScheme();
@@ -18,24 +18,24 @@ function RootContent() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ animationEnabled: false, headerShown: false }}>
         <Stack.Screen
-          name="/business"
+          name="business"
           options={{
             headerShown: false,
           }}
         />
         <Stack.Screen
-          name="/chef"
+          name="chef"
           options={{
             headerShown: false,
           }}
         />
         <Stack.Screen
-          name="/login"
+          name="login"
           options={{
             headerShown: false,
           }}
         />
-        <Stack.Screen name="/driver" options={{ headerShown: false }} />
+        <Stack.Screen name="driver" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

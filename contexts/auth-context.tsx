@@ -30,6 +30,10 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
+const AUTH_TOKEN_KEY = "authToken";
+const AUTH_USERNAME_KEY = "authUsername";
+const AUTH_REMEMBER_ME_KEY = "authRememberMe";
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mock validation - replace with backend API call later
@@ -86,20 +90,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkStoredAuth = async () => {
       try {
+        const rememberMe = await AsyncStorage.getItem(AUTH_REMEMBER_ME_KEY);
+        const shouldRestoreAuth = rememberMe === "true";
+
+        if (!shouldRestoreAuth) {
+          await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
+          try {
+            await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          } catch (e) {
+            // ignore if SecureStore not available
+          }
+          setUser(null);
+          return;
+        }
+
         // Try SecureStore first (native), fall back to AsyncStorage (web)
         let storedToken = null as string | null;
         try {
-          storedToken = await SecureStore.getItemAsync("authToken");
+          storedToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
         } catch (e) {
           // SecureStore may not be available on web; ignore
           storedToken = null;
         }
 
         if (!storedToken) {
-          storedToken = await AsyncStorage.getItem("authToken");
+          storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
         }
 
-        const storedUsername = await AsyncStorage.getItem("authUsername");
+        const storedUsername = await AsyncStorage.getItem(AUTH_USERNAME_KEY);
 
         if (storedToken && storedUsername) {
           // Validate stored token and retrieve user data
@@ -141,15 +159,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.user) {
         setUser(result.user);
 
-        // Persist token and username so a reload keeps the user logged in.
-        // Store in both SecureStore (native) and AsyncStorage (web) for cross-platform reliability.
-        try {
-          await SecureStore.setItemAsync("authToken", result.user.token);
-        } catch (e) {
-          // ignore if SecureStore not available
+        if (rememberMe) {
+          try {
+            await SecureStore.setItemAsync(AUTH_TOKEN_KEY, result.user.token);
+          } catch (e) {
+            // ignore if SecureStore not available
+          }
+          await AsyncStorage.setItem(AUTH_TOKEN_KEY, result.user.token);
+          await AsyncStorage.setItem(AUTH_USERNAME_KEY, result.user.username);
+          await AsyncStorage.setItem(AUTH_REMEMBER_ME_KEY, "true");
+        } else {
+          try {
+            await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          } catch (e) {
+            // ignore if SecureStore not available
+          }
+          await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
         }
-        await AsyncStorage.setItem("authToken", result.user.token);
-        await AsyncStorage.setItem("authUsername", result.user.username);
 
         return {
           success: true,
@@ -171,12 +197,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setUser(null);
       try {
-        await SecureStore.deleteItemAsync("authToken");
+        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
       } catch (e) {
         // ignore if not available
       }
-      await AsyncStorage.removeItem("authToken");
-      await AsyncStorage.removeItem("authUsername");
+      await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_REMEMBER_ME_KEY]);
     } catch (error) {
       console.error("Error logging out:", error);
     } finally {
