@@ -1,29 +1,42 @@
-import { StyleSheet, View, Text, Pressable, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
-import { useTranslation } from '@/hooks/use-translation';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Header } from "@/components/header";
+import { Colors } from "@/constants/theme";
+import { useAuth } from "@/contexts/auth-context";
+import { useTranslation } from "@/hooks/use-translation";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 
 export default function ChefProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
-  const [driverName, setDriverName] = useState('');
-  const [driverUsername, setDriverUsername] = useState('');
-  const [driverPassword, setDriverPassword] = useState('');
+  const [activeTab, setActiveTab] = useState<"profile" | "settings">("profile");
+  const [driverName, setDriverName] = useState("");
+  const [driverUsername, setDriverUsername] = useState("");
+  const [driverPassword, setDriverPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/login');
+    router.replace("/login");
   };
 
   const handleCreateDriver = async () => {
-    if (!driverName.trim() || !driverUsername.trim() || !driverPassword.trim()) {
-      Alert.alert(t('common', 'error'), t('chefProfile', 'alertFillFields'));
+    if (
+      !driverName.trim() ||
+      !driverUsername.trim() ||
+      !driverPassword.trim()
+    ) {
+      Alert.alert(t("common", "error"), t("chefProfile", "alertFillFields"));
       return;
     }
 
@@ -32,12 +45,15 @@ export default function ChefProfileScreen() {
       // TODO: Replace with actual API call
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      Alert.alert(t('common', 'success'), `"${driverName}" ${t('chefProfile', 'alertDriverCreated')}`);
-      setDriverName('');
-      setDriverUsername('');
-      setDriverPassword('');
+      Alert.alert(
+        t("common", "success"),
+        `"${driverName}" ${t("chefProfile", "alertDriverCreated")}`,
+      );
+      setDriverName("");
+      setDriverUsername("");
+      setDriverPassword("");
     } catch (error) {
-      Alert.alert(t('common', 'error'), t('chefProfile', 'alertCreateFailed'));
+      Alert.alert(t("common", "error"), t("chefProfile", "alertCreateFailed"));
     } finally {
       setIsCreating(false);
     }
@@ -45,39 +61,60 @@ export default function ChefProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle={t('chefProfile', 'headerSubtitle')} code="CH" />
+      <Header
+        title="TRANSLOG PRO"
+        subtitle={t("chefProfile", "headerSubtitle")}
+        code="CH"
+        onCodePress={() => router.push('/chef/profile')}
+        showLogout={true}
+      />
 
       <View style={styles.tabsContainer}>
         <Pressable
-          style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
-          onPress={() => setActiveTab('profile')}
+          style={[styles.tab, activeTab === "profile" && styles.tabActive]}
+          onPress={() => setActiveTab("profile")}
         >
-          <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
-            {t('chefProfile', 'tabProfile')}
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "profile" && styles.tabTextActive,
+            ]}
+          >
+            {t("chefProfile", "tabProfile")}
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.tab, activeTab === 'settings' && styles.tabActive]}
-          onPress={() => setActiveTab('settings')}
+          style={[styles.tab, activeTab === "settings" && styles.tabActive]}
+          onPress={() => setActiveTab("settings")}
         >
-          <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
-            {t('chefProfile', 'tabManagement')}
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "settings" && styles.tabTextActive,
+            ]}
+          >
+            {t("chefProfile", "tabManagement")}
           </Text>
         </Pressable>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {activeTab === 'profile' ? (
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentInner}
+      >
+        {activeTab === "profile" ? (
           <>
             <View style={styles.profileCard}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatar}>
-                  {user?.name?.charAt(0).toUpperCase() || '?'}
+                  {user?.name?.charAt(0).toUpperCase() || "?"}
                 </Text>
               </View>
-              <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
+              <Text style={styles.profileName}>
+                {user?.name || t("common", "unknown")}
+              </Text>
               <Text style={styles.profileRole}>
-                {t('chefProfile', 'accountBadge')}
+                {t("chefProfile", "accountBadge")}
               </Text>
               <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
@@ -85,27 +122,37 @@ export default function ChefProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>{t('chefProfile', 'statsDrivers')}</Text>
+                <Text style={styles.statLabel}>
+                  {t("chefProfile", "statsDrivers")}
+                </Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>{t('chefProfile', 'statsOrders')}</Text>
+                <Text style={styles.statLabel}>
+                  {t("chefProfile", "statsOrders")}
+                </Text>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>{t('chefProfile', 'statsDistance')}</Text>
+                <Text style={styles.statLabel}>
+                  {t("chefProfile", "statsDistance")}
+                </Text>
               </View>
             </View>
           </>
         ) : (
           <>
             <View style={styles.settingsSection}>
-              <Text style={styles.sectionTitle}>{t('chefProfile', 'createDriverTitle')}</Text>
-              <Text style={styles.sectionDescription}>{t('chefProfile', 'createDriverDesc')}</Text>
+              <Text style={styles.sectionTitle}>
+                {t("chefProfile", "createDriverTitle")}
+              </Text>
+              <Text style={styles.sectionDescription}>
+                {t("chefProfile", "createDriverDesc")}
+              </Text>
 
               <TextInput
                 style={styles.input}
-                placeholder={t('chefProfile', 'driverNamePlaceholder')}
+                placeholder={t("chefProfile", "driverNamePlaceholder")}
                 value={driverName}
                 onChangeText={setDriverName}
                 editable={!isCreating}
@@ -113,7 +160,7 @@ export default function ChefProfileScreen() {
 
               <TextInput
                 style={styles.input}
-                placeholder={t('chefProfile', 'usernamePlaceholder')}
+                placeholder={t("chefProfile", "usernamePlaceholder")}
                 value={driverUsername}
                 onChangeText={setDriverUsername}
                 editable={!isCreating}
@@ -122,7 +169,7 @@ export default function ChefProfileScreen() {
 
               <TextInput
                 style={styles.input}
-                placeholder={t('chefProfile', 'passwordPlaceholder')}
+                placeholder={t("chefProfile", "passwordPlaceholder")}
                 value={driverPassword}
                 onChangeText={setDriverPassword}
                 secureTextEntry
@@ -131,42 +178,45 @@ export default function ChefProfileScreen() {
               />
 
               <Pressable
-                style={[styles.createButton, isCreating && styles.buttonDisabled]}
+                style={[
+                  styles.createButton,
+                  isCreating && styles.buttonDisabled,
+                ]}
                 onPress={handleCreateDriver}
                 disabled={isCreating}
               >
                 {isCreating ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={styles.createButtonText}>{t('chefProfile', 'createDriverButton')}</Text>
+                  <Text style={styles.createButtonText}>
+                    {t("chefProfile", "createDriverButton")}
+                  </Text>
                 )}
               </Pressable>
             </View>
 
             <View style={styles.settingsSection}>
-              <Text style={styles.sectionTitle}>{t('chefProfile', 'accountSection')}</Text>
+              <Text style={styles.sectionTitle}>
+                {t("chefProfile", "accountSection")}
+              </Text>
               <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>{t('chefProfile', 'usernameLabel')}</Text>
+                <Text style={styles.settingLabel}>
+                  {t("chefProfile", "usernameLabel")}
+                </Text>
                 <Text style={styles.settingValue}>{user?.username}</Text>
               </View>
               <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>{t('chefProfile', 'roleLabel')}</Text>
-                <Text style={styles.settingValue}>{t('chefProfile', 'roleValue')}</Text>
+                <Text style={styles.settingLabel}>
+                  {t("chefProfile", "roleLabel")}
+                </Text>
+                <Text style={styles.settingValue}>
+                  {t("chefProfile", "roleValue")}
+                </Text>
               </View>
             </View>
           </>
         )}
       </ScrollView>
-
-      <Pressable
-        style={({ pressed }) => [
-          styles.logoutButton,
-          { opacity: pressed ? 0.7 : 1 },
-        ]}
-        onPress={handleLogout}
-      >
-        <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -177,24 +227,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ui.lightGray,
   },
   tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
+    flexDirection: "row",
+    backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
   tab: {
     flex: 1,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    borderBottomColor: "transparent",
   },
   tabActive: {
     borderBottomColor: Colors.ui.primary,
   },
   tabText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.ui.darkGray,
   },
   tabTextActive: {
@@ -208,12 +258,12 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   profileCard: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 16,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -224,18 +274,18 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     backgroundColor: Colors.ui.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
   },
   avatar: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
   },
   profileName: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 4,
     color: Colors.ui.charcoal,
   },
@@ -247,21 +297,21 @@ const styles = StyleSheet.create({
   profileUsername: {
     fontSize: 13,
     color: Colors.ui.darkGray,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 24,
     gap: 12,
   },
   statBox: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -269,7 +319,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.ui.primary,
     marginBottom: 4,
   },
@@ -278,11 +328,11 @@ const styles = StyleSheet.create({
     color: Colors.ui.darkGray,
   },
   settingsSection: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -290,7 +340,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 4,
     color: Colors.ui.charcoal,
   },
@@ -312,13 +362,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ui.primary,
     borderRadius: 8,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   createButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -327,9 +377,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   settingLabel: {
     fontSize: 14,
@@ -337,25 +387,7 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.ui.charcoal,
-  },
-  logoutButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    shadowColor: Colors.ui.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
   },
 });

@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type UserRole = 'boss' | 'driver';
+export type UserRole = "boss" | "driver";
 
 export interface User {
   id: string;
@@ -22,7 +22,11 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string, rememberMe: boolean) => Promise<LoginResponse>;
+  login: (
+    username: string,
+    password: string,
+    rememberMe: boolean,
+  ) => Promise<LoginResponse>;
   logout: () => Promise<void>;
 }
 
@@ -31,7 +35,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Mock validation - replace with backend API call later
 const validateCredentials = async (
   username: string,
-  password: string
+  password: string,
 ): Promise<LoginResponse> => {
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -39,22 +43,22 @@ const validateCredentials = async (
   // Mock credentials for testing
   const mockUsers: Record<string, { password: string; user: User }> = {
     boss: {
-      password: 'boss123',
+      password: "boss123",
       user: {
-        id: '1',
-        username: 'boss',
-        name: 'Boss User',
-        role: 'boss',
+        id: "1",
+        username: "boss",
+        name: "Boss User",
+        role: "boss",
         token: `token_boss_${Date.now()}`,
       },
     },
     driver: {
-      password: 'driver123',
+      password: "driver123",
       user: {
-        id: '2',
-        username: 'driver',
-        name: 'Driver User',
-        role: 'driver',
+        id: "2",
+        username: "driver",
+        name: "Driver User",
+        role: "driver",
         token: `token_driver_${Date.now()}`,
       },
     },
@@ -70,7 +74,7 @@ const validateCredentials = async (
 
   return {
     success: false,
-    error: 'Invalid username or password',
+    error: "Invalid username or password",
   };
 };
 
@@ -82,21 +86,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkStoredAuth = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync('authToken');
-        const storedUsername = await AsyncStorage.getItem('authUsername');
+        // Try SecureStore first (native), fall back to AsyncStorage (web)
+        let storedToken = null as string | null;
+        try {
+          storedToken = await SecureStore.getItemAsync("authToken");
+        } catch (e) {
+          // SecureStore may not be available on web; ignore
+          storedToken = null;
+        }
+
+        if (!storedToken) {
+          storedToken = await AsyncStorage.getItem("authToken");
+        }
+
+        const storedUsername = await AsyncStorage.getItem("authUsername");
 
         if (storedToken && storedUsername) {
           // Validate stored token and retrieve user data
           // For now, just reconstruct user from stored data
           // In production, validate token with backend
-          const userRole = storedUsername === 'boss' ? 'boss' : 'driver';
+          const userRole = storedUsername === "boss" ? "boss" : "driver";
           const userNames: Record<string, string> = {
-            boss: 'Boss User',
-            driver: 'Driver User',
+            boss: "Boss User",
+            driver: "Driver User",
           };
 
           setUser({
-            id: userRole === 'boss' ? '1' : '2',
+            id: userRole === "boss" ? "1" : "2",
             username: storedUsername,
             name: userNames[storedUsername] || storedUsername,
             role: userRole,
@@ -104,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } catch (error) {
-        console.error('Error checking stored auth:', error);
+        console.error("Error checking stored auth:", error);
       } finally {
         setIsLoading(false);
       }
@@ -116,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (
     username: string,
     password: string,
-    rememberMe: boolean
+    rememberMe: boolean,
   ): Promise<LoginResponse> => {
     setIsLoading(true);
     try {
@@ -125,11 +141,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.user) {
         setUser(result.user);
 
-        // Store token and username if remember me is checked
-        if (rememberMe) {
-          await SecureStore.setItemAsync('authToken', result.user.token);
-          await AsyncStorage.setItem('authUsername', result.user.username);
+        // Persist token and username so a reload keeps the user logged in.
+        // Store in both SecureStore (native) and AsyncStorage (web) for cross-platform reliability.
+        try {
+          await SecureStore.setItemAsync("authToken", result.user.token);
+        } catch (e) {
+          // ignore if SecureStore not available
         }
+        await AsyncStorage.setItem("authToken", result.user.token);
+        await AsyncStorage.setItem("authUsername", result.user.username);
 
         return {
           success: true,
@@ -150,10 +170,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       setUser(null);
-      await SecureStore.deleteItemAsync('authToken');
-      await AsyncStorage.removeItem('authUsername');
+      try {
+        await SecureStore.deleteItemAsync("authToken");
+      } catch (e) {
+        // ignore if not available
+      }
+      await AsyncStorage.removeItem("authToken");
+      await AsyncStorage.removeItem("authUsername");
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error("Error logging out:", error);
     } finally {
       setIsLoading(false);
     }
@@ -177,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
