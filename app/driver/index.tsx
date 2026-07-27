@@ -5,27 +5,32 @@ import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { Order, orderService } from "../services/orderService";
 
 export default function DriverDashboardScreen() {
-  const { user } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const { t, language } = useTranslation();
   const router = useRouter();
   const timeLocale = language === "de" ? "de-DE" : "en-US";
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
 
   useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+
     if (user?.id) {
       loadDriverOrders();
     }
-  }, [user?.id]);
+  }, [isLoading, isAuthenticated, user?.id, router]);
 
   const loadDriverOrders = () => {
     if (user?.id) {
@@ -57,16 +62,27 @@ export default function DriverDashboardScreen() {
     return statusMap[status] || status;
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
         subtitle={`${t("driverDashboard", "headerSubtitle")} - ${user?.name || t("common", "unknown")}`}
         code={user?.username?.[0]?.toUpperCase() || "U"}
-        onCodePress={() => router.push('/driver/profile')}
+        onCodePress={() => router.push("/driver/profile")}
         showLogout={true}
       />
-
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
@@ -164,6 +180,12 @@ export default function DriverDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: Colors.ui.lightGray,
   },
   content: {
