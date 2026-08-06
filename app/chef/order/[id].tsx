@@ -1,9 +1,10 @@
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Order, orderService } from '../../services/orderService';
 
 export default function ChefOrderDetailScreen() {
@@ -79,9 +80,9 @@ export default function ChefOrderDetailScreen() {
       <Header title="TRANSLOG PRO" subtitle={t('chefOrderDetail', 'headerSubtitle')} code="CH" />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        <Pressable style={styles.backLink} onPress={() => router.back()}>
+        <FluidPressable style={styles.backLink} onPress={() => router.back()}>
           <Text style={styles.backLinkText}>← {t('chefOrderDetail', 'back')}</Text>
-        </Pressable>
+        </FluidPressable>
 
         <View style={styles.orderHeaderCard}>
           <View style={styles.orderHeaderRow}>
@@ -204,7 +205,7 @@ export default function ChefOrderDetailScreen() {
                 data={drivers}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                  <Pressable style={styles.driverOption} onPress={() => handleAssign(item.id)}>
+                  <FluidPressable style={styles.driverOption} onPress={() => handleAssign(item.id)}>
                     <Text style={styles.driverName}>{item.name}</Text>
                     <Text
                       style={[
@@ -214,7 +215,7 @@ export default function ChefOrderDetailScreen() {
                     >
                       {item.status === 'online' ? `● ${t('common', 'online')}` : `● ${t('common', 'offline')}`}
                     </Text>
-                  </Pressable>
+                  </FluidPressable>
                 )}
               />
             </>

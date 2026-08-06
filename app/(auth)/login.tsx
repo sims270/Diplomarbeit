@@ -1,42 +1,32 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useTranslation } from "@/hooks/use-translation";
 import React, { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  TextInput,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, TextInput } from "react-native";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
   const { login, isLoading } = useAuth();
-  const { t } = useTranslation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      setError(t("login", "errorFillFields"));
+      setError("Please fill in both username and password.");
       return;
     }
 
-    const result = await login(username, password, rememberMe);
+    const result = await login(username.trim(), password);
 
     if (!result.success) {
-      setError(t("login", "errorInvalid"));
-      setPassword("");
+      setError(result.error ?? "Login failed. Please try again.");
     } else {
       setError("");
-      setUsername("");
-      setPassword("");
     }
   };
 
@@ -46,10 +36,12 @@ export default function LoginScreen() {
     <ThemedView style={styles.container}>
       <ThemedView style={styles.contentContainer}>
         <ThemedText type="title" style={styles.title}>
-          {t("login", "title")}
+          Login
         </ThemedText>
 
-        <ThemedText style={styles.subtitle}>{t("login", "subtitle")}</ThemedText>
+        <ThemedText style={styles.subtitle}>
+          Sign in with your username and password
+        </ThemedText>
 
         {error ? (
           <ThemedView style={[styles.errorBox, { backgroundColor: "#ffebee" }]}>
@@ -66,12 +58,13 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder={t("login", "usernamePlaceholder")}
+          placeholder="Username"
           placeholderTextColor={themeColors.tabIconDefault}
           value={username}
           onChangeText={setUsername}
           editable={!isLoading}
           autoCapitalize="none"
+          autoComplete="username"
         />
 
         <TextInput
@@ -83,37 +76,17 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder={t("login", "passwordPlaceholder")}
+          placeholder="Password"
           placeholderTextColor={themeColors.tabIconDefault}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           editable={!isLoading}
           autoCapitalize="none"
+          autoComplete="password"
         />
 
-        <Pressable
-          style={styles.checkboxContainer}
-          onPress={() => setRememberMe(!rememberMe)}
-          disabled={isLoading}
-        >
-          <ThemedView
-            style={[
-              styles.checkbox,
-              {
-                backgroundColor: rememberMe ? themeColors.tint : "transparent",
-                borderColor: themeColors.tint,
-              },
-            ]}
-          >
-            {rememberMe && (
-              <ThemedText style={{ color: "white" }}>✓</ThemedText>
-            )}
-          </ThemedView>
-          <ThemedText style={styles.checkboxLabel}>{t("login", "rememberMe")}</ThemedText>
-        </Pressable>
-
-        <Pressable
+        <FluidPressable
           style={[
             styles.loginButton,
             {
@@ -129,25 +102,7 @@ export default function LoginScreen() {
           ) : (
             <ThemedText style={styles.loginButtonText}>Login</ThemedText>
           )}
-        </Pressable>
-
-        {/*
-        <ThemedView style={styles.demoBox}>
-          <ThemedText type="defaultSemiBold" style={styles.demoTitle}>
-            Demo Credentials
-          </ThemedText>
-          <ThemedText style={styles.demoText}>
-            Boss:{'\n'}
-            Username: boss{'\n'}
-            Password: boss123
-          </ThemedText>
-          <ThemedText style={styles.demoText}>
-            Driver:{'\n'}
-            Username: driver{'\n'}
-            Password: driver123
-          </ThemedText>
-        </ThemedView>
-        */}
+        </FluidPressable>
       </ThemedView>
     </ThemedView>
   );
@@ -187,47 +142,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
-  checkboxContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-  },
   loginButton: {
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "white",
-  },
-  demoBox: {
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  demoTitle: {
-    marginBottom: 8,
-    fontSize: 14,
-  },
-  demoText: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: "monospace",
   },
 });

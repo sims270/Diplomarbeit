@@ -1,8 +1,11 @@
-import { StyleSheet, ScrollView, View, Text, Pressable, Modal, TextInput, ActivityIndicator, FlatList, Alert, Switch } from 'react-native';
+import { StyleSheet, ScrollView, View, Text, Modal, TextInput, ActivityIndicator, FlatList, Alert, Switch } from 'react-native';
+import { BlurSurface } from '@/components/fluid/BlurSurface';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
+import { useReducedMotion } from '@/lib/motion/reducedMotion';
 import { StatusCard } from '@/components/status-card';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
@@ -32,6 +35,7 @@ export default function ChefDashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
+  const reducedMotion = useReducedMotion();
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -179,6 +183,17 @@ export default function ChefDashboardScreen() {
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.quickActionsRow}>
+          <FluidPressable
+            style={styles.manageDriversButton}
+            onPress={() => router.push('/chef/drivers')}
+          >
+            <Text style={styles.manageDriversButtonText}>
+              {t('chefDashboard', 'manageDriversButton')}
+            </Text>
+          </FluidPressable>
+        </View>
+
         <View style={styles.statusContainer}>
           <StatusCard
             count={stats.pending}
@@ -200,9 +215,9 @@ export default function ChefDashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('chefDashboard', 'ordersToday')} ({orders.length})</Text>
-            <Pressable style={styles.addButton} onPress={() => setShowCreateModal(true)}>
+            <FluidPressable style={styles.addButton} onPress={() => setShowCreateModal(true)}>
               <Text style={styles.addButtonText}>{t('chefDashboard', 'addOrderButton')}</Text>
-            </Pressable>
+            </FluidPressable>
           </View>
 
           {orders.length === 0 ? (
@@ -218,7 +233,7 @@ export default function ChefDashboardScreen() {
               data={orders}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <Pressable
+                <FluidPressable
                   style={styles.orderCard}
                   onPress={() => router.push({ pathname: '/chef/order/[id]', params: { id: item.id } })}
                 >
@@ -245,14 +260,14 @@ export default function ChefDashboardScreen() {
                       {t('chefDashboard', 'assignedTo')}: {drivers.find(d => d.id === item.assignedTo)?.name || t('common', 'unknown')}
                     </Text>
                   ) : (
-                    <Pressable
+                    <FluidPressable
                       style={styles.assignButton}
                       onPress={() => openAssignModal(item)}
                     >
                       <Text style={styles.assignButtonText}>{t('chefDashboard', 'assignButton')}</Text>
-                    </Pressable>
+                    </FluidPressable>
                   )}
-                </Pressable>
+                </FluidPressable>
               )}
             />
           )}
@@ -262,16 +277,22 @@ export default function ChefDashboardScreen() {
       <Modal
         visible={showAssignModal}
         transparent
-        animationType="slide"
+        animationType={reducedMotion ? 'none' : 'slide'}
         onRequestClose={() => setShowAssignModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefDashboard', 'modalTitle')}</Text>
-              <Pressable onPress={() => setShowAssignModal(false)}>
+              <FluidPressable onPress={() => setShowAssignModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
-              </Pressable>
+              </FluidPressable>
             </View>
 
             {selectedOrder && (
@@ -286,7 +307,7 @@ export default function ChefDashboardScreen() {
                   data={drivers}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
-                    <Pressable
+                    <FluidPressable
                       style={[
                         styles.driverOption,
                         selectedDriver === item.id && styles.driverOptionSelected,
@@ -314,20 +335,20 @@ export default function ChefDashboardScreen() {
                       >
                         {item.status === 'online' ? `● ${t('common', 'online')}` : `● ${t('common', 'offline')}`}
                       </Text>
-                    </Pressable>
+                    </FluidPressable>
                   )}
                 />
 
                 <View style={styles.modalButtonContainer}>
-                  <Pressable
+                  <FluidPressable
                     style={[styles.modalButton, styles.cancelButton]}
                     onPress={() => setShowAssignModal(false)}
                     disabled={isSubmitting}
                   >
                     <Text style={styles.cancelButtonText}>{t('common', 'cancel')}</Text>
-                  </Pressable>
+                  </FluidPressable>
 
-                  <Pressable
+                  <FluidPressable
                     style={[
                       styles.modalButton,
                       styles.submitButton,
@@ -341,7 +362,7 @@ export default function ChefDashboardScreen() {
                     ) : (
                       <Text style={styles.submitButtonText}>{t('chefDashboard', 'assign')}</Text>
                     )}
-                  </Pressable>
+                  </FluidPressable>
                 </View>
               </>
             )}
@@ -352,16 +373,22 @@ export default function ChefDashboardScreen() {
       <Modal
         visible={showCreateModal}
         transparent
-        animationType="slide"
+        animationType={reducedMotion ? 'none' : 'slide'}
         onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefCreateOrder', 'modalTitle')}</Text>
-              <Pressable onPress={() => setShowCreateModal(false)}>
+              <FluidPressable onPress={() => setShowCreateModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
-              </Pressable>
+              </FluidPressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -484,7 +511,7 @@ export default function ChefDashboardScreen() {
                     { value: 'urgent', label: t('chefCreateOrder', 'priorityUrgent') },
                   ] as { value: Order['priority']; label: string }[]
                 ).map((option) => (
-                  <Pressable
+                  <FluidPressable
                     key={option.value}
                     style={[
                       styles.priorityOption,
@@ -500,20 +527,20 @@ export default function ChefDashboardScreen() {
                     >
                       {option.label}
                     </Text>
-                  </Pressable>
+                  </FluidPressable>
                 ))}
               </View>
 
               <View style={styles.modalButtonContainer}>
-                <Pressable
+                <FluidPressable
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => setShowCreateModal(false)}
                   disabled={isCreatingOrder}
                 >
                   <Text style={styles.cancelButtonText}>{t('common', 'cancel')}</Text>
-                </Pressable>
+                </FluidPressable>
 
-                <Pressable
+                <FluidPressable
                   style={[styles.modalButton, styles.submitButton, isCreatingOrder && styles.submitButtonDisabled]}
                   onPress={handleCreateOrder}
                   disabled={isCreatingOrder}
@@ -523,7 +550,7 @@ export default function ChefDashboardScreen() {
                   ) : (
                     <Text style={styles.submitButtonText}>{t('chefCreateOrder', 'createButton')}</Text>
                   )}
-                </Pressable>
+                </FluidPressable>
               </View>
             </ScrollView>
           </View>
@@ -545,6 +572,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 16,
+  },
+  quickActionsRow: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  manageDriversButton: {
+    backgroundColor: Colors.ui.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  manageDriversButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '700',
   },
   section: {
     paddingHorizontal: 16,
@@ -660,7 +702,8 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // Backdrop is BlurSurface (a translucent material), not a flat
+    // scrim — see the fluid-design "materials & depth" guidance.
     justifyContent: 'flex-end',
   },
   modalContent: {

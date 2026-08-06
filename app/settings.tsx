@@ -1,3 +1,4 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
@@ -6,7 +7,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Switch } from "react-native";
+import { StyleSheet, Switch } from "react-native";
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
           {themeOptions.map((option) => {
             const isActive = themePreference === option.value;
             return (
-              <Pressable
+              <FluidPressable
                 key={option.value}
                 style={[
                   styles.optionButton,
@@ -73,7 +74,7 @@ export default function SettingsScreen() {
                 >
                   {option.label}
                 </ThemedText>
-              </Pressable>
+              </FluidPressable>
             );
           })}
         </ThemedView>
@@ -86,7 +87,7 @@ export default function SettingsScreen() {
           {languageOptions.map((option) => {
             const isActive = language === option.value;
             return (
-              <Pressable
+              <FluidPressable
                 key={option.value}
                 style={[
                   styles.optionButton,
@@ -106,7 +107,7 @@ export default function SettingsScreen() {
                 >
                   {option.label}
                 </ThemedText>
-              </Pressable>
+              </FluidPressable>
             );
           })}
         </ThemedView>
@@ -126,14 +127,14 @@ export default function SettingsScreen() {
           />
         </ThemedView>
 
-        <Pressable
+        <FluidPressable
           style={[styles.backButton, { borderColor: themeColors.tint }]}
           onPress={() => router.back()}
         >
           <ThemedText style={{ color: themeColors.tint }}>
             {t("settings", "back")}
           </ThemedText>
-        </Pressable>
+        </FluidPressable>
       </ThemedView>
     </ThemedView>
   );

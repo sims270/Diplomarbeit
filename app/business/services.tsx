@@ -1,8 +1,9 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { Gradients } from "@/constants/theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ServicesScreen() {
   const router = useRouter();
@@ -27,9 +28,9 @@ export default function ServicesScreen() {
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <Pressable onPress={() => router.back()}>
+          <FluidPressable onPress={() => router.back()}>
             <Text style={styles.backBtn}>← {t("common", "back")}</Text>
-          </Pressable>
+          </FluidPressable>
           <Text style={styles.headerTitle}>{t("services", "headerTitle")}</Text>
           <View style={{ width: 40 }} />
         </View>

@@ -1,7 +1,7 @@
 import { StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { useState, useEffect } from 'react';
 import { orderService, Order } from '../services/orderService';

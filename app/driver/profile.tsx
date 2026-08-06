@@ -1,9 +1,10 @@
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function DriverProfileScreen() {
   const { user } = useAuth();
@@ -19,22 +20,22 @@ export default function DriverProfileScreen() {
       />
 
       <View style={styles.tabsContainer}>
-        <Pressable
+        <FluidPressable
           style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
           onPress={() => setActiveTab('profile')}
         >
           <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
             {t('driverProfile', 'tabProfile')}
           </Text>
-        </Pressable>
-        <Pressable
+        </FluidPressable>
+        <FluidPressable
           style={[styles.tab, activeTab === 'settings' && styles.tabActive]}
           onPress={() => setActiveTab('settings')}
         >
           <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
             {t('driverProfile', 'tabSettings')}
           </Text>
-        </Pressable>
+        </FluidPressable>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>

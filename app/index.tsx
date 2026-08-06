@@ -1,5 +1,6 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { Colors, Gradients } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,7 +9,6 @@ import React, { useEffect } from "react";
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -64,21 +64,21 @@ export default function WelcomeScreen() {
             style={styles.logoImage}
           />{" "}
           <View style={styles.navLinks}>
-            <Pressable onPress={() => router.push("/login")}>
+            <FluidPressable onPress={() => router.push("/(auth)/login")}>
               <Text style={styles.navLink}>{t("home", "navLogin")}</Text>
-            </Pressable>
+            </FluidPressable>
             <Text style={styles.navDivider}>|</Text>
-            <Pressable onPress={() => router.push("/business/about")}>
+            <FluidPressable onPress={() => router.push("/business/about")}>
               <Text style={styles.navLink}>{t("home", "navAbout")}</Text>
-            </Pressable>
+            </FluidPressable>
             <Text style={styles.navDivider}>|</Text>
-            <Pressable onPress={() => router.push("/business/services")}>
+            <FluidPressable onPress={() => router.push("/business/services")}>
               <Text style={styles.navLink}>{t("home", "navGoals")}</Text>
-            </Pressable>
+            </FluidPressable>
             <Text style={styles.navDivider}>|</Text>
-            <Pressable onPress={() => router.push("/business/contact")}>
+            <FluidPressable onPress={() => router.push("/business/contact")}>
               <Text style={styles.navLink}>{t("home", "navContact")}</Text>
-            </Pressable>
+            </FluidPressable>
           </View>
         </View>
       </LinearGradient>
@@ -112,12 +112,12 @@ export default function WelcomeScreen() {
             {t("home", "heroSubtitle")}
           </Text>
 
-          <Pressable
+          <FluidPressable
             style={styles.seeMoreBtn}
-            onPress={() => router.push("/login")}
+            onPress={() => router.push("/(auth)/login")}
           >
             <Text style={styles.seeMoreText}>{t("home", "heroButton")}</Text>
-          </Pressable>
+          </FluidPressable>
         </View>
       </LinearGradient>
     </ScrollView>

@@ -1,12 +1,13 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import { ActivityIndicator, StyleSheet } from "react-native";
 
 export default function LogoutScreen() {
   const colorScheme = useColorScheme();
@@ -45,7 +46,7 @@ export default function LogoutScreen() {
           </ThemedView>
         ) : null}
 
-        <Pressable
+        <FluidPressable
           style={[
             styles.logoutButton,
             {
@@ -61,9 +62,9 @@ export default function LogoutScreen() {
           ) : (
             <ThemedText style={styles.logoutButtonText}>{t("logout", "logoutButton")}</ThemedText>
           )}
-        </Pressable>
+        </FluidPressable>
 
-        <Pressable
+        <FluidPressable
           style={styles.cancelButton}
           onPress={() => router.back()}
           disabled={isLoading}
@@ -71,7 +72,7 @@ export default function LogoutScreen() {
           <ThemedText style={{ color: themeColors.tint }}>
             {t("logout", "cancelButton")}
           </ThemedText>
-        </Pressable>
+        </FluidPressable>
       </ThemedView>
     </ThemedView>
   );

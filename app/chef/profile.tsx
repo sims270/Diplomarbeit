@@ -1,7 +1,8 @@
-import { StyleSheet, View, Text, Pressable, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -11,36 +12,10 @@ export default function ChefProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
-  const [driverName, setDriverName] = useState('');
-  const [driverUsername, setDriverUsername] = useState('');
-  const [driverPassword, setDriverPassword] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/login');
-  };
-
-  const handleCreateDriver = async () => {
-    if (!driverName.trim() || !driverUsername.trim() || !driverPassword.trim()) {
-      Alert.alert(t('common', 'error'), t('chefProfile', 'alertFillFields'));
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      // TODO: Replace with actual API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      Alert.alert(t('common', 'success'), `"${driverName}" ${t('chefProfile', 'alertDriverCreated')}`);
-      setDriverName('');
-      setDriverUsername('');
-      setDriverPassword('');
-    } catch (error) {
-      Alert.alert(t('common', 'error'), t('chefProfile', 'alertCreateFailed'));
-    } finally {
-      setIsCreating(false);
-    }
+    router.replace('/(auth)/login');
   };
 
   return (
@@ -48,22 +23,22 @@ export default function ChefProfileScreen() {
       <Header title="TRANSLOG PRO" subtitle={t('chefProfile', 'headerSubtitle')} code="CH" />
 
       <View style={styles.tabsContainer}>
-        <Pressable
+        <FluidPressable
           style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
           onPress={() => setActiveTab('profile')}
         >
           <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
             {t('chefProfile', 'tabProfile')}
           </Text>
-        </Pressable>
-        <Pressable
+        </FluidPressable>
+        <FluidPressable
           style={[styles.tab, activeTab === 'settings' && styles.tabActive]}
           onPress={() => setActiveTab('settings')}
         >
           <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
             {t('chefProfile', 'tabManagement')}
           </Text>
-        </Pressable>
+        </FluidPressable>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
@@ -100,47 +75,15 @@ export default function ChefProfileScreen() {
         ) : (
           <>
             <View style={styles.settingsSection}>
-              <Text style={styles.sectionTitle}>{t('chefProfile', 'createDriverTitle')}</Text>
-              <Text style={styles.sectionDescription}>{t('chefProfile', 'createDriverDesc')}</Text>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'createDriverCardTitle')}</Text>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'createDriverCardDesc')}</Text>
 
-              <TextInput
-                style={styles.input}
-                placeholder={t('chefProfile', 'driverNamePlaceholder')}
-                value={driverName}
-                onChangeText={setDriverName}
-                editable={!isCreating}
-              />
-
-              <TextInput
-                style={styles.input}
-                placeholder={t('chefProfile', 'usernamePlaceholder')}
-                value={driverUsername}
-                onChangeText={setDriverUsername}
-                editable={!isCreating}
-                autoCapitalize="none"
-              />
-
-              <TextInput
-                style={styles.input}
-                placeholder={t('chefProfile', 'passwordPlaceholder')}
-                value={driverPassword}
-                onChangeText={setDriverPassword}
-                secureTextEntry
-                editable={!isCreating}
-                autoCapitalize="none"
-              />
-
-              <Pressable
-                style={[styles.createButton, isCreating && styles.buttonDisabled]}
-                onPress={handleCreateDriver}
-                disabled={isCreating}
+              <FluidPressable
+                style={styles.createButton}
+                onPress={() => router.push('/chef/drivers')}
               >
-                {isCreating ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.createButtonText}>{t('chefProfile', 'createDriverButton')}</Text>
-                )}
-              </Pressable>
+                <Text style={styles.createButtonText}>{t('chefProfile', 'createDriverCardButton')}</Text>
+              </FluidPressable>
             </View>
 
             <View style={styles.settingsSection}>
@@ -158,15 +101,9 @@ export default function ChefProfileScreen() {
         )}
       </ScrollView>
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.logoutButton,
-          { opacity: pressed ? 0.7 : 1 },
-        ]}
-        onPress={handleLogout}
-      >
+      <FluidPressable style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
-      </Pressable>
+      </FluidPressable>
     </View>
   );
 }

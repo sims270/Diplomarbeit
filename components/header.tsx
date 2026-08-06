@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 
 export interface HeaderProps {
   title: string;
@@ -13,7 +14,7 @@ export interface HeaderProps {
 
 export function Header({ title, subtitle, code }: HeaderProps) {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { t } = useTranslation();
 
   return (
@@ -24,19 +25,28 @@ export function Header({ title, subtitle, code }: HeaderProps) {
       </View>
       <View style={styles.rightContainer}>
         {code && <Text style={styles.code}>{code}</Text>}
-        <Pressable
+        {user?.role === 'boss' && (
+          <FluidPressable
+            style={styles.settingsButton}
+            onPress={() => router.push('/chef/drivers')}
+            accessibilityLabel={t('chefProfile', 'createDriverCardButton')}
+          >
+            <Text style={styles.settingsButtonText}>👤</Text>
+          </FluidPressable>
+        )}
+        <FluidPressable
           style={styles.settingsButton}
           onPress={() => router.push('/settings')}
         >
           <Text style={styles.settingsButtonText}>⚙</Text>
-        </Pressable>
+        </FluidPressable>
         {isAuthenticated && (
-          <Pressable
+          <FluidPressable
             style={styles.logoutButton}
             onPress={() => router.push('/logout')}
           >
             <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
-          </Pressable>
+          </FluidPressable>
         )}
       </View>
     </View>
