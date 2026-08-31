@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -84,7 +83,7 @@ export const OrderStatusUpdate: React.FC<OrderStatusUpdateProps> = ({
       setSelectedStatus(newStatus);
 
       Alert.alert('Erfolg', `Status aktualisiert zu: ${getStatusLabel(newStatus)}`);
-    } catch (error) {
+    } catch {
       Alert.alert('Fehler', 'Status-Update konnte nicht übertragen werden');
     } finally {
       setUpdating(false);

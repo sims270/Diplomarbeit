@@ -34,7 +34,7 @@ const emptyOrderForm = {
 export default function ChefDashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const reducedMotion = useReducedMotion();
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -48,8 +48,15 @@ export default function ChefDashboardScreen() {
   const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0 });
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isLoading, isAuthenticated, router]);
 
   const loadData = () => {
     setOrders(orderService.getAllOrders());
@@ -173,6 +180,18 @@ export default function ChefDashboardScreen() {
     };
     return statusMap[status] || status;
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -563,6 +582,12 @@ export default function ChefDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
   },
   content: {

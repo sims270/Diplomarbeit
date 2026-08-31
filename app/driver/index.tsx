@@ -1,22 +1,29 @@
-import { StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
+import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
+import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { orderService, Order } from '../services/orderService';
 
 export default function DriverDashboardScreen() {
-  const { user } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
   const { t, language } = useTranslation();
+  const router = useRouter();
   const timeLocale = language === 'de' ? 'de-DE' : 'en-US';
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
 
   useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+
     if (user?.id) {
       loadDriverOrders();
     }
-  }, [user?.id]);
+  }, [isLoading, isAuthenticated, user?.id, router]);
 
   const loadDriverOrders = () => {
     if (user?.id) {
@@ -47,6 +54,18 @@ export default function DriverDashboardScreen() {
     };
     return statusMap[status] || status;
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -129,6 +148,12 @@ export default function DriverDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
   },
   content: {

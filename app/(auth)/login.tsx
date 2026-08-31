@@ -3,13 +3,17 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import React, { useState } from "react";
+import { useTranslation } from "@/hooks/use-translation";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, TextInput } from "react-native";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
-  const { login, isLoading } = useAuth();
+  const router = useRouter();
+  const { login, isLoading, isAuthenticated, user } = useAuth();
+  const { t } = useTranslation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -17,14 +21,14 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      setError("Please fill in both username and password.");
+      setError(t("login", "errorFillFields"));
       return;
     }
 
     const result = await login(username.trim(), password);
 
     if (!result.success) {
-      setError(result.error ?? "Login failed. Please try again.");
+      setError(result.error ?? t("login", "errorInvalid"));
     } else {
       setError("");
     }
@@ -32,15 +36,25 @@ export default function LoginScreen() {
 
   const themeColors = Colors[colorScheme ?? "light"];
 
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      if (user?.role === "boss") {
+        router.replace("/chef");
+      } else {
+        router.replace("/driver");
+      }
+    }
+  }, [isLoading, isAuthenticated, user, router]);
+
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.contentContainer}>
         <ThemedText type="title" style={styles.title}>
-          Login
+          {t("login", "title")}
         </ThemedText>
 
         <ThemedText style={styles.subtitle}>
-          Sign in with your username and password
+          {t("login", "subtitle")}
         </ThemedText>
 
         {error ? (
@@ -58,7 +72,7 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder="Username"
+          placeholder={t("login", "usernamePlaceholder")}
           placeholderTextColor={themeColors.tabIconDefault}
           value={username}
           onChangeText={setUsername}
@@ -76,7 +90,7 @@ export default function LoginScreen() {
               backgroundColor: themeColors.background,
             },
           ]}
-          placeholder="Password"
+          placeholder={t("login", "passwordPlaceholder")}
           placeholderTextColor={themeColors.tabIconDefault}
           value={password}
           onChangeText={setPassword}
@@ -100,7 +114,9 @@ export default function LoginScreen() {
           {isLoading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <ThemedText style={styles.loginButtonText}>Login</ThemedText>
+            <ThemedText style={styles.loginButtonText}>
+              {t("login", "loginButton")}
+            </ThemedText>
           )}
         </FluidPressable>
       </ThemedView>

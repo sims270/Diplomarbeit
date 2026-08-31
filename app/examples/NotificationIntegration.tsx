@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
-import { SafeAreaView, View, StyleSheet, ScrollView } from 'react-native';
-import { NotificationProvider } from '../context/NotificationContext';
-import { NotificationCenter } from '../components/NotificationCenter';
-import { OrderStatusUpdate } from '../components/OrderStatusUpdate';
-import { useNotificationsSorted } from '../hooks/useNotifications';
-import { NotificationItem } from '../components/NotificationItem';
+import React from "react";
+import { SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
+import { NotificationCenter } from "../components/NotificationCenter";
+import { NotificationItem } from "../components/NotificationItem";
+import { OrderStatusUpdate } from "../components/OrderStatusUpdate";
+import { NotificationProvider } from "../context/NotificationContext";
+import { useNotificationsSorted } from "../hooks/useNotifications";
 
 /**
  * Beispiel-Integrationen für das Real-Time Notification System
@@ -68,7 +68,7 @@ export const ChefDashboard = ({ userId }: { userId: string }) => {
                 notification={notification}
                 onPress={() => {
                   // Navigation zu Auftragsdetails
-                  console.log('Navigate to order:', notification.orderId);
+                  console.log("Navigate to order:", notification.orderId);
                 }}
               />
             ))}
@@ -83,7 +83,7 @@ export const ChefDashboard = ({ userId }: { userId: string }) => {
  * Vollständig strukturierte App mit Notifications
  */
 export const AppWithNotifications = () => {
-  const userId = 'user_002'; // Würde normalerweise vom Auth-Context kommen
+  const userId = "user_002"; // Würde normalerweise vom Auth-Context kommen
 
   return (
     <NotificationProvider userId={userId}>
@@ -100,11 +100,11 @@ export const AppWithNotifications = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
   },
   headerContent: {
     padding: 16,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   content: {
     flex: 1,

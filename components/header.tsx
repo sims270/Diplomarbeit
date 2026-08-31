@@ -17,6 +17,42 @@ export function Header({ title, subtitle, code }: HeaderProps) {
   const { isAuthenticated, user } = useAuth();
   const { t } = useTranslation();
 
+  const handleCodePress = () => {
+    try {
+      if (user?.role === 'driver') {
+        router.push('/driver/profile');
+        return;
+      }
+      if (user?.role === 'boss') {
+        router.push('/chef/profile');
+        return;
+      }
+
+      // Fallback: try to infer route from current location (web) so reloads still work
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          window.location &&
+          window.location.pathname
+        ) {
+          const p = window.location.pathname.toLowerCase();
+          if (p.startsWith('/driver')) {
+            router.push('/driver/profile');
+            return;
+          }
+          if (p.startsWith('/chef') || p.startsWith('/business')) {
+            router.push('/chef/profile');
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    } catch {
+      router.push('/logout');
+    }
+  };
+
   return (
     <View style={styles.header}>
       <View style={styles.titleContainer}>
@@ -24,7 +60,11 @@ export function Header({ title, subtitle, code }: HeaderProps) {
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       </View>
       <View style={styles.rightContainer}>
-        {code && <Text style={styles.code}>{code}</Text>}
+        {code && (
+          <FluidPressable style={styles.codeButton} onPress={handleCodePress}>
+            <Text style={styles.code}>{code}</Text>
+          </FluidPressable>
+        )}
         {user?.role === 'boss' && (
           <FluidPressable
             style={styles.settingsButton}
@@ -82,6 +122,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  codeButton: {
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   code: {
     fontSize: 14,
