@@ -1,17 +1,13 @@
+import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    Pressable,
-    StyleSheet,
-    TextInput,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, TextInput } from "react-native";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
@@ -21,7 +17,6 @@ export default function LoginScreen() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
@@ -30,20 +25,12 @@ export default function LoginScreen() {
       return;
     }
 
-    const result = await login(username, password, rememberMe);
+    const result = await login(username.trim(), password);
 
     if (!result.success) {
-      setError(t("login", "errorInvalid"));
-      setPassword("");
+      setError(result.error ?? t("login", "errorInvalid"));
     } else {
       setError("");
-      setUsername("");
-      setPassword("");
-      if (result.user?.role === "boss") {
-        router.replace("/chef");
-      } else {
-        router.replace("/driver");
-      }
     }
   };
 
@@ -91,6 +78,7 @@ export default function LoginScreen() {
           onChangeText={setUsername}
           editable={!isLoading}
           autoCapitalize="none"
+          autoComplete="username"
         />
 
         <TextInput
@@ -109,32 +97,10 @@ export default function LoginScreen() {
           secureTextEntry
           editable={!isLoading}
           autoCapitalize="none"
+          autoComplete="password"
         />
 
-        <Pressable
-          style={styles.checkboxContainer}
-          onPress={() => setRememberMe(!rememberMe)}
-          disabled={isLoading}
-        >
-          <ThemedView
-            style={[
-              styles.checkbox,
-              {
-                backgroundColor: rememberMe ? themeColors.tint : "transparent",
-                borderColor: themeColors.tint,
-              },
-            ]}
-          >
-            {rememberMe && (
-              <ThemedText style={{ color: "white" }}>✓</ThemedText>
-            )}
-          </ThemedView>
-          <ThemedText style={styles.checkboxLabel}>
-            {t("login", "rememberMe")}
-          </ThemedText>
-        </Pressable>
-
-        <Pressable
+        <FluidPressable
           style={[
             styles.loginButton,
             {
@@ -148,27 +114,11 @@ export default function LoginScreen() {
           {isLoading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <ThemedText style={styles.loginButtonText}>Login</ThemedText>
+            <ThemedText style={styles.loginButtonText}>
+              {t("login", "loginButton")}
+            </ThemedText>
           )}
-        </Pressable>
-
-        {/*
-        <ThemedView style={styles.demoBox}>
-          <ThemedText type="defaultSemiBold" style={styles.demoTitle}>
-            Demo Credentials
-          </ThemedText>
-          <ThemedText style={styles.demoText}>
-            Boss:{'\n'}
-            Username: boss{'\n'}
-            Password: boss123
-          </ThemedText>
-          <ThemedText style={styles.demoText}>
-            Driver:{'\n'}
-            Username: driver{'\n'}
-            Password: driver123
-          </ThemedText>
-        </ThemedView>
-        */}
+        </FluidPressable>
       </ThemedView>
     </ThemedView>
   );
@@ -208,47 +158,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
-  checkboxContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-  },
   loginButton: {
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "white",
-  },
-  demoBox: {
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  demoTitle: {
-    marginBottom: 8,
-    fontSize: 14,
-  },
-  demoText: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: "monospace",
   },
 });

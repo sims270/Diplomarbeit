@@ -1,49 +1,41 @@
-import { Header } from "@/components/header";
-import { StatusCard } from "@/components/status-card";
-import { Colors } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
-import { useTranslation } from "@/hooks/use-translation";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
-import { Order, orderService } from "../services/orderService";
+import { StyleSheet, ScrollView, View, Text, Modal, TextInput, ActivityIndicator, FlatList, Alert, Switch } from 'react-native';
+import { BlurSurface } from '@/components/fluid/BlurSurface';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
+import { Header } from '@/components/header';
+import { useReducedMotion } from '@/lib/motion/reducedMotion';
+import { StatusCard } from '@/components/status-card';
+import { Colors } from '@/constants/theme';
+import { useAuth } from '@/app/context/AuthContext';
+import { useTranslation } from '@/hooks/use-translation';
+import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { orderService, Order } from '../services/orderService';
 
 const emptyOrderForm = {
-  customerName: "",
-  customerEmail: "",
-  customerPhone: "",
-  pickupAddress: "",
-  pickupCity: "",
-  pickupZip: "",
-  deliveryAddress: "",
-  deliveryCity: "",
-  deliveryZip: "",
-  packageDescription: "",
-  packageWeight: "",
-  packageVolume: "",
-  packageValue: "",
+  customerName: '',
+  customerEmail: '',
+  customerPhone: '',
+  pickupAddress: '',
+  pickupCity: '',
+  pickupZip: '',
+  deliveryAddress: '',
+  deliveryCity: '',
+  deliveryZip: '',
+  packageDescription: '',
+  packageWeight: '',
+  packageVolume: '',
+  packageValue: '',
   packageFragile: false,
-  priority: "normal" as Order["priority"],
-  pickupTime: "",
-  deliveryTime: "",
+  priority: 'normal' as Order['priority'],
+  pickupTime: '',
+  deliveryTime: '',
 };
 
 export default function ChefDashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user, isLoading, isAuthenticated } = useAuth();
+  const reducedMotion = useReducedMotion();
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -53,17 +45,11 @@ export default function ChefDashboardScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderForm, setOrderForm] = useState(emptyOrderForm);
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    assigned: 0,
-    inProgress: 0,
-    completed: 0,
-  });
+  const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0 });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
+      router.replace('/login');
       return;
     }
 
@@ -80,10 +66,7 @@ export default function ChefDashboardScreen() {
 
   const handleAssignOrder = async () => {
     if (!selectedOrder || !selectedDriver) {
-      Alert.alert(
-        t("common", "error"),
-        t("chefDashboard", "alertSelectDriver"),
-      );
+      Alert.alert(t('common', 'error'), t('chefDashboard', 'alertSelectDriver'));
       return;
     }
 
@@ -95,8 +78,8 @@ export default function ChefDashboardScreen() {
       setSelectedOrder(null);
       setSelectedDriver(null);
       Alert.alert(
-        t("common", "success"),
-        `${t("chefDashboard", "orderPrefix")} ${selectedOrder.orderNumber} ${t("chefDashboard", "alertAssignedSuccess")}`,
+        t('common', 'success'),
+        `${t('chefDashboard', 'orderPrefix')} ${selectedOrder.orderNumber} ${t('chefDashboard', 'alertAssignedSuccess')}`
       );
     } finally {
       setIsSubmitting(false);
@@ -110,7 +93,7 @@ export default function ChefDashboardScreen() {
   };
 
   const buildScheduledTime = (time: string) => {
-    const [hours, minutes] = time.split(":").map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
     const date = new Date();
     date.setHours(hours || 0, minutes || 0, 0, 0);
     return date.toISOString();
@@ -118,38 +101,19 @@ export default function ChefDashboardScreen() {
 
   const handleCreateOrder = async () => {
     const {
-      customerName,
-      customerEmail,
-      customerPhone,
-      pickupAddress,
-      pickupCity,
-      pickupZip,
-      deliveryAddress,
-      deliveryCity,
-      deliveryZip,
-      packageDescription,
-      pickupTime,
-      deliveryTime,
+      customerName, customerEmail, customerPhone,
+      pickupAddress, pickupCity, pickupZip,
+      deliveryAddress, deliveryCity, deliveryZip,
+      packageDescription, pickupTime, deliveryTime,
     } = orderForm;
 
     if (
-      !customerName.trim() ||
-      !customerEmail.trim() ||
-      !customerPhone.trim() ||
-      !pickupAddress.trim() ||
-      !pickupCity.trim() ||
-      !pickupZip.trim() ||
-      !deliveryAddress.trim() ||
-      !deliveryCity.trim() ||
-      !deliveryZip.trim() ||
-      !packageDescription.trim() ||
-      !pickupTime.trim() ||
-      !deliveryTime.trim()
+      !customerName.trim() || !customerEmail.trim() || !customerPhone.trim() ||
+      !pickupAddress.trim() || !pickupCity.trim() || !pickupZip.trim() ||
+      !deliveryAddress.trim() || !deliveryCity.trim() || !deliveryZip.trim() ||
+      !packageDescription.trim() || !pickupTime.trim() || !deliveryTime.trim()
     ) {
-      Alert.alert(
-        t("common", "error"),
-        t("chefCreateOrder", "alertFillFields"),
-      );
+      Alert.alert(t('common', 'error'), t('chefCreateOrder', 'alertFillFields'));
       return;
     }
 
@@ -173,20 +137,20 @@ export default function ChefDashboardScreen() {
         },
         package: {
           description: packageDescription,
-          weight: orderForm.packageWeight || "0kg",
-          volume: orderForm.packageVolume || "0m³",
+          weight: orderForm.packageWeight || '0kg',
+          volume: orderForm.packageVolume || '0m³',
           fragile: orderForm.packageFragile,
           value: Number(orderForm.packageValue) || 0,
         },
         priority: orderForm.priority,
         scheduledPickupTime: buildScheduledTime(pickupTime),
         scheduledDeliveryTime: buildScheduledTime(deliveryTime),
-        createdBy: user?.id || "",
+        createdBy: user?.id || '',
       });
       loadData();
       setShowCreateModal(false);
       setOrderForm(emptyOrderForm);
-      Alert.alert(t("common", "success"), t("chefCreateOrder", "alertCreated"));
+      Alert.alert(t('common', 'success'), t('chefCreateOrder', 'alertCreated'));
     } finally {
       setIsCreatingOrder(false);
     }
@@ -194,12 +158,12 @@ export default function ChefDashboardScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
+      case 'pending':
         return Colors.ui.orange;
-      case "assigned":
-      case "in_progress":
+      case 'assigned':
+      case 'in_progress':
         return Colors.ui.blue;
-      case "completed":
+      case 'completed':
         return Colors.ui.green;
       default:
         return Colors.ui.darkGray;
@@ -208,11 +172,11 @@ export default function ChefDashboardScreen() {
 
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
-      pending: t("chefDashboard", "statusPending"),
-      assigned: t("chefDashboard", "statusAssigned"),
-      in_progress: t("chefDashboard", "statusInProgress"),
-      completed: t("chefDashboard", "statusCompleted"),
-      cancelled: t("chefDashboard", "statusCancelled"),
+      pending: t('chefDashboard', 'statusPending'),
+      assigned: t('chefDashboard', 'statusAssigned'),
+      in_progress: t('chefDashboard', 'statusInProgress'),
+      completed: t('chefDashboard', 'statusCompleted'),
+      cancelled: t('chefDashboard', 'statusCancelled'),
     };
     return statusMap[status] || status;
   };
@@ -233,53 +197,53 @@ export default function ChefDashboardScreen() {
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
-        subtitle={t("chefDashboard", "headerSubtitle")}
+        subtitle={t('chefDashboard', 'headerSubtitle')}
         code="CH"
-        onCodePress={() => router.push("/chef/profile")}
-        showLogout={true}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.quickActionsRow}>
+          <FluidPressable
+            style={styles.manageDriversButton}
+            onPress={() => router.push('/chef/drivers')}
+          >
+            <Text style={styles.manageDriversButtonText}>
+              {t('chefDashboard', 'manageDriversButton')}
+            </Text>
+          </FluidPressable>
+        </View>
+
         <View style={styles.statusContainer}>
           <StatusCard
             count={stats.pending}
-            label={t("chefDashboard", "statusOpen")}
+            label={t('chefDashboard', 'statusOpen')}
             color={Colors.ui.orange}
           />
           <StatusCard
             count={stats.assigned}
-            label={t("chefDashboard", "statusAssigned")}
+            label={t('chefDashboard', 'statusAssigned')}
             color={Colors.ui.blue}
           />
           <StatusCard
             count={stats.completed}
-            label={t("chefDashboard", "statusCompleted")}
+            label={t('chefDashboard', 'statusCompleted')}
             color={Colors.ui.green}
           />
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {t("chefDashboard", "ordersToday")} ({orders.length})
-            </Text>
-            <Pressable
-              style={styles.addButton}
-              onPress={() => setShowCreateModal(true)}
-            >
-              <Text style={styles.addButtonText}>
-                {t("chefDashboard", "addOrderButton")}
-              </Text>
-            </Pressable>
+            <Text style={styles.sectionTitle}>{t('chefDashboard', 'ordersToday')} ({orders.length})</Text>
+            <FluidPressable style={styles.addButton} onPress={() => setShowCreateModal(true)}>
+              <Text style={styles.addButtonText}>{t('chefDashboard', 'addOrderButton')}</Text>
+            </FluidPressable>
           </View>
 
           {orders.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                {t("chefDashboard", "emptyOrders")}
-              </Text>
+              <Text style={styles.emptyStateText}>{t('chefDashboard', 'emptyOrders')}</Text>
               <Text style={styles.emptyStateSubtext}>
-                {t("chefDashboard", "emptyOrdersSub")}
+                {t('chefDashboard', 'emptyOrdersSub')}
               </Text>
             </View>
           ) : (
@@ -288,14 +252,9 @@ export default function ChefDashboardScreen() {
               data={orders}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <Pressable
+                <FluidPressable
                   style={styles.orderCard}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/chef/order/[id]",
-                      params: { id: item.id },
-                    })
-                  }
+                  onPress={() => router.push({ pathname: '/chef/order/[id]', params: { id: item.id } })}
                 >
                   <View style={styles.orderHeader}>
                     <Text style={styles.orderNumber}>{item.orderNumber}</Text>
@@ -311,30 +270,23 @@ export default function ChefDashboardScreen() {
                     </View>
                   </View>
                   <Text style={styles.customerName}>{item.customer.name}</Text>
-                  <Text style={styles.packageDesc}>
-                    {item.package.description}
-                  </Text>
+                  <Text style={styles.packageDesc}>{item.package.description}</Text>
                   <Text style={styles.location}>
-                    {t("chefDashboard", "from")}: {item.pickupLocation.city} →{" "}
-                    {item.deliveryLocation.city}
+                    {t('chefDashboard', 'from')}: {item.pickupLocation.city} → {item.deliveryLocation.city}
                   </Text>
                   {item.assignedTo ? (
                     <Text style={styles.assignedDriver}>
-                      {t("chefDashboard", "assignedTo")}:{" "}
-                      {drivers.find((d) => d.id === item.assignedTo)?.name ||
-                        t("common", "unknown")}
+                      {t('chefDashboard', 'assignedTo')}: {drivers.find(d => d.id === item.assignedTo)?.name || t('common', 'unknown')}
                     </Text>
                   ) : (
-                    <Pressable
+                    <FluidPressable
                       style={styles.assignButton}
                       onPress={() => openAssignModal(item)}
                     >
-                      <Text style={styles.assignButtonText}>
-                        {t("chefDashboard", "assignButton")}
-                      </Text>
-                    </Pressable>
+                      <Text style={styles.assignButtonText}>{t('chefDashboard', 'assignButton')}</Text>
+                    </FluidPressable>
                   )}
-                </Pressable>
+                </FluidPressable>
               )}
             />
           )}
@@ -344,53 +296,47 @@ export default function ChefDashboardScreen() {
       <Modal
         visible={showAssignModal}
         transparent
-        animationType="slide"
+        animationType={reducedMotion ? 'none' : 'slide'}
         onRequestClose={() => setShowAssignModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t("chefDashboard", "modalTitle")}
-              </Text>
-              <Pressable onPress={() => setShowAssignModal(false)}>
+              <Text style={styles.modalTitle}>{t('chefDashboard', 'modalTitle')}</Text>
+              <FluidPressable onPress={() => setShowAssignModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
-              </Pressable>
+              </FluidPressable>
             </View>
 
             {selectedOrder && (
               <>
-                <Text style={styles.orderInfoTitle}>
-                  {selectedOrder.orderNumber}
-                </Text>
-                <Text style={styles.orderInfo}>
-                  {selectedOrder.customer.name}
-                </Text>
-                <Text style={styles.orderInfo}>
-                  {selectedOrder.package.description}
-                </Text>
+                <Text style={styles.orderInfoTitle}>{selectedOrder.orderNumber}</Text>
+                <Text style={styles.orderInfo}>{selectedOrder.customer.name}</Text>
+                <Text style={styles.orderInfo}>{selectedOrder.package.description}</Text>
 
-                <Text style={styles.driversTitle}>
-                  {t("chefDashboard", "selectDriver")}
-                </Text>
+                <Text style={styles.driversTitle}>{t('chefDashboard', 'selectDriver')}</Text>
                 <FlatList
                   scrollEnabled={false}
                   data={drivers}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
-                    <Pressable
+                    <FluidPressable
                       style={[
                         styles.driverOption,
-                        selectedDriver === item.id &&
-                          styles.driverOptionSelected,
+                        selectedDriver === item.id && styles.driverOptionSelected,
                       ]}
                       onPress={() => setSelectedDriver(item.id)}
                     >
                       <View
                         style={[
                           styles.driverRadio,
-                          selectedDriver === item.id &&
-                            styles.driverRadioSelected,
+                          selectedDriver === item.id && styles.driverRadioSelected,
                         ]}
                       >
                         {selectedDriver === item.id && (
@@ -401,36 +347,31 @@ export default function ChefDashboardScreen() {
                       <Text
                         style={[
                           styles.driverStatus,
-                          item.status === "online"
+                          item.status === 'online'
                             ? { color: Colors.ui.green }
                             : { color: Colors.ui.darkGray },
                         ]}
                       >
-                        {item.status === "online"
-                          ? `● ${t("common", "online")}`
-                          : `● ${t("common", "offline")}`}
+                        {item.status === 'online' ? `● ${t('common', 'online')}` : `● ${t('common', 'offline')}`}
                       </Text>
-                    </Pressable>
+                    </FluidPressable>
                   )}
                 />
 
                 <View style={styles.modalButtonContainer}>
-                  <Pressable
+                  <FluidPressable
                     style={[styles.modalButton, styles.cancelButton]}
                     onPress={() => setShowAssignModal(false)}
                     disabled={isSubmitting}
                   >
-                    <Text style={styles.cancelButtonText}>
-                      {t("common", "cancel")}
-                    </Text>
-                  </Pressable>
+                    <Text style={styles.cancelButtonText}>{t('common', 'cancel')}</Text>
+                  </FluidPressable>
 
-                  <Pressable
+                  <FluidPressable
                     style={[
                       styles.modalButton,
                       styles.submitButton,
-                      (!selectedDriver || isSubmitting) &&
-                        styles.submitButtonDisabled,
+                      (!selectedDriver || isSubmitting) && styles.submitButtonDisabled,
                     ]}
                     onPress={handleAssignOrder}
                     disabled={!selectedDriver || isSubmitting}
@@ -438,11 +379,9 @@ export default function ChefDashboardScreen() {
                     {isSubmitting ? (
                       <ActivityIndicator color="white" />
                     ) : (
-                      <Text style={styles.submitButtonText}>
-                        {t("chefDashboard", "assign")}
-                      </Text>
+                      <Text style={styles.submitButtonText}>{t('chefDashboard', 'assign')}</Text>
                     )}
-                  </Pressable>
+                  </FluidPressable>
                 </View>
               </>
             )}
@@ -453,245 +392,184 @@ export default function ChefDashboardScreen() {
       <Modal
         visible={showCreateModal}
         transparent
-        animationType="slide"
+        animationType={reducedMotion ? 'none' : 'slide'}
         onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t("chefCreateOrder", "modalTitle")}
-              </Text>
-              <Pressable onPress={() => setShowCreateModal(false)}>
+              <Text style={styles.modalTitle}>{t('chefCreateOrder', 'modalTitle')}</Text>
+              <FluidPressable onPress={() => setShowCreateModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
-              </Pressable>
+              </FluidPressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.formSectionTitle}>
-                {t("chefOrderDetail", "customerSection")}
-              </Text>
+              <Text style={styles.formSectionTitle}>{t('chefOrderDetail', 'customerSection')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "nameLabel")}
+                placeholder={t('chefOrderDetail', 'nameLabel')}
                 value={orderForm.customerName}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, customerName: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, customerName: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "emailLabel")}
+                placeholder={t('chefOrderDetail', 'emailLabel')}
                 value={orderForm.customerEmail}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, customerEmail: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, customerEmail: v })}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "phoneLabel")}
+                placeholder={t('chefOrderDetail', 'phoneLabel')}
                 value={orderForm.customerPhone}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, customerPhone: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, customerPhone: v })}
                 keyboardType="phone-pad"
               />
 
-              <Text style={styles.formSectionTitle}>
-                {t("chefOrderDetail", "pickupSection")}
-              </Text>
+              <Text style={styles.formSectionTitle}>{t('chefOrderDetail', 'pickupSection')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "addressLabel")}
+                placeholder={t('chefOrderDetail', 'addressLabel')}
                 value={orderForm.pickupAddress}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, pickupAddress: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, pickupAddress: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "cityLabel")}
+                placeholder={t('chefOrderDetail', 'cityLabel')}
                 value={orderForm.pickupCity}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, pickupCity: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, pickupCity: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "zipLabel")}
+                placeholder={t('chefOrderDetail', 'zipLabel')}
                 value={orderForm.pickupZip}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, pickupZip: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, pickupZip: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={`${t("chefOrderDetail", "pickupTimeLabel")} (${t("chefCreateOrder", "timePlaceholder")})`}
+                placeholder={`${t('chefOrderDetail', 'pickupTimeLabel')} (${t('chefCreateOrder', 'timePlaceholder')})`}
                 value={orderForm.pickupTime}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, pickupTime: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, pickupTime: v })}
               />
 
-              <Text style={styles.formSectionTitle}>
-                {t("chefOrderDetail", "deliverySection")}
-              </Text>
+              <Text style={styles.formSectionTitle}>{t('chefOrderDetail', 'deliverySection')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "addressLabel")}
+                placeholder={t('chefOrderDetail', 'addressLabel')}
                 value={orderForm.deliveryAddress}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, deliveryAddress: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, deliveryAddress: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "cityLabel")}
+                placeholder={t('chefOrderDetail', 'cityLabel')}
                 value={orderForm.deliveryCity}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, deliveryCity: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, deliveryCity: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "zipLabel")}
+                placeholder={t('chefOrderDetail', 'zipLabel')}
                 value={orderForm.deliveryZip}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, deliveryZip: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, deliveryZip: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={`${t("chefOrderDetail", "deliveryTimeLabel")} (${t("chefCreateOrder", "timePlaceholder")})`}
+                placeholder={`${t('chefOrderDetail', 'deliveryTimeLabel')} (${t('chefCreateOrder', 'timePlaceholder')})`}
                 value={orderForm.deliveryTime}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, deliveryTime: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, deliveryTime: v })}
               />
 
-              <Text style={styles.formSectionTitle}>
-                {t("chefOrderDetail", "packageSection")}
-              </Text>
+              <Text style={styles.formSectionTitle}>{t('chefOrderDetail', 'packageSection')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "descriptionLabel")}
+                placeholder={t('chefOrderDetail', 'descriptionLabel')}
                 value={orderForm.packageDescription}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, packageDescription: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, packageDescription: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "weightLabel")}
+                placeholder={t('chefOrderDetail', 'weightLabel')}
                 value={orderForm.packageWeight}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, packageWeight: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, packageWeight: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "volumeLabel")}
+                placeholder={t('chefOrderDetail', 'volumeLabel')}
                 value={orderForm.packageVolume}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, packageVolume: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, packageVolume: v })}
               />
               <TextInput
                 style={styles.input}
-                placeholder={t("chefOrderDetail", "valueLabel")}
+                placeholder={t('chefOrderDetail', 'valueLabel')}
                 value={orderForm.packageValue}
-                onChangeText={(v) =>
-                  setOrderForm({ ...orderForm, packageValue: v })
-                }
+                onChangeText={(v) => setOrderForm({ ...orderForm, packageValue: v })}
                 keyboardType="numeric"
               />
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>
-                  {t("chefOrderDetail", "fragileLabel")}
-                </Text>
+                <Text style={styles.switchLabel}>{t('chefOrderDetail', 'fragileLabel')}</Text>
                 <Switch
                   value={orderForm.packageFragile}
-                  onValueChange={(v) =>
-                    setOrderForm({ ...orderForm, packageFragile: v })
-                  }
+                  onValueChange={(v) => setOrderForm({ ...orderForm, packageFragile: v })}
                   trackColor={{ true: Colors.ui.primary }}
                 />
               </View>
 
-              <Text style={styles.formSectionTitle}>
-                {t("chefCreateOrder", "priorityLabel")}
-              </Text>
+              <Text style={styles.formSectionTitle}>{t('chefCreateOrder', 'priorityLabel')}</Text>
               <View style={styles.priorityRow}>
                 {(
                   [
-                    {
-                      value: "normal",
-                      label: t("chefCreateOrder", "priorityNormal"),
-                    },
-                    {
-                      value: "high",
-                      label: t("chefCreateOrder", "priorityHigh"),
-                    },
-                    {
-                      value: "urgent",
-                      label: t("chefCreateOrder", "priorityUrgent"),
-                    },
-                  ] as { value: Order["priority"]; label: string }[]
+                    { value: 'normal', label: t('chefCreateOrder', 'priorityNormal') },
+                    { value: 'high', label: t('chefCreateOrder', 'priorityHigh') },
+                    { value: 'urgent', label: t('chefCreateOrder', 'priorityUrgent') },
+                  ] as { value: Order['priority']; label: string }[]
                 ).map((option) => (
-                  <Pressable
+                  <FluidPressable
                     key={option.value}
                     style={[
                       styles.priorityOption,
-                      orderForm.priority === option.value &&
-                        styles.priorityOptionSelected,
+                      orderForm.priority === option.value && styles.priorityOptionSelected,
                     ]}
-                    onPress={() =>
-                      setOrderForm({ ...orderForm, priority: option.value })
-                    }
+                    onPress={() => setOrderForm({ ...orderForm, priority: option.value })}
                   >
                     <Text
                       style={[
                         styles.priorityOptionText,
-                        orderForm.priority === option.value &&
-                          styles.priorityOptionTextSelected,
+                        orderForm.priority === option.value && styles.priorityOptionTextSelected,
                       ]}
                     >
                       {option.label}
                     </Text>
-                  </Pressable>
+                  </FluidPressable>
                 ))}
               </View>
 
               <View style={styles.modalButtonContainer}>
-                <Pressable
+                <FluidPressable
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => setShowCreateModal(false)}
                   disabled={isCreatingOrder}
                 >
-                  <Text style={styles.cancelButtonText}>
-                    {t("common", "cancel")}
-                  </Text>
-                </Pressable>
+                  <Text style={styles.cancelButtonText}>{t('common', 'cancel')}</Text>
+                </FluidPressable>
 
-                <Pressable
-                  style={[
-                    styles.modalButton,
-                    styles.submitButton,
-                    isCreatingOrder && styles.submitButtonDisabled,
-                  ]}
+                <FluidPressable
+                  style={[styles.modalButton, styles.submitButton, isCreatingOrder && styles.submitButtonDisabled]}
                   onPress={handleCreateOrder}
                   disabled={isCreatingOrder}
                 >
                   {isCreatingOrder ? (
                     <ActivityIndicator color="white" />
                   ) : (
-                    <Text style={styles.submitButtonText}>
-                      {t("chefCreateOrder", "createButton")}
-                    </Text>
+                    <Text style={styles.submitButtonText}>{t('chefCreateOrder', 'createButton')}</Text>
                   )}
-                </Pressable>
+                </FluidPressable>
               </View>
             </ScrollView>
           </View>
@@ -708,33 +586,48 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
   },
   content: {
     flex: 1,
   },
   statusContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
     padding: 16,
+  },
+  quickActionsRow: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  manageDriversButton: {
+    backgroundColor: Colors.ui.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  manageDriversButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '700',
   },
   section: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
   },
   addButton: {
     backgroundColor: Colors.ui.primary,
@@ -743,9 +636,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   addButtonText: {
-    color: "white",
+    color: 'white',
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   driverText: {
     fontSize: 14,
@@ -755,24 +648,24 @@ const styles = StyleSheet.create({
   emptyState: {
     paddingVertical: 32,
     paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
     backgroundColor: Colors.ui.lightGray,
   },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.ui.darkGray,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: Colors.ui.darkGray,
-    textAlign: "center",
+    textAlign: 'center',
   },
   orderCard: {
-    backgroundColor: "white",
+    backgroundColor: 'white',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -780,14 +673,14 @@ const styles = StyleSheet.create({
     borderLeftColor: Colors.ui.primary,
   },
   orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   orderNumber: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
   },
   statusBadge: {
@@ -796,13 +689,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusBadgeText: {
-    color: "white",
+    color: 'white',
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   customerName: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 4,
   },
@@ -819,41 +712,42 @@ const styles = StyleSheet.create({
   assignedDriver: {
     fontSize: 11,
     color: Colors.ui.green,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   assignButton: {
     backgroundColor: Colors.ui.primary,
     paddingVertical: 8,
     borderRadius: 4,
-    alignItems: "center",
+    alignItems: 'center',
   },
   assignButtonText: {
-    color: "white",
+    color: 'white',
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
+    // Backdrop is BlurSurface (a translucent material), not a flat
+    // scrim — see the fluid-design "materials & depth" guidance.
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: "white",
+    backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
     paddingBottom: 40,
-    maxHeight: "80%",
+    maxHeight: '80%',
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
   },
   closeButton: {
@@ -862,7 +756,7 @@ const styles = StyleSheet.create({
   },
   orderInfoTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 4,
   },
@@ -873,14 +767,14 @@ const styles = StyleSheet.create({
   },
   driversTitle: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
     marginTop: 16,
     marginBottom: 12,
   },
   driverOption: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -888,7 +782,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ui.lightGray,
   },
   driverOptionSelected: {
-    backgroundColor: "#FBEAEA",
+    backgroundColor: '#FBEAEA',
     borderWidth: 1,
     borderColor: Colors.ui.primary,
   },
@@ -898,8 +792,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: Colors.ui.darkGray,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   driverRadioSelected: {
@@ -911,16 +805,16 @@ const styles = StyleSheet.create({
   },
   driverName: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.light.text,
     flex: 1,
   },
   driverStatus: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   modalButtonContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
     marginTop: 24,
   },
@@ -928,15 +822,15 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButton: {
     backgroundColor: Colors.ui.lightGray,
   },
   cancelButtonText: {
     color: Colors.light.text,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   submitButton: {
     backgroundColor: Colors.ui.primary,
@@ -945,14 +839,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    color: "white",
-    fontWeight: "600",
+    color: 'white',
+    fontWeight: '600',
   },
   formSectionTitle: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.ui.charcoal,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
     marginTop: 16,
     marginBottom: 8,
   },
@@ -966,9 +860,9 @@ const styles = StyleSheet.create({
     color: Colors.ui.charcoal,
   },
   switchRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 8,
   },
   switchLabel: {
@@ -976,7 +870,7 @@ const styles = StyleSheet.create({
     color: Colors.ui.charcoal,
   },
   priorityRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
   },
   priorityOption: {
@@ -985,17 +879,17 @@ const styles = StyleSheet.create({
     borderColor: Colors.ui.primary,
     borderRadius: 8,
     paddingVertical: 10,
-    alignItems: "center",
+    alignItems: 'center',
   },
   priorityOptionSelected: {
     backgroundColor: Colors.ui.primary,
   },
   priorityOptionText: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.ui.primary,
   },
   priorityOptionTextSelected: {
-    color: "white",
+    color: 'white',
   },
 });

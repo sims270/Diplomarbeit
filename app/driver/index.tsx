@@ -1,51 +1,44 @@
-import { Header } from "@/components/header";
-import { Colors } from "@/constants/theme";
-import { useAuth } from "@/contexts/auth-context";
-import { useTranslation } from "@/hooks/use-translation";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    FlatList,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from "react-native";
-import { Order, orderService } from "../services/orderService";
+import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
+import { Header } from '@/components/header';
+import { Colors } from '@/constants/theme';
+import { useAuth } from '@/app/context/AuthContext';
+import { useTranslation } from '@/hooks/use-translation';
+import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { orderService, Order } from '../services/orderService';
 
 export default function DriverDashboardScreen() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { t, language } = useTranslation();
   const router = useRouter();
-  const timeLocale = language === "de" ? "de-DE" : "en-US";
+  const timeLocale = language === 'de' ? 'de-DE' : 'en-US';
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
-
-  const loadDriverOrders = useCallback(() => {
-    if (user?.id) {
-      const orders = orderService.getOrdersByDriver(user.id);
-      setAssignedOrders(orders);
-    }
-  }, [user?.id]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
+      router.replace('/login');
       return;
     }
 
     if (user?.id) {
       loadDriverOrders();
     }
-  }, [isLoading, isAuthenticated, user?.id, router, loadDriverOrders]);
+  }, [isLoading, isAuthenticated, user?.id, router]);
+
+  const loadDriverOrders = () => {
+    if (user?.id) {
+      const orders = orderService.getOrdersByDriver(user.id);
+      setAssignedOrders(orders);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "assigned":
+      case 'assigned':
         return Colors.ui.orange;
-      case "in_progress":
+      case 'in_progress':
         return Colors.ui.blue;
-      case "completed":
+      case 'completed':
         return Colors.ui.green;
       default:
         return Colors.ui.darkGray;
@@ -54,10 +47,10 @@ export default function DriverDashboardScreen() {
 
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
-      assigned: t("driverDashboard", "statusAssigned"),
-      in_progress: t("driverDashboard", "statusInProgress"),
-      completed: t("driverDashboard", "statusCompleted"),
-      cancelled: t("driverDashboard", "statusCancelled"),
+      assigned: t('driverDashboard', 'statusAssigned'),
+      in_progress: t('driverDashboard', 'statusInProgress'),
+      completed: t('driverDashboard', 'statusCompleted'),
+      cancelled: t('driverDashboard', 'statusCancelled'),
     };
     return statusMap[status] || status;
   };
@@ -78,25 +71,19 @@ export default function DriverDashboardScreen() {
     <View style={styles.container}>
       <Header
         title="TRANSLOG PRO"
-        subtitle={`${t("driverDashboard", "headerSubtitle")} - ${user?.name || t("common", "unknown")}`}
-        code={user?.username?.[0]?.toUpperCase() || "U"}
-        onCodePress={() => router.push("/driver/profile")}
-        showLogout={true}
+        subtitle={`${t('driverDashboard', 'headerSubtitle')} - ${user?.name || t('common', 'unknown')}`}
+        code={user?.username?.[0]?.toUpperCase() || 'U'}
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {t("driverDashboard", "myOrders")} ({assignedOrders.length})
-          </Text>
+          <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({assignedOrders.length})</Text>
 
           {assignedOrders.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                {t("driverDashboard", "emptyOrders")}
-              </Text>
+              <Text style={styles.emptyStateText}>{t('driverDashboard', 'emptyOrders')}</Text>
               <Text style={styles.emptyStateSubtext}>
-                {t("driverDashboard", "emptyOrdersSub")}
+                {t('driverDashboard', 'emptyOrdersSub')}
               </Text>
             </View>
           ) : (
@@ -120,22 +107,16 @@ export default function DriverDashboardScreen() {
                     </View>
                   </View>
                   <Text style={styles.customerName}>{item.customer.name}</Text>
-                  <Text style={styles.packageDesc}>
-                    {item.package.description}
-                  </Text>
+                  <Text style={styles.packageDesc}>{item.package.description}</Text>
                   <View style={styles.locationContainer}>
                     <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>
-                        {t("driverDashboard", "pickup")}:
-                      </Text>
+                      <Text style={styles.locationLabel}>{t('driverDashboard', 'pickup')}:</Text>
                       <Text style={styles.locationText}>
                         {item.pickupLocation.city}
                       </Text>
                     </View>
                     <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>
-                        {t("driverDashboard", "delivery")}:
-                      </Text>
+                      <Text style={styles.locationLabel}>{t('driverDashboard', 'delivery')}:</Text>
                       <Text style={styles.locationText}>
                         {item.deliveryLocation.city}
                       </Text>
@@ -143,28 +124,15 @@ export default function DriverDashboardScreen() {
                   </View>
                   <View style={styles.timeContainer}>
                     <Text style={styles.timeText}>
-                      ⏱{" "}
-                      {new Date(item.scheduledPickupTime).toLocaleTimeString(
-                        timeLocale,
-                        { hour: "2-digit", minute: "2-digit" },
-                      )}{" "}
-                      -{" "}
-                      {new Date(item.scheduledDeliveryTime).toLocaleTimeString(
-                        timeLocale,
-                        { hour: "2-digit", minute: "2-digit" },
-                      )}
+                      ⏱ {new Date(item.scheduledPickupTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })} - {new Date(item.scheduledDeliveryTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
                   <View style={styles.priorityContainer}>
-                    {item.priority === "urgent" && (
-                      <Text style={styles.priorityUrgent}>
-                        {t("driverDashboard", "priorityUrgent")}
-                      </Text>
+                    {item.priority === 'urgent' && (
+                      <Text style={styles.priorityUrgent}>{t('driverDashboard', 'priorityUrgent')}</Text>
                     )}
-                    {item.priority === "high" && (
-                      <Text style={styles.priorityHigh}>
-                        {t("driverDashboard", "priorityHigh")}
-                      </Text>
+                    {item.priority === 'high' && (
+                      <Text style={styles.priorityHigh}>{t('driverDashboard', 'priorityHigh')}</Text>
                     )}
                   </View>
                 </View>
@@ -184,8 +152,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
   },
   content: {
@@ -198,32 +166,32 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
-    textTransform: "uppercase",
+    textTransform: 'uppercase',
     marginBottom: 16,
   },
   emptyState: {
     paddingVertical: 32,
     paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
     backgroundColor: Colors.ui.lightGray,
   },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.ui.darkGray,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: Colors.ui.darkGray,
-    textAlign: "center",
+    textAlign: 'center',
   },
   orderCard: {
-    backgroundColor: "white",
+    backgroundColor: 'white',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -231,14 +199,14 @@ const styles = StyleSheet.create({
     borderLeftColor: Colors.ui.primary,
   },
   orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   orderNumber: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.light.text,
   },
   statusBadge: {
@@ -247,13 +215,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusBadgeText: {
-    color: "white",
+    color: 'white',
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   customerName: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 4,
   },
@@ -263,8 +231,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   locationContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   locationItem: {
@@ -273,12 +241,12 @@ const styles = StyleSheet.create({
   locationLabel: {
     fontSize: 10,
     color: Colors.ui.darkGray,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   locationText: {
     fontSize: 12,
     color: Colors.light.text,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   timeContainer: {
     paddingVertical: 6,
@@ -287,20 +255,20 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 11,
     color: Colors.light.text,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   priorityContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
   },
   priorityUrgent: {
     fontSize: 11,
-    fontWeight: "700",
-    color: "#d32f2f",
+    fontWeight: '700',
+    color: '#d32f2f',
   },
   priorityHigh: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: '700',
     color: Colors.ui.orange,
   },
 });
