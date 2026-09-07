@@ -21,7 +21,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // exactly as documented. Native (iOS/Android) is unaffected either way.
 const isServerSideRender = Platform.OS === "web" && typeof window === "undefined";
 
-const authStorage = {
+// Auch vom Offline-Fallback genutzt (lib/offlineFallback.ts wird über den
+// AuthContext eingebunden), damit die SSR-Absicherung oben nur an einer
+// Stelle steht.
+export const authStorage = {
   getItem: (key: string) =>
     isServerSideRender ? Promise.resolve(null) : AsyncStorage.getItem(key),
   setItem: (key: string, value: string) =>

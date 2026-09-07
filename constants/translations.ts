@@ -10,6 +10,9 @@ export const translations = {
       logout: 'Logout',
       online: 'Online',
       offline: 'Offline',
+      offlineMode: 'OFFLINE-MODUS',
+      offlineModeHint:
+        'Server nicht erreichbar — lokale Demo-Daten. Fahrerverwaltung ist deaktiviert.',
     },
     login: {
       title: 'Login',
@@ -20,6 +23,8 @@ export const translations = {
       loginButton: 'Anmelden',
       errorFillFields: 'Bitte Benutzername und Passwort eingeben',
       errorInvalid: 'Ungültiger Benutzername oder Passwort',
+      errorUnreachable:
+        'Server nicht erreichbar. Bitte Internetverbindung prüfen und später erneut versuchen.',
     },
     logout: {
       title: 'Logout',
@@ -254,6 +259,9 @@ export const translations = {
       logout: 'Logout',
       online: 'Online',
       offline: 'Offline',
+      offlineMode: 'OFFLINE MODE',
+      offlineModeHint:
+        'Server unreachable — local demo data. Driver management is disabled.',
     },
     login: {
       title: 'Login',
@@ -264,6 +272,8 @@ export const translations = {
       loginButton: 'Log In',
       errorFillFields: 'Please enter both username and password',
       errorInvalid: 'Invalid username or password',
+      errorUnreachable:
+        'Server unreachable. Please check your connection and try again later.',
     },
     logout: {
       title: 'Logout',

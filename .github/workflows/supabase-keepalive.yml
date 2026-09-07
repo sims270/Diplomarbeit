@@ -1,0 +1,50 @@
+name: Supabase Keep-Alive
+
+# Supabase pausiert Projekte im Free-Tier nach 7 Tagen ohne Aktivität.
+# Ein pausiertes Projekt verliert seinen erreichbaren Endpunkt (DNS/TLS
+# antworten nicht mehr), wodurch der Login in der App mit einem reinen
+# Netzwerkfehler ("Failed to fetch") scheitert — ohne dass am Code etwas
+# kaputt wäre.
+#
+# Dieser Job stellt alle 3 Tage eine echte API-Anfrage an das Projekt und
+# hält es damit dauerhaft aktiv. Der Abstand ist bewusst deutlich kleiner
+# als das 7-Tage-Fenster, damit auch ein einzelner fehlgeschlagener Lauf
+# (GitHub-Ausfall o.ä.) das Projekt nicht in die Pause rutschen lässt.
+
+on:
+  schedule:
+    # 06:00 UTC an jedem dritten Tag des Monats (max. 3 Tage Abstand).
+    - cron: "0 6 */3 * *"
+  # Erlaubt zusätzlich das manuelle Auslösen über den Actions-Tab.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Supabase REST-API anpingen
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "SUPABASE_URL oder SUPABASE_ANON_KEY fehlt in den Repository-Secrets."
+            exit 1
+          fi
+
+          # PostgREST-Wurzel: eine echte, authentifizierte API-Anfrage gegen
+          # das Projekt — das zählt als Aktivität. Ein reiner DNS-Ping oder
+          # ein Health-Endpunkt ohne Key würde das nicht zuverlässig tun.
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/")
+
+          echo "Antwort: HTTP $status"
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
+            echo "Projekt antwortet nicht wie erwartet — evtl. pausiert oder Keys ungültig."
+            exit 1
+          fi
+
+          echo "Supabase-Projekt ist aktiv."

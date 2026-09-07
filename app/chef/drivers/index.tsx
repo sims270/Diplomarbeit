@@ -1,6 +1,7 @@
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ interface Driver {
 export default function DriversListScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { isOfflineMode } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -30,6 +32,17 @@ export default function DriversListScreen() {
 
   const loadDrivers = useCallback(async () => {
     setLoadError(false);
+
+    // Im Offline-Modus gibt es kein JWT, das die Edge Function akzeptieren
+    // könnte — der Aufruf würde zwangsläufig scheitern. Statt den Nutzer in
+    // einen Netzwerkfehler laufen zu lassen, sagen wir gleich warum.
+    if (isOfflineMode) {
+      setDrivers([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('list-drivers', {
         method: 'GET',
@@ -44,7 +57,7 @@ export default function DriversListScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [isOfflineMode]);
 
   // Refresh every time this screen becomes active (e.g. after creating
   // or editing a driver and navigating back).
@@ -73,12 +86,16 @@ export default function DriversListScreen() {
           <Text style={styles.sectionTitle}>
             {t('driversList', 'title')} ({drivers.length})
           </Text>
-          <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/drivers/new')}>
-            <Text style={styles.addButtonText}>{t('driversList', 'addButton')}</Text>
-          </FluidPressable>
+          {!isOfflineMode && (
+            <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/drivers/new')}>
+              <Text style={styles.addButtonText}>{t('driversList', 'addButton')}</Text>
+            </FluidPressable>
+          )}
         </View>
 
-        {isLoading ? (
+        {isOfflineMode ? (
+          <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
+        ) : isLoading ? (
           <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('driversList', 'loadFailed')}</Text>

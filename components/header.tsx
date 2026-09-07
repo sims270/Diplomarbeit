@@ -14,7 +14,7 @@ export interface HeaderProps {
 
 export function Header({ title, subtitle, code }: HeaderProps) {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isOfflineMode } = useAuth();
   const { t } = useTranslation();
 
   const handleCodePress = () => {
@@ -58,6 +58,13 @@ export function Header({ title, subtitle, code }: HeaderProps) {
       <View style={styles.titleContainer}>
         <Text style={styles.title}>{title}</Text>
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        {isOfflineMode && (
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineBadgeText}>
+              {t('common', 'offlineMode')}
+            </Text>
+          </View>
+        )}
       </View>
       <View style={styles.rightContainer}>
         {code && (
@@ -65,7 +72,7 @@ export function Header({ title, subtitle, code }: HeaderProps) {
             <Text style={styles.code}>{code}</Text>
           </FluidPressable>
         )}
-        {user?.role === 'boss' && (
+        {user?.role === 'boss' && !isOfflineMode && (
           <FluidPressable
             style={styles.settingsButton}
             onPress={() => router.push('/chef/drivers')}
@@ -117,6 +124,20 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 2,
     textTransform: 'uppercase',
+  },
+  offlineBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  offlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.5,
   },
   rightContainer: {
     flexDirection: 'row',

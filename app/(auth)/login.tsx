@@ -28,7 +28,11 @@ export default function LoginScreen() {
     const result = await login(username.trim(), password);
 
     if (!result.success) {
-      setError(result.error ?? t("login", "errorInvalid"));
+      setError(
+        result.isNetworkError
+          ? t("login", "errorUnreachable")
+          : t("login", "errorInvalid"),
+      );
     } else {
       setError("");
     }
