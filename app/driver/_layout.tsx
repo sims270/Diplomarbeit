@@ -35,6 +35,9 @@ export default function TabLayout() {
           ),
         }}
       />
+
+      {/* Auftragsdetails open from the dashboard, not from the tab bar. */}
+      <Tabs.Screen name="order" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -7,7 +7,10 @@ import { escapeHtml, footer, formatTimeWindow, letterhead, nl2p, PDF_STYLES } fr
  * carriers ("fremde LKW"), matching the company's real paper template 1:1.
  * Page 1 carries the order-specific fields; pages 2 and 3 are the fixed
  * legal terms and MUST stay word-for-word identical on every generated
- * order — do not parametrize any of that text.
+ * order — do not parametrize any of that text. The one exception is the
+ * "Zahlungsziel" (payment terms) line in the page-3 signoff table: that's a
+ * commercial term that varies per deal, not boilerplate law text, so it's
+ * driven by order.paymentTerms (see PAYMENT_TERMS_OPTIONS below).
  *
  * Deliberately framework-free (no RN/expo imports) so buildTransportauftragHtml
  * can be rendered and previewed outside the app too (e.g. headless Chromium).
@@ -37,6 +40,33 @@ export const VEHICLE_TYPE_OPTIONS = [
   'KIPP-LKW',
   '7,65 + 7,65 M Hängerzug',
   'Klein-LKW m. Hebebühne',
+];
+
+// Dropdown options for "Zahlungskonditionen" — the 20 most common payment
+// terms in freight/logistics business. Unlike the AGB/Erklärung/
+// Vereinbarung text on pages 2/3, this is a commercial term that varies per
+// deal, so it's editable per order rather than fixed boilerplate.
+export const PAYMENT_TERMS_OPTIONS = [
+  '45 Tage netto nach Rechnungserhalt / 14 Tage abzüglich 3 % Skonto',
+  '30 Tage netto',
+  '30 Tage netto nach Rechnungserhalt',
+  '14 Tage netto',
+  '21 Tage netto',
+  '60 Tage netto',
+  '90 Tage netto',
+  '7 Tage netto',
+  'Sofort netto ohne Abzug',
+  '10 Tage 2 % Skonto, 30 Tage netto',
+  '14 Tage 2 % Skonto, 30 Tage netto',
+  '14 Tage 3 % Skonto, 45 Tage netto',
+  '8 Tage 2 % Skonto, 30 Tage netto',
+  '30 Tage 2 % Skonto, 60 Tage netto',
+  '30 Tage 3 % Skonto, 60 Tage netto',
+  'Vorauskasse',
+  'Zahlung bei Lieferung',
+  'Bankeinzug',
+  'Rechnung nach Leistungserbringung',
+  'Individuelle Vereinbarung laut Vertrag',
 ];
 
 // Fixed legal terms — page 2. Verbatim from the paper template. Never
@@ -174,8 +204,7 @@ ${PDF_STYLES}
     </div>
 
     <table class="signoff">
-      <tr><td class="k" rowspan="2">Zahlungsziel:</td><td>45 Tage netto nach Rechnungserhalt</td></tr>
-      <tr><td>14 Tage abzüglich 3 % Skonto</td></tr>
+      <tr><td class="k">Zahlungsziel:</td><td>${escapeHtml(order.paymentTerms).replace(/ \/ /g, '<br/>')}</td></tr>
       <tr><td class="k">Kennzeichen:</td><td>${escapeHtml(order.licensePlate || '')}</td></tr>
       <tr><td class="k">Fahrer:</td><td>${escapeHtml(order.driverName || '')}</td></tr>
       <tr><td class="k">Unterschrift:</td><td></td></tr>

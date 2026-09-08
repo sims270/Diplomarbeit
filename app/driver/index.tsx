@@ -1,4 +1,5 @@
 import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
@@ -6,8 +7,8 @@ import { getOrdersByDriver, Order } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
 import { isoToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
-import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 
 export default function DriverDashboardScreen() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -16,18 +17,7 @@ export default function DriverDashboardScreen() {
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
-      return;
-    }
-
-    if (user?.id) {
-      loadDriverOrders();
-    }
-  }, [isLoading, isAuthenticated, user?.id, router]);
-
-  const loadDriverOrders = async () => {
+  const loadDriverOrders = useCallback(async () => {
     if (!user?.id) return;
     setIsLoadingOrders(true);
     try {
@@ -37,7 +27,21 @@ export default function DriverDashboardScreen() {
     } finally {
       setIsLoadingOrders(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  // Jedes Mal neu laden, wenn das Dashboard wieder aktiv wird — etwa
+  // nachdem ein Auftrag im Detail als erledigt markiert wurde.
+  useFocusEffect(
+    useCallback(() => {
+      loadDriverOrders();
+    }, [loadDriverOrders])
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -107,7 +111,12 @@ export default function DriverDashboardScreen() {
               data={assignedOrders}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <View style={styles.orderCard}>
+                <FluidPressable
+                  style={styles.orderCard}
+                  onPress={() =>
+                    router.push({ pathname: '/driver/order/[id]', params: { id: item.id } })
+                  }
+                >
                   <View style={styles.orderHeader}>
                     <Text style={styles.orderNumber}>Nr. {item.orderNr}</Text>
                     <View
@@ -147,7 +156,7 @@ export default function DriverDashboardScreen() {
                       {t('driverDashboard', 'loadingMeters')}: {item.loadingMeters}
                     </Text>
                   ) : null}
-                </View>
+                </FluidPressable>
               )}
             />
           )}
