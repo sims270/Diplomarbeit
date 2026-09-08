@@ -1,30 +1,57 @@
+import { useAuth } from '@/app/context/AuthContext';
+import { Driver, getDrivers } from '@/app/services/driverService';
+import {
+  assignOrderToDriver,
+  getOrderById,
+  updateOrder,
+  type Order,
+  type OrderFields,
+} from '@/app/services/orderService';
+import { OwnOrderForm } from '@/components/OwnOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
+import { showAlert } from '@/lib/alert';
+import { exportOwnOrderPdf } from '@/lib/ownOrderExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Order, orderService } from '../../services/orderService';
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function ChefOrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { t, language } = useTranslation();
-  const timeLocale = language === 'de' ? 'de-DE' : 'en-US';
+  const { t } = useTranslation();
+  const { isOfflineMode } = useAuth();
 
-  const [order, setOrder] = useState<Order | undefined>(undefined);
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [order, setOrder] = useState<Order | undefined | null>(undefined);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadOrder();
+    loadDrivers();
   }, [id]);
 
-  const loadData = () => {
-    if (id) {
-      setOrder(orderService.getOrderById(id));
+  const loadOrder = () => {
+    if (!id) return;
+    getOrderById(id)
+      .then((found) => setOrder(found ?? null))
+      .catch(() => setOrder(null));
+  };
+
+  // Real drivers a boss created via Fahrerverwaltung — not the old demo
+  // roster, which never matched what actually exists.
+  const loadDrivers = async () => {
+    if (isOfflineMode) {
+      setDrivers([]);
+      return;
     }
-    setDrivers(orderService.getDrivers());
+    try {
+      setDrivers(await getDrivers());
+    } catch {
+      setDrivers([]);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -52,20 +79,48 @@ export default function ChefOrderDetailScreen() {
     return statusMap[status] || status;
   };
 
-  const handleAssign = (driverId: string) => {
-    if (!order) return;
-    orderService.assignOrderToDriver(order.id, driverId);
-    loadData();
-    Alert.alert(
-      t('common', 'success'),
-      `${t('chefDashboard', 'orderPrefix')} ${order.orderNumber} ${t('chefOrderDetail', 'alertAssignedSuccess')}`
-    );
+  const handleUpdate = async (fields: OrderFields) => {
+    if (!id) return;
+    const updated = await updateOrder(id, fields);
+    const assignedDriver = drivers.find((d) => d.id === updated.assignedTo);
+
+    // Same reasoning as the create screen: keep this right after the click
+    // with nothing awaited ahead of it, so web's popup permission holds.
+    await exportOwnOrderPdf(updated, assignedDriver?.username);
+    router.back();
   };
 
-  if (!order) {
+  const handleAssign = async (driverId: string) => {
+    if (!order) return;
+    setIsAssigning(true);
+    try {
+      await assignOrderToDriver(order.id, driverId);
+      loadOrder();
+      showAlert(
+        t('common', 'success'),
+        `Nr. ${order.orderNr} ${t('chefOrderDetail', 'alertAssignedSuccess')}`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      showAlert(t('common', 'error'), message);
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  if (order === undefined) {
     return (
       <View style={styles.container}>
-        <Header title="TRANSLOG PRO" subtitle={t('chefOrderDetail', 'headerSubtitle')} code="CH" />
+        <Header title="TRANSLOG PRO" subtitle={t('chefOwnOrder', 'editHeaderSubtitle')} code="CH" />
+        <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+      </View>
+    );
+  }
+
+  if (order === null) {
+    return (
+      <View style={styles.container}>
+        <Header title="TRANSLOG PRO" subtitle={t('chefOwnOrder', 'editHeaderSubtitle')} code="CH" />
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>{t('chefOrderDetail', 'notFound')}</Text>
         </View>
@@ -73,11 +128,11 @@ export default function ChefOrderDetailScreen() {
     );
   }
 
-  const assignedDriver = drivers.find(d => d.id === order.assignedTo);
+  const assignedDriver = drivers.find((d) => d.id === order.assignedTo);
 
   return (
     <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle={t('chefOrderDetail', 'headerSubtitle')} code="CH" />
+      <Header title="TRANSLOG PRO" subtitle={t('chefOwnOrder', 'editHeaderSubtitle')} code="CH" />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         <FluidPressable style={styles.backLink} onPress={() => router.back()}>
@@ -85,107 +140,8 @@ export default function ChefOrderDetailScreen() {
         </FluidPressable>
 
         <View style={styles.orderHeaderCard}>
-          <View style={styles.orderHeaderRow}>
-            <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-              <Text style={styles.statusBadgeText}>{getStatusText(order.status)}</Text>
-            </View>
-          </View>
-          {order.priority === 'urgent' && (
-            <Text style={styles.priorityUrgent}>{t('driverDashboard', 'priorityUrgent')}</Text>
-          )}
-          {order.priority === 'high' && (
-            <Text style={styles.priorityHigh}>{t('driverDashboard', 'priorityHigh')}</Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'customerSection')}</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'nameLabel')}</Text>
-            <Text style={styles.value}>{order.customer.name}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'emailLabel')}</Text>
-            <Text style={styles.value}>{order.customer.email}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'phoneLabel')}</Text>
-            <Text style={styles.value}>{order.customer.phone}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'pickupSection')}</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'addressLabel')}</Text>
-            <Text style={styles.value}>{order.pickupLocation.address}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'cityLabel')}</Text>
-            <Text style={styles.value}>{order.pickupLocation.city}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'zipLabel')}</Text>
-            <Text style={styles.value}>{order.pickupLocation.zipCode}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'deliverySection')}</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'addressLabel')}</Text>
-            <Text style={styles.value}>{order.deliveryLocation.address}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'cityLabel')}</Text>
-            <Text style={styles.value}>{order.deliveryLocation.city}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'zipLabel')}</Text>
-            <Text style={styles.value}>{order.deliveryLocation.zipCode}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'packageSection')}</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'descriptionLabel')}</Text>
-            <Text style={styles.value}>{order.package.description}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'weightLabel')}</Text>
-            <Text style={styles.value}>{order.package.weight}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'volumeLabel')}</Text>
-            <Text style={styles.value}>{order.package.volume}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'valueLabel')}</Text>
-            <Text style={styles.value}>{order.package.value} €</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'fragileLabel')}</Text>
-            <Text style={styles.value}>
-              {order.package.fragile ? t('chefOrderDetail', 'fragileYes') : t('chefOrderDetail', 'fragileNo')}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'scheduleSection')}</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'pickupTimeLabel')}</Text>
-            <Text style={styles.value}>
-              {new Date(order.scheduledPickupTime).toLocaleString(timeLocale)}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('chefOrderDetail', 'deliveryTimeLabel')}</Text>
-            <Text style={styles.value}>
-              {new Date(order.scheduledDeliveryTime).toLocaleString(timeLocale)}
-            </Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+            <Text style={styles.statusBadgeText}>{getStatusText(order.status)}</Text>
           </View>
         </View>
 
@@ -194,33 +150,39 @@ export default function ChefOrderDetailScreen() {
           {assignedDriver ? (
             <View style={styles.row}>
               <Text style={styles.label}>{t('chefOrderDetail', 'assignedDriverLabel')}</Text>
-              <Text style={styles.value}>{assignedDriver.name}</Text>
+              <Text style={styles.value}>{assignedDriver.username}</Text>
             </View>
           ) : (
             <>
               <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'notAssigned')}</Text>
               <Text style={styles.selectDriverTitle}>{t('chefOrderDetail', 'selectDriver')}</Text>
-              <FlatList
-                scrollEnabled={false}
-                data={drivers}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <FluidPressable style={styles.driverOption} onPress={() => handleAssign(item.id)}>
-                    <Text style={styles.driverName}>{item.name}</Text>
-                    <Text
-                      style={[
-                        styles.driverStatus,
-                        item.status === 'online' ? { color: Colors.ui.green } : { color: Colors.ui.darkGray },
-                      ]}
+              {drivers.length === 0 ? (
+                <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'noDriversYet')}</Text>
+              ) : (
+                <FlatList
+                  scrollEnabled={false}
+                  data={drivers}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <FluidPressable
+                      style={styles.driverOption}
+                      onPress={() => handleAssign(item.id)}
+                      disabled={isAssigning}
                     >
-                      {item.status === 'online' ? `● ${t('common', 'online')}` : `● ${t('common', 'offline')}`}
-                    </Text>
-                  </FluidPressable>
-                )}
-              />
+                      <Text style={styles.driverName}>{item.username}</Text>
+                    </FluidPressable>
+                  )}
+                />
+              )}
             </>
           )}
         </View>
+
+        <OwnOrderForm
+          initialValues={order}
+          submitLabel={t('chefOwnOrder', 'saveButton')}
+          onSubmit={handleUpdate}
+        />
       </ScrollView>
     </View>
   );
@@ -246,6 +208,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.ui.primary,
   },
+  loading: {
+    marginTop: 32,
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -261,21 +226,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    alignItems: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 1,
-  },
-  orderHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  orderNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -286,18 +242,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 11,
     fontWeight: '700',
-  },
-  priorityUrgent: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#d32f2f',
-    marginTop: 8,
-  },
-  priorityHigh: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.orange,
-    marginTop: 8,
   },
   section: {
     backgroundColor: 'white',
@@ -360,9 +304,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.ui.charcoal,
-  },
-  driverStatus: {
-    fontSize: 11,
-    fontWeight: '600',
   },
 });
