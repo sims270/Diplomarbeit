@@ -2,17 +2,19 @@ import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
+import { getOrdersByDriver, Order } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
+import { isoToGerman } from '@/lib/dateFormat';
+import { formatTimeWindow } from '@/lib/pdfLayout';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { orderService, Order } from '../services/orderService';
 
 export default function DriverDashboardScreen() {
   const { user, isLoading, isAuthenticated } = useAuth();
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
-  const timeLocale = language === 'de' ? 'de-DE' : 'en-US';
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -25,10 +27,15 @@ export default function DriverDashboardScreen() {
     }
   }, [isLoading, isAuthenticated, user?.id, router]);
 
-  const loadDriverOrders = () => {
-    if (user?.id) {
-      const orders = orderService.getOrdersByDriver(user.id);
-      setAssignedOrders(orders);
+  const loadDriverOrders = async () => {
+    if (!user?.id) return;
+    setIsLoadingOrders(true);
+    try {
+      setAssignedOrders(await getOrdersByDriver(user.id));
+    } catch {
+      setAssignedOrders([]);
+    } finally {
+      setIsLoadingOrders(false);
     }
   };
 
@@ -55,6 +62,12 @@ export default function DriverDashboardScreen() {
     return statusMap[status] || status;
   };
 
+  const formatDateTime = (date: string, from: string, until: string) => {
+    if (!date) return '—';
+    const window = formatTimeWindow(from, until);
+    return window ? `${isoToGerman(date)}, ${window}` : isoToGerman(date);
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -79,7 +92,9 @@ export default function DriverDashboardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({assignedOrders.length})</Text>
 
-          {assignedOrders.length === 0 ? (
+          {isLoadingOrders ? (
+            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+          ) : assignedOrders.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>{t('driverDashboard', 'emptyOrders')}</Text>
               <Text style={styles.emptyStateSubtext}>
@@ -94,7 +109,7 @@ export default function DriverDashboardScreen() {
               renderItem={({ item }) => (
                 <View style={styles.orderCard}>
                   <View style={styles.orderHeader}>
-                    <Text style={styles.orderNumber}>{item.orderNumber}</Text>
+                    <Text style={styles.orderNumber}>Nr. {item.orderNr}</Text>
                     <View
                       style={[
                         styles.statusBadge,
@@ -106,35 +121,32 @@ export default function DriverDashboardScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.customerName}>{item.customer.name}</Text>
-                  <Text style={styles.packageDesc}>{item.package.description}</Text>
-                  <View style={styles.locationContainer}>
-                    <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>{t('driverDashboard', 'pickup')}:</Text>
-                      <Text style={styles.locationText}>
-                        {item.pickupLocation.city}
-                      </Text>
-                    </View>
-                    <View style={styles.locationItem}>
-                      <Text style={styles.locationLabel}>{t('driverDashboard', 'delivery')}:</Text>
-                      <Text style={styles.locationText}>
-                        {item.deliveryLocation.city}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.timeContainer}>
+
+                  <View style={styles.locationItem}>
+                    <Text style={styles.locationLabel}>{t('driverDashboard', 'pickup')}:</Text>
+                    <Text style={styles.locationText}>
+                      {item.loadingCompany || '—'}{item.loadingAddress ? `, ${item.loadingAddress}` : ''}
+                    </Text>
                     <Text style={styles.timeText}>
-                      ⏱ {new Date(item.scheduledPickupTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })} - {new Date(item.scheduledDeliveryTime).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })}
+                      {formatDateTime(item.loadingDate, item.loadingTimeFrom, item.loadingTimeUntil)}
                     </Text>
                   </View>
-                  <View style={styles.priorityContainer}>
-                    {item.priority === 'urgent' && (
-                      <Text style={styles.priorityUrgent}>{t('driverDashboard', 'priorityUrgent')}</Text>
-                    )}
-                    {item.priority === 'high' && (
-                      <Text style={styles.priorityHigh}>{t('driverDashboard', 'priorityHigh')}</Text>
-                    )}
+
+                  <View style={styles.locationItem}>
+                    <Text style={styles.locationLabel}>{t('driverDashboard', 'delivery')}:</Text>
+                    <Text style={styles.locationText}>
+                      {item.unloadingCompany || '—'}{item.unloadingAddress ? `, ${item.unloadingAddress}` : ''}
+                    </Text>
+                    <Text style={styles.timeText}>
+                      {formatDateTime(item.unloadingDate, item.unloadingTimeFrom, item.unloadingTimeUntil)}
+                    </Text>
                   </View>
+
+                  {item.loadingMeters ? (
+                    <Text style={styles.metersText}>
+                      {t('driverDashboard', 'loadingMeters')}: {item.loadingMeters}
+                    </Text>
+                  ) : null}
                 </View>
               )}
             />
@@ -170,6 +182,9 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     textTransform: 'uppercase',
     marginBottom: 16,
+  },
+  loading: {
+    marginTop: 32,
   },
   emptyState: {
     paddingVertical: 32,
@@ -219,24 +234,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  customerName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  packageDesc: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
   locationItem: {
-    flex: 1,
+    marginBottom: 8,
   },
   locationLabel: {
     fontSize: 10,
@@ -248,27 +247,13 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     fontWeight: '500',
   },
-  timeContainer: {
-    paddingVertical: 6,
-    marginBottom: 8,
-  },
   timeText: {
     fontSize: 11,
-    color: Colors.light.text,
+    color: Colors.ui.darkGray,
+  },
+  metersText: {
+    fontSize: 11,
+    color: Colors.ui.darkGray,
     fontWeight: '600',
-  },
-  priorityContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  priorityUrgent: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#d32f2f',
-  },
-  priorityHigh: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.ui.orange,
   },
 });
