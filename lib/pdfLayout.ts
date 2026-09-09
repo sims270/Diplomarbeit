@@ -79,25 +79,43 @@ export function footer(pageLabel: string): string {
 // Shared <style> body for every generated document. Unused selectors
 // (e.g. table.signoff for a page-1-only document) are harmless.
 export const PDF_STYLES = `
-  @page { size: A4; margin: 18mm 16mm; }
+  /* Rand 0 statt 18mm/16mm: Der Browser druckt seine eigene Kopf- und
+     Fußzeile (Datum, Uhrzeit, Dokumenttitel, URL) in genau diesen Rand.
+     Ohne Rand hat er dafür keinen Platz mehr und lässt sie weg — anders
+     ist das per CSS nicht abschaltbar. Die Seitenränder übernimmt dafür
+     das padding von .page, das Druckbild bleibt also gleich.
+     Sollte die Browser-Zeile trotzdem erscheinen, ist im Druckdialog
+     "Kopf- und Fußzeilen" angehakt und muss dort abgewählt werden. */
+  @page { size: A4; margin: 0; }
   /* Kept close to the browser default line-height (not the airier 1.4-1.5
      that page 1's spacious form invites) — pages 2/3 pack in a lot of
      dense legal text that already barely fits one A4 page each; a global
      bump there would spill it onto extra pages. */
+  /* margin:0 ist Pflicht, seit @page keinen Rand mehr hat: der
+     Standardrand des Browsers (8px) käme sonst zur Seitenhöhe hinzu und
+     schöbe hinter jedes Blatt eine leere Seite. */
+  html, body { margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.25; color: #111; }
-  /* Page content box height is intentionally a bit less than the full A4
-     printable area (297mm minus the @page's 18mm top/bottom margins =
-     261mm) — an exact match spills a near-empty extra page from rounding
-     in the mm->px conversion. The margin trades a few mm of blank space
-     above the footer for pagination that doesn't break. */
-  .page { position: relative; min-height: 248mm; box-sizing: border-box; padding-bottom: 50px; page-break-after: always; }
+  /* Die Seite füllt jetzt das ganze A4-Blatt (297mm) statt nur die Fläche
+     innerhalb der alten @page-Ränder — die Ränder stecken im padding.
+     Dadurch liegt bottom:0 der Fußzeile wirklich am Blattende und nicht
+     mehr rund 30mm darüber.
+     294mm statt 297mm lässt bewusst 3mm Luft: bei einer exakten
+     Übereinstimmung schiebt schon eine Rundung in der mm->px-Umrechnung
+     eine fast leere Zusatzseite heraus. */
+  .page { position: relative; min-height: 294mm; box-sizing: border-box; padding: 12mm 16mm 30mm; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
   .letterhead { text-align: center; margin-bottom: 10px; }
   .companyName { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 21px; font-weight: 700; }
   .brandName { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-size: 28px; font-weight: 400; vertical-align: -3px; }
   .companyLine { font-size: 9px; line-height: 1.4; }
   hr { border: none; border-top: 1px solid #999; margin: 6px 0 8px; }
-  .footer { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-style: italic; font-size: 8px; line-height: 1.4; color: #333; border-top: 1px solid #ccc; padding-top: 6px; }
+  /* left/right auf die Seitenränder gesetzt, weil absolut positionierte
+     Elemente sich am padding-*Rand* der Seite ausrichten und das padding
+     von .page sonst übersprungen würde — die Fußzeile liefe sonst über
+     die volle Blattbreite hinaus. bottom:8mm hält sie am Blattende, aber
+     außerhalb des nicht bedruckbaren Randbereichs der meisten Drucker. */
+  .footer { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; text-align: center; font-style: italic; font-size: 8px; line-height: 1.4; color: #333; border-top: 1px solid #ccc; padding-top: 6px; }
   .pageLabel { text-align: right; font-style: normal; margin-top: 2px; }
   .dateRow { text-align: right; font-size: 12px; margin: 10px 0 4px; }
   h1.title { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 24px; letter-spacing: 1px; margin: 18px 0 26px; }

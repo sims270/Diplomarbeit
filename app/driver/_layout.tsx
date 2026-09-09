@@ -27,17 +27,23 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="map"
+        name="tankliste"
         options={{
-          title: "Karte",
+          title: "Tankliste",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="map" color={color} />
+            <IconSymbol size={28} name="fuelpump.fill" color={color} />
           ),
         }}
       />
 
       {/* Auftragsdetails open from the dashboard, not from the tab bar. */}
       <Tabs.Screen name="order" options={{ href: null }} />
+
+      {/* Der Kartenscreen ist der Tankliste gewichen. expo-router legt für
+          jede Datei unter app/driver/ automatisch einen Tab an, deshalb
+          reicht es nicht, den Eintrag hier wegzulassen — map.tsx würde
+          sonst mit Standardtitel wieder in der Tab-Leiste auftauchen. */}
+      <Tabs.Screen name="map" options={{ href: null }} />
     </Tabs>
   );
 }

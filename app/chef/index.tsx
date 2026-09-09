@@ -5,15 +5,18 @@ import { StatusCard } from '@/components/status-card';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
+import { showAlert } from '@/lib/alert';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { getOrderStats } from '../services/orderService';
+import { downloadTankEntriesXlsx } from '../services/tankEntryService';
 
 export default function ChefDashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { isLoading, isAuthenticated } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0 });
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -38,6 +41,20 @@ export default function ChefDashboardScreen() {
     }
   };
 
+  const handleExportTankliste = async () => {
+    setIsExporting(true);
+    try {
+      await downloadTankEntriesXlsx();
+    } catch (error) {
+      showAlert(
+        t('common', 'error'),
+        error instanceof Error ? error.message : t('chefDashboard', 'exportTanklisteError')
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -59,14 +76,21 @@ export default function ChefDashboardScreen() {
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Die Fahrerverwaltung erreicht der Chef über den 👤-Button im
+            Header (components/header.tsx) — hier stand sie doppelt. */}
         <View style={styles.quickActionsRow}>
           <FluidPressable
-            style={styles.manageDriversButton}
-            onPress={() => router.push('/chef/drivers')}
+            style={[styles.quickActionButton, isExporting && styles.quickActionButtonDisabled]}
+            onPress={handleExportTankliste}
+            disabled={isExporting}
           >
-            <Text style={styles.manageDriversButtonText}>
-              {t('chefDashboard', 'manageDriversButton')}
-            </Text>
+            {isExporting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.quickActionButtonText}>
+                {t('chefDashboard', 'exportTanklisteButton')}
+              </Text>
+            )}
           </FluidPressable>
         </View>
 
@@ -131,17 +155,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
   },
-  manageDriversButton: {
+  quickActionButton: {
     flex: 1,
     backgroundColor: Colors.ui.primary,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  manageDriversButtonText: {
+  quickActionButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '700',
+  },
+  quickActionButtonDisabled: {
+    opacity: 0.6,
   },
   section: {
     paddingHorizontal: 16,
