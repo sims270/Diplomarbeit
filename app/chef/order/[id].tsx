@@ -7,11 +7,13 @@ import {
   type Order,
   type OrderFields,
 } from '@/app/services/orderService';
+import { OrderDocuments } from '@/components/OrderDocuments';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
+import { timestampToGerman } from '@/lib/dateFormat';
 import { showAlert } from '@/lib/alert';
 import { exportOwnOrderPdf } from '@/lib/ownOrderExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -145,6 +147,22 @@ export default function ChefOrderDetailScreen() {
           </View>
         </View>
 
+        {order.completedAt ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {t('chefOrderDetail', 'completedSection')}
+            </Text>
+            <View style={styles.row}>
+              <Text style={styles.label}>
+                {t('chefOrderDetail', 'completedAtLabel')}
+              </Text>
+              <Text style={[styles.value, styles.completedValue]}>
+                ✓ {timestampToGerman(order.completedAt)}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'driverSection')}</Text>
           {assignedDriver ? (
@@ -177,6 +195,17 @@ export default function ChefOrderDetailScreen() {
             </>
           )}
         </View>
+
+        {order.status === 'completed' ? (
+          <OrderDocuments orderId={order.id} />
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('orderDocuments', 'title')}</Text>
+            <Text style={styles.documentsHint}>
+              {t('orderDocuments', 'hiddenUntilCompleted')}
+            </Text>
+          </View>
+        )}
 
         <OwnOrderForm
           initialValues={order}
@@ -278,6 +307,14 @@ const styles = StyleSheet.create({
     color: Colors.ui.charcoal,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  completedValue: {
+    color: Colors.ui.green,
+  },
+  documentsHint: {
+    fontSize: 13,
+    color: Colors.ui.darkGray,
+    lineHeight: 18,
   },
   notAssignedText: {
     fontSize: 13,

@@ -37,6 +37,7 @@ export interface ExternalOrder {
 
   freightRate: string;
   deadlineSurcharge: string;
+  paymentTerms: string;
 
   vehicleType: string;
   notes: string;
@@ -85,6 +86,7 @@ function rowToOrder(row: any): ExternalOrder {
     unloadingAddress: row.unloading_address,
     freightRate: row.freight_rate,
     deadlineSurcharge: row.deadline_surcharge,
+    paymentTerms: row.payment_terms,
     vehicleType: row.vehicle_type,
     notes: row.notes,
     licensePlate: row.license_plate ?? '',
@@ -115,6 +117,7 @@ function fieldsToRow(data: ExternalOrderFields): Record<string, unknown> {
     unloading_address: data.unloadingAddress,
     freight_rate: data.freightRate,
     deadline_surcharge: data.deadlineSurcharge,
+    payment_terms: data.paymentTerms,
     vehicle_type: data.vehicleType,
     notes: data.notes,
     license_plate: data.licensePlate || null,

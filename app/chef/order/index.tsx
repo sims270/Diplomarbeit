@@ -7,7 +7,7 @@ import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
-import { isoToGerman } from '@/lib/dateFormat';
+import { isoToGerman, timestampToGermanDate } from '@/lib/dateFormat';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -183,6 +183,11 @@ export default function OrdersListScreen() {
                 {item.loadingDate ? (
                   <Text style={styles.date}>
                     {t('chefOrdersList', 'loadingOn')} {isoToGerman(item.loadingDate)}
+                  </Text>
+                ) : null}
+                {item.completedAt ? (
+                  <Text style={styles.completedAt}>
+                    ✓ {t('chefOrdersList', 'completedOn')} {timestampToGermanDate(item.completedAt)}
                   </Text>
                 ) : null}
                 {item.assignedTo ? (
@@ -405,6 +410,12 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 11,
     color: Colors.ui.darkGray,
+    marginBottom: 6,
+  },
+  completedAt: {
+    fontSize: 11,
+    color: Colors.ui.green,
+    fontWeight: '600',
     marginBottom: 6,
   },
   assignedDriver: {

@@ -19,6 +19,8 @@ export interface Order {
 
   assignedTo: string | null;
   status: string;
+  // Gesetzt, sobald der Fahrer den Auftrag als erledigt markiert hat.
+  completedAt: string | null;
 
   loadingDate: string;
   loadingTimeFrom: string;
@@ -38,7 +40,10 @@ export interface Order {
 // from the sequence shared with externalOrderService (see fieldsToRow and
 // the order_nr_seq comment in the migration) — eigene Aufträge and
 // Fremdaufträge never collide on the same number. Typing one overrides it.
-export type OrderFields = Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'assignedTo' | 'status'>;
+export type OrderFields = Omit<
+  Order,
+  'id' | 'createdAt' | 'updatedAt' | 'assignedTo' | 'status' | 'completedAt'
+>;
 
 // orders.loading_date/unloading_date are real `date` columns — an empty
 // string isn't a valid date, so store that as null instead.
@@ -59,6 +64,7 @@ function rowToOrder(row: any): Order {
     createdBy: row.created_by ?? '',
     assignedTo: row.assigned_to,
     status: row.status,
+    completedAt: row.completed_at ?? null,
     loadingDate: fromDateColumn(row.loading_date),
     loadingTimeFrom: row.loading_time_from,
     loadingTimeUntil: row.loading_time_until,
@@ -172,6 +178,18 @@ export async function assignOrderToDriver(orderId: string, driverId: string): Pr
     .eq('id', orderId);
 
   if (error) throw new Error(error.message);
+}
+
+// Der einzige Schreibzugriff, den ein Fahrer auf orders hat. Läuft über
+// die RPC-Funktion complete_order (siehe
+// supabase/migrations/20260908110000_driver_complete_order.sql), die den
+// Status setzt und dabei selbst prüft, dass der Auftrag dem angemeldeten
+// Fahrer gehört — die orders-Policies erlauben Fahrern kein UPDATE.
+export async function completeOrder(orderId: string): Promise<Order> {
+  const { data, error } = await supabase.rpc('complete_order', { order_id: orderId });
+
+  if (error) throw new Error(error.message);
+  return rowToOrder(data);
 }
 
 export async function getOrderStats(): Promise<{

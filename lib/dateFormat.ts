@@ -40,3 +40,20 @@ export function dateToTimeString(date: Date): string {
   const m = String(date.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
+
+// created_at/updated_at/completed_at sind volle Zeitstempel (timestamptz,
+// also UTC), nicht die reinen ISO-Daten der Lade-/Entladespalten. Über den
+// Umweg Date -> lokale Getter kommt der Tag heraus, den der Nutzer auch
+// erlebt hat — ein einfaches slice(0, 10) auf den UTC-String läge abends
+// einen Tag daneben.
+export function timestampToGermanDate(timestamp: string): string {
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return timestamp;
+  return isoToGerman(dateToIso(parsed));
+}
+
+export function timestampToGerman(timestamp: string): string {
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return timestamp;
+  return `${isoToGerman(dateToIso(parsed))}, ${dateToTimeString(parsed)} Uhr`;
+}

@@ -5,8 +5,8 @@ import { StatusCard } from '@/components/status-card';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
-import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { getOrderStats } from '../services/orderService';
 
 export default function ChefDashboardScreen() {
@@ -18,13 +18,16 @@ export default function ChefDashboardScreen() {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace('/login');
-      return;
-    }
-
-    if (isAuthenticated) {
-      loadStats();
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Auf Fokus statt nur beim Mounten: so zählt die Kachel "erledigt"
+  // auch die Aufträge mit, die ein Fahrer gerade abgeschlossen hat.
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated) loadStats();
+    }, [isAuthenticated])
+  );
 
   const loadStats = async () => {
     try {

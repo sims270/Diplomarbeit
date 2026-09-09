@@ -8,7 +8,7 @@ import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
-import { VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
+import { PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,7 +20,12 @@ import {
   View,
 } from 'react-native';
 
-type PickerField = 'vehicleType' | 'recipientCompany' | 'loadingCompany' | 'unloadingCompany';
+type PickerField =
+  | 'vehicleType'
+  | 'paymentTerms'
+  | 'recipientCompany'
+  | 'loadingCompany'
+  | 'unloadingCompany';
 
 const emptyFields: ExternalOrderFields = {
   createdBy: '',
@@ -42,6 +47,7 @@ const emptyFields: ExternalOrderFields = {
   unloadingAddress: '',
   freightRate: '0,00',
   deadlineSurcharge: '0,00',
+  paymentTerms: PAYMENT_TERMS_OPTIONS[0],
   vehicleType: '',
   notes: '',
   licensePlate: '',
@@ -77,13 +83,18 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
   const pickerOptions =
     activePicker === 'vehicleType'
       ? VEHICLE_TYPE_OPTIONS
-      : activePicker === 'recipientCompany'
-        ? carrierCompanies
-        : siteCompanies;
+      : activePicker === 'paymentTerms'
+        ? PAYMENT_TERMS_OPTIONS
+        : activePicker === 'recipientCompany'
+          ? carrierCompanies
+          : siteCompanies;
   const pickerTitle =
     activePicker === 'vehicleType'
       ? t('chefExternalOrder', 'vehicleTypeLabel')
-      : t('chefExternalOrder', 'companyLabel');
+      : activePicker === 'paymentTerms'
+        ? t('chefExternalOrder', 'paymentTermsLabel')
+        : t('chefExternalOrder', 'companyLabel');
+  const isClosedListPicker = activePicker === 'vehicleType' || activePicker === 'paymentTerms';
 
   const handleSubmit = async () => {
     const {
@@ -273,6 +284,13 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         keyboardType="numeric"
       />
 
+      <FluidPressable style={styles.selectField} onPress={() => setActivePicker('paymentTerms')}>
+        <Text style={form.paymentTerms ? styles.selectValue : styles.selectPlaceholder}>
+          {form.paymentTerms || t('chefExternalOrder', 'paymentTermsLabel')}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </FluidPressable>
+
       <FluidPressable style={styles.selectField} onPress={() => setActivePicker('vehicleType')}>
         <Text style={form.vehicleType ? styles.selectValue : styles.selectPlaceholder}>
           {form.vehicleType || t('chefExternalOrder', 'vehicleTypeLabel')}
@@ -334,7 +352,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
                 <Text style={styles.closeButton}>✕</Text>
               </FluidPressable>
             </View>
-            {activePicker !== 'vehicleType' && pickerOptions.length === 0 ? (
+            {!isClosedListPicker && pickerOptions.length === 0 ? (
               <Text style={styles.emptyPickerText}>
                 {t('chefExternalOrder', 'noCompaniesYet')}
               </Text>
