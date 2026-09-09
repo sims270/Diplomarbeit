@@ -42,31 +42,41 @@ export const VEHICLE_TYPE_OPTIONS = [
   'Klein-LKW m. Hebebühne',
 ];
 
-// Dropdown options for "Zahlungskonditionen" — the 20 most common payment
-// terms in freight/logistics business. Unlike the AGB/Erklärung/
-// Vereinbarung text on pages 2/3, this is a commercial term that varies per
-// deal, so it's editable per order rather than fixed boilerplate.
+// Dropdown-Optionen für "Zahlungskonditionen" — die Konditionen aus dem
+// Warenwirtschaftssystem der Firma (Maske "Kondition suchen", Firma 219430),
+// wortwörtlich und in derselben Reihenfolge übernommen. Der Wortlaut muss
+// mit dem System übereinstimmen, damit Transportauftrag und Buchhaltung
+// dieselbe Kondition auch gleich benennen.
+//
+// Anders als der AGB-/Erklärungs-/Vereinbarungstext auf Seite 2 und 3 ist
+// das eine kaufmännische Vereinbarung, die pro Auftrag unterschiedlich
+// ausfällt — deshalb wählbar statt fest verdrahtet.
 export const PAYMENT_TERMS_OPTIONS = [
-  '45 Tage netto nach Rechnungserhalt / 14 Tage abzüglich 3 % Skonto',
-  '30 Tage netto',
-  '30 Tage netto nach Rechnungserhalt',
-  '14 Tage netto',
-  '21 Tage netto',
-  '60 Tage netto',
-  '90 Tage netto',
-  '7 Tage netto',
-  'Sofort netto ohne Abzug',
-  '10 Tage 2 % Skonto, 30 Tage netto',
-  '14 Tage 2 % Skonto, 30 Tage netto',
-  '14 Tage 3 % Skonto, 45 Tage netto',
-  '8 Tage 2 % Skonto, 30 Tage netto',
-  '30 Tage 2 % Skonto, 60 Tage netto',
-  '30 Tage 3 % Skonto, 60 Tage netto',
-  'Vorauskasse',
-  'Zahlung bei Lieferung',
-  'Bankeinzug',
-  'Rechnung nach Leistungserbringung',
-  'Individuelle Vereinbarung laut Vertrag',
+  'Zahlbar innerhalb 45 Tagen netto',
+  'Zahlbar innerhalb von 10 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 14 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 30 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 45 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 60 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 90 Tagen netto ohne Abzug',
+  'Innerhalb von 8 Tagen 2 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 10 Tagen 3 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 10 Tagen 3 % Skonto, 60 Tage ohne Abzug',
+  'Innerhalb von 14 Tagen 2 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 14 Tagen 3 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 30 Tagen 3 % Skonto, 60 Tage ohne Abzug',
+  'Innerhalb von 7 Tagen 3 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 10 Tagen 2 % Skonto, 30 Tage ohne Abzug',
+  'Innerhalb von 14 Tagen 3 % Skonto, 14 Tage ohne Abzug',
+  'Zahlbar innerhalb von 7 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 40 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 21 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 42 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 50 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 8 Tagen netto ohne Abzug',
+  'Zahlbar innerhalb von 20 Tagen netto ohne Abzug',
+  'Innerhalb von 8 Tagen 3 % Skonto, 30 Tage ohne Abzug',
+  'Zahlbar innerhalb von 5 Tagen netto ohne Abzug',
 ];
 
 // Fixed legal terms — page 2. Verbatim from the paper template. Never
@@ -150,7 +160,7 @@ ${PDF_STYLES}
 
   <div class="page">
     ${letterhead}
-    <div class="dateRow">Stadlhof, ${today}<br/>Nr. ${escapeHtml(order.orderNr)}</div>
+    <div class="dateRow">Stadlhof, ${today}<br/>Transportauftragsnr. ${escapeHtml(order.orderNr)}</div>
 
     <h1 class="title">TRANSPORTAUFTRAG</h1>
 
