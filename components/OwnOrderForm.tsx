@@ -1,5 +1,6 @@
 import type { OrderFields } from '@/app/services/orderService';
-import { addSiteCompanyIfNew, getSiteCompanies } from '@/app/services/siteCompanyService';
+import { addSiteCompanyIfNew, getSiteCompanies, type SiteCompany } from '@/app/services/siteCompanyService';
+import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
@@ -51,16 +52,55 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   const { t } = useTranslation();
 
   const [form, setForm] = useState<OrderFields>({ ...emptyFields, ...initialValues });
-  const [siteCompanies, setSiteCompanies] = useState<string[]>([]);
+  const [siteCompanies, setSiteCompanies] = useState<SiteCompany[]>([]);
+  const [unloadingCompanies, setUnloadingCompanies] = useState<string[]>([]);
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
+  const [companySearch, setCompanySearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     getSiteCompanies().then(setSiteCompanies);
+    getUnloadingCompanies().then(setUnloadingCompanies);
   }, []);
 
   const set = (field: keyof OrderFields) => (value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Ladung und Entladung ziehen aus zwei getrennten Listen: an der
+  // Ladestelle die importierten Kundenfirmen samt Adresse, an der
+  // Entladestelle die selbst gewachsene Liste ohne Adresse.
+  const isLoadingPicker = activePicker === 'loadingCompany';
+  const pickerCompanies = isLoadingPicker
+    ? siteCompanies.map((company) => company.name)
+    : unloadingCompanies;
+
+  // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall im
+  // Namen — ein eingetippter Teil genügt, der Anfang muss es nicht sein.
+  const query = companySearch.trim().toLowerCase();
+  const visibleCompanies =
+    isLoadingPicker && query
+      ? pickerCompanies.filter((name) => name.toLowerCase().includes(query))
+      : pickerCompanies;
+
+  const openPicker = (field: PickerField) => {
+    setCompanySearch('');
+    setActivePicker(field);
+  };
+
+  // Mit einer Ladestellen-Firma kommt gleich ihre Adresse ins Formular —
+  // sie ist pro Firma immer dieselbe und steht in site_companies. Ist dort
+  // keine hinterlegt, bleibt stehen, was schon im Adressfeld steht, statt
+  // es zu leeren. Die Entladeadresse wird immer von Hand eingetragen.
+  const pickCompany = (name: string) => {
+    const field = activePicker as PickerField;
+    setForm((prev) => {
+      const next = { ...prev, [field]: name };
+      const address = siteCompanies.find((company) => company.name === name)?.address;
+      if (address && field === 'loadingCompany') next.loadingAddress = address;
+      return next;
+    });
+    setActivePicker(null);
+  };
 
   const handleSubmit = async () => {
     const { loadingDate, loadingCompany, loadingAddress, unloadingDate, unloadingCompany, unloadingAddress } = form;
@@ -81,7 +121,7 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
       // for next time's dropdowns. Never blocks saving if it fails (see
       // service) — fire-and-forget so it can't delay navigating back.
       addSiteCompanyIfNew(form.loadingCompany);
-      addSiteCompanyIfNew(form.unloadingCompany);
+      addUnloadingCompanyIfNew(form.unloadingCompany);
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
       showAlert(t('common', 'error'), message || t('chefOwnOrder', 'alertPdfFailed'));
@@ -132,7 +172,7 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
         />
         <FluidPressable
           style={styles.comboChevronButton}
-          onPress={() => setActivePicker('loadingCompany')}
+          onPress={() => openPicker('loadingCompany')}
         >
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
@@ -181,7 +221,7 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
         />
         <FluidPressable
           style={styles.comboChevronButton}
-          onPress={() => setActivePicker('unloadingCompany')}
+          onPress={() => openPicker('unloadingCompany')}
         >
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
@@ -225,22 +265,30 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
                 <Text style={styles.closeButton}>✕</Text>
               </FluidPressable>
             </View>
-            {siteCompanies.length === 0 ? (
+            {isLoadingPicker && (
+              <TextInput
+                style={styles.input}
+                placeholder={t('chefOwnOrder', 'companySearchPlaceholder')}
+                value={companySearch}
+                onChangeText={setCompanySearch}
+                autoFocus
+              />
+            )}
+            {pickerCompanies.length === 0 ? (
               <Text style={styles.emptyPickerText}>
                 {t('chefOwnOrder', 'noCompaniesYet')}
               </Text>
+            ) : visibleCompanies.length === 0 ? (
+              <Text style={styles.emptyPickerText}>
+                {t('chefOwnOrder', 'noCompanyMatches')}
+              </Text>
             ) : (
               <FlatList
-                data={siteCompanies}
+                data={visibleCompanies}
                 keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
-                  <FluidPressable
-                    style={styles.vehicleOption}
-                    onPress={() => {
-                      setForm((prev) => ({ ...prev, [activePicker as PickerField]: item }));
-                      setActivePicker(null);
-                    }}
-                  >
+                  <FluidPressable style={styles.vehicleOption} onPress={() => pickCompany(item)}>
                     <Text style={styles.vehicleOptionText}>{item}</Text>
                   </FluidPressable>
                 )}

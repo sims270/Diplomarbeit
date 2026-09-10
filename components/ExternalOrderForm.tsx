@@ -1,6 +1,7 @@
 import type { ExternalOrderFields } from '@/app/services/externalOrderService';
 import { addCarrierCompanyIfNew, getCarrierCompanies } from '@/app/services/carrierCompanyService';
-import { addSiteCompanyIfNew, getSiteCompanies } from '@/app/services/siteCompanyService';
+import { addSiteCompanyIfNew, getSiteCompanies, type SiteCompany } from '@/app/services/siteCompanyService';
+import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
@@ -68,18 +69,24 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
 
   const [form, setForm] = useState<ExternalOrderFields>({ ...emptyFields, ...initialValues });
   const [carrierCompanies, setCarrierCompanies] = useState<string[]>([]);
-  const [siteCompanies, setSiteCompanies] = useState<string[]>([]);
+  const [siteCompanies, setSiteCompanies] = useState<SiteCompany[]>([]);
+  const [unloadingCompanies, setUnloadingCompanies] = useState<string[]>([]);
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
+  const [companySearch, setCompanySearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     getCarrierCompanies().then(setCarrierCompanies);
     getSiteCompanies().then(setSiteCompanies);
+    getUnloadingCompanies().then(setUnloadingCompanies);
   }, []);
 
   const set = (field: keyof ExternalOrderFields) => (value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
+  // Ladung und Entladung ziehen aus zwei getrennten Listen: an der
+  // Ladestelle die importierten Kundenfirmen samt Adresse, an der
+  // Entladestelle die selbst gewachsene Liste ohne Adresse.
   const pickerOptions =
     activePicker === 'vehicleType'
       ? VEHICLE_TYPE_OPTIONS
@@ -87,7 +94,9 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         ? PAYMENT_TERMS_OPTIONS
         : activePicker === 'recipientCompany'
           ? carrierCompanies
-          : siteCompanies;
+          : activePicker === 'unloadingCompany'
+            ? unloadingCompanies
+            : siteCompanies.map((company) => company.name);
   const pickerTitle =
     activePicker === 'vehicleType'
       ? t('chefExternalOrder', 'vehicleTypeLabel')
@@ -95,6 +104,35 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         ? t('chefExternalOrder', 'paymentTermsLabel')
         : t('chefExternalOrder', 'companyLabel');
   const isClosedListPicker = activePicker === 'vehicleType' || activePicker === 'paymentTerms';
+
+  // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall im
+  // Namen — ein eingetippter Teil genügt, der Anfang muss es nicht sein.
+  const isSearchablePicker = activePicker === 'loadingCompany';
+  const query = companySearch.trim().toLowerCase();
+  const visibleOptions =
+    isSearchablePicker && query
+      ? pickerOptions.filter((option) => option.toLowerCase().includes(query))
+      : pickerOptions;
+
+  const openPicker = (field: PickerField) => {
+    setCompanySearch('');
+    setActivePicker(field);
+  };
+
+  // Mit einer Ladestellen-Firma kommt gleich ihre Adresse ins Formular —
+  // sie ist pro Firma immer dieselbe und steht in site_companies. Ist dort
+  // keine hinterlegt, bleibt stehen, was schon im Adressfeld steht, statt
+  // es zu leeren. Die Entladeadresse wird immer von Hand eingetragen.
+  const pickOption = (value: string) => {
+    const field = activePicker as PickerField;
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      const address = siteCompanies.find((company) => company.name === value)?.address;
+      if (address && field === 'loadingCompany') next.loadingAddress = address;
+      return next;
+    });
+    setActivePicker(null);
+  };
 
   const handleSubmit = async () => {
     const {
@@ -120,7 +158,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
       // service) — fire-and-forget so it can't delay navigating back.
       addCarrierCompanyIfNew(form.recipientCompany);
       addSiteCompanyIfNew(form.loadingCompany);
-      addSiteCompanyIfNew(form.unloadingCompany);
+      addUnloadingCompanyIfNew(form.unloadingCompany);
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
       showAlert(t('common', 'error'), message || t('chefExternalOrder', 'alertPdfFailed'));
@@ -152,7 +190,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         />
         <FluidPressable
           style={styles.comboChevronButton}
-          onPress={() => setActivePicker('recipientCompany')}
+          onPress={() => openPicker('recipientCompany')}
         >
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
@@ -195,7 +233,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         />
         <FluidPressable
           style={styles.comboChevronButton}
-          onPress={() => setActivePicker('loadingCompany')}
+          onPress={() => openPicker('loadingCompany')}
         >
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
@@ -256,7 +294,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         />
         <FluidPressable
           style={styles.comboChevronButton}
-          onPress={() => setActivePicker('unloadingCompany')}
+          onPress={() => openPicker('unloadingCompany')}
         >
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
@@ -284,14 +322,14 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         keyboardType="numeric"
       />
 
-      <FluidPressable style={styles.selectField} onPress={() => setActivePicker('paymentTerms')}>
+      <FluidPressable style={styles.selectField} onPress={() => openPicker('paymentTerms')}>
         <Text style={form.paymentTerms ? styles.selectValue : styles.selectPlaceholder}>
           {form.paymentTerms || t('chefExternalOrder', 'paymentTermsLabel')}
         </Text>
         <Text style={styles.selectChevron}>▾</Text>
       </FluidPressable>
 
-      <FluidPressable style={styles.selectField} onPress={() => setActivePicker('vehicleType')}>
+      <FluidPressable style={styles.selectField} onPress={() => openPicker('vehicleType')}>
         <Text style={form.vehicleType ? styles.selectValue : styles.selectPlaceholder}>
           {form.vehicleType || t('chefExternalOrder', 'vehicleTypeLabel')}
         </Text>
@@ -352,22 +390,30 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
                 <Text style={styles.closeButton}>✕</Text>
               </FluidPressable>
             </View>
+            {isSearchablePicker && (
+              <TextInput
+                style={styles.input}
+                placeholder={t('chefExternalOrder', 'companySearchPlaceholder')}
+                value={companySearch}
+                onChangeText={setCompanySearch}
+                autoFocus
+              />
+            )}
             {!isClosedListPicker && pickerOptions.length === 0 ? (
               <Text style={styles.emptyPickerText}>
                 {t('chefExternalOrder', 'noCompaniesYet')}
               </Text>
+            ) : visibleOptions.length === 0 ? (
+              <Text style={styles.emptyPickerText}>
+                {t('chefExternalOrder', 'noCompanyMatches')}
+              </Text>
             ) : (
               <FlatList
-                data={pickerOptions}
+                data={visibleOptions}
                 keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
-                  <FluidPressable
-                    style={styles.vehicleOption}
-                    onPress={() => {
-                      setForm((prev) => ({ ...prev, [activePicker as PickerField]: item }));
-                      setActivePicker(null);
-                    }}
-                  >
+                  <FluidPressable style={styles.vehicleOption} onPress={() => pickOption(item)}>
                     <Text style={styles.vehicleOptionText}>{item}</Text>
                   </FluidPressable>
                 )}
