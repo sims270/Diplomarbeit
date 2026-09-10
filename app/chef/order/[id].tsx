@@ -7,6 +7,7 @@ import {
   type Order,
   type OrderFields,
 } from '@/app/services/orderService';
+import { InvoiceForm } from '@/components/InvoiceForm';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -160,6 +161,14 @@ export default function ChefOrderDetailScreen() {
                 ✓ {timestampToGerman(order.completedAt)}
               </Text>
             </View>
+          </View>
+        ) : null}
+
+        {/* Erst ab hier sinnvoll: abgerechnet wird, was gefahren wurde. */}
+        {order.status === 'completed' ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('chefInvoice', 'title')}</Text>
+            <InvoiceForm orderId={order.id} orderNr={order.orderNr} />
           </View>
         ) : null}
 
