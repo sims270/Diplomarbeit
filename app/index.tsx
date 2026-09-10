@@ -1,4 +1,5 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
+import { PageMeta } from "@/components/page-meta";
 import { Colors, Gradients } from "@/constants/theme";
 import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -21,6 +22,16 @@ export default function WelcomeScreen() {
   const colorScheme = useColorScheme();
   const { t } = useTranslation();
 
+  // Beim statischen Web-Export wird die Startseite im Ladezustand gerendert.
+  // Die Metadaten müssen deshalb vor dem frühen Return stehen, sonst landen
+  // Titel und Beschreibung nicht im exportierten HTML.
+  const meta = (
+    <PageMeta
+      title={t("seo", "homeTitle")}
+      description={t("seo", "homeDescription")}
+    />
+  );
+
   if (isLoading) {
     return (
       <View
@@ -31,6 +42,7 @@ export default function WelcomeScreen() {
           backgroundColor: Colors[colorScheme ?? "light"].background,
         }}
       >
+        {meta}
         <ActivityIndicator
           size="large"
           color={Colors[colorScheme ?? "light"].tint}
@@ -41,6 +53,8 @@ export default function WelcomeScreen() {
 
   return (
     <ScrollView style={styles.container} scrollEnabled={false}>
+      {meta}
+
       {/* Header Navigation */}
       <LinearGradient
         colors={Gradients.header}

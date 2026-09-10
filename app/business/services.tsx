@@ -1,4 +1,5 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
+import { PageMeta } from "@/components/page-meta";
 import { Gradients } from "@/constants/theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,6 +21,11 @@ export default function ServicesScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      <PageMeta
+        title={t("seo", "servicesTitle")}
+        description={t("seo", "servicesDescription")}
+      />
+
       {/* Header */}
       <LinearGradient
         colors={Gradients.header}

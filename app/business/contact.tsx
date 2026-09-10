@@ -1,4 +1,5 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
+import { PageMeta } from "@/components/page-meta";
 import { Gradients } from "@/constants/theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,6 +12,11 @@ export default function ContactScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      <PageMeta
+        title={t("seo", "contactTitle")}
+        description={t("seo", "contactDescription")}
+      />
+
       {/* Header */}
       <LinearGradient
         colors={Gradients.header}

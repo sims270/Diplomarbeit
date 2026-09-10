@@ -329,6 +329,20 @@ export const translations = {
       roleLabel: 'Rolle',
       roleValue: 'Fahrer',
     },
+    seo: {
+      homeTitle: 'TRANSLOG PRO — Logistik- und Transportmanagement',
+      homeDescription:
+        'TRANSLOG PRO ist eine Plattform für Disposition und Auftragsverwaltung im Transportwesen: Aufträge zuweisen, Fahrer koordinieren und Transportdokumente erzeugen.',
+      aboutTitle: 'Über uns',
+      aboutDescription:
+        'TRANSLOG PRO ist ein Diplomarbeitsprojekt der HAK Judenburg. Das Team LSC ITSolutions entwickelt eine moderne Logistik- und Liefermanagementplattform.',
+      servicesTitle: 'Ziele',
+      servicesDescription:
+        'Automatisierte Disposition, Auftragsverteilung an Fahrer, Echtzeit-Benachrichtigungen und ein übersichtliches Fahrer-Dashboard — die Ziele von TRANSLOG PRO.',
+      contactTitle: 'Kontakt',
+      contactDescription:
+        'Fragen zu TRANSLOG PRO? Das Team LSC ITSolutions der HAK Judenburg ist per E-Mail erreichbar.',
+    },
     about: {
       headerTitle: 'Über uns',
       section1Title: 'Über dieses Projekt',
@@ -700,6 +714,20 @@ export const translations = {
       usernameLabel: 'Username',
       roleLabel: 'Role',
       roleValue: 'Driver',
+    },
+    seo: {
+      homeTitle: 'TRANSLOG PRO — Logistics and Transport Management',
+      homeDescription:
+        'TRANSLOG PRO is a platform for dispatching and order management in the transport industry: assign orders, coordinate drivers and generate transport documents.',
+      aboutTitle: 'About Us',
+      aboutDescription:
+        'TRANSLOG PRO is a diploma thesis project from HAK Judenburg. The LSC ITSolutions team is building a modern logistics and delivery management platform.',
+      servicesTitle: 'Goals',
+      servicesDescription:
+        'Automated dispatching, order distribution to drivers, real-time notifications and a clear driver dashboard — the goals of TRANSLOG PRO.',
+      contactTitle: 'Contact',
+      contactDescription:
+        'Questions about TRANSLOG PRO? The LSC ITSolutions team from HAK Judenburg is available by email.',
     },
     about: {
       headerTitle: 'About Us',
