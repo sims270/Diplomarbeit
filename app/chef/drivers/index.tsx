@@ -18,6 +18,7 @@ import {
 interface Driver {
   id: string;
   username: string;
+  licensePlate?: string;
   createdAt: string;
 }
 
@@ -117,7 +118,11 @@ export default function DriversListScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/chef/drivers/[id]',
-                    params: { id: item.id, username: item.username },
+                    params: {
+                      id: item.id,
+                      username: item.username,
+                      licensePlate: item.licensePlate ?? '',
+                    },
                   })
                 }
               >
@@ -126,7 +131,12 @@ export default function DriversListScreen() {
                     {item.username.charAt(0).toUpperCase()}
                   </Text>
                 </View>
-                <Text style={styles.driverUsername}>{item.username}</Text>
+                <View style={styles.driverInfo}>
+                  <Text style={styles.driverUsername}>{item.username}</Text>
+                  {!!item.licensePlate && (
+                    <Text style={styles.driverPlate}>{item.licensePlate}</Text>
+                  )}
+                </View>
                 <Text style={styles.editLabel}>{t('driversList', 'editButton')} ›</Text>
               </FluidPressable>
             )}
@@ -232,11 +242,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  driverUsername: {
+  driverInfo: {
     flex: 1,
+  },
+  driverUsername: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.ui.charcoal,
+  },
+  driverPlate: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.ui.tertiary,
+    marginTop: 2,
   },
   editLabel: {
     fontSize: 13,

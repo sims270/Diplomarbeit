@@ -7,6 +7,7 @@ import {
   type TankEntry,
 } from '@/app/services/tankEntryService';
 import { DateField } from '@/components/DateField';
+import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
@@ -14,10 +15,12 @@ import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { dateToIso, isoToGerman } from '@/lib/dateFormat';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,6 +28,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+// Die Tankstellen, an denen die Fahrer regelmäßig tanken. Bewusst eine
+// offene Liste: das Feld bleibt frei beschreibbar, damit eine
+// Fremdtankung unterwegs nicht am Dropdown scheitert.
+const FUEL_STATION_OPTIONS = [
+  'Diesel 24, Traboch',
+  'Liegl, Ort im Innkreis',
+  'Diesel 24, Ort im Innkreis',
+  'Honisch, Arnsberg',
+];
 
 /**
  * Tankliste des Fahrers — ersetzt den Papierzettel im LKW. Erfassen und
@@ -47,6 +60,32 @@ export default function DriverTankListeScreen() {
   const [litersDiesel, setLitersDiesel] = useState('');
   const [litersAdBlue, setLitersAdBlue] = useState('');
   const [fuelStation, setFuelStation] = useState('');
+  const [isStationPickerOpen, setIsStationPickerOpen] = useState(false);
+  const [isPlatePickerOpen, setIsPlatePickerOpen] = useState(false);
+
+  // Der vom Chef zugeteilte LKW steht beim Öffnen schon im Feld — das ist
+  // der Normalfall und spart das Abtippen, das auf dem Papierzettel die
+  // Fehlerquelle war. Überschrieben wird nie: Hat der Fahrer bereits etwas
+  // eingetragen, bleibt das stehen.
+  const assignedPlate = user?.licensePlate ?? '';
+  useEffect(() => {
+    if (assignedPlate) setLicensePlate((prev) => prev || assignedPlate);
+  }, [assignedPlate]);
+
+  // Zur Auswahl stehen der zugeteilte LKW und jeder andere, den dieser
+  // Fahrer schon einmal getankt hat — fährt er öfter denselben Ersatz-LKW,
+  // steht der ab der zweiten Tankung von allein in der Liste.
+  const plateOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: string[] = [];
+    for (const plate of [assignedPlate, ...entries.map((e) => e.licensePlate)]) {
+      const value = plate?.trim();
+      if (!value || seen.has(value.toUpperCase())) continue;
+      seen.add(value.toUpperCase());
+      options.push(value);
+    }
+    return options;
+  }, [assignedPlate, entries]);
 
   const loadEntries = useCallback(async () => {
     if (!user?.id) return;
@@ -172,15 +211,25 @@ export default function DriverTankListeScreen() {
               />
 
               <Text style={styles.label}>{t('tankliste', 'fieldLicensePlate')}</Text>
-              <TextInput
-                style={styles.input}
-                value={licensePlate}
-                onChangeText={setLicensePlate}
-                placeholder={t('tankliste', 'placeholderLicensePlate')}
-                placeholderTextColor="#9a9a9a"
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
+              <View style={styles.comboRow}>
+                <TextInput
+                  style={[styles.input, styles.comboInput]}
+                  value={licensePlate}
+                  onChangeText={setLicensePlate}
+                  placeholder={t('tankliste', 'placeholderLicensePlate')}
+                  placeholderTextColor="#9a9a9a"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                {plateOptions.length > 0 && (
+                  <FluidPressable
+                    style={styles.comboChevronButton}
+                    onPress={() => setIsPlatePickerOpen(true)}
+                  >
+                    <Text style={styles.comboChevron}>▾</Text>
+                  </FluidPressable>
+                )}
+              </View>
 
               <Text style={styles.label}>{t('tankliste', 'fieldKmStand')}</Text>
               <TextInput
@@ -213,13 +262,21 @@ export default function DriverTankListeScreen() {
               />
 
               <Text style={styles.label}>{t('tankliste', 'fieldFuelStation')}</Text>
-              <TextInput
-                style={styles.input}
-                value={fuelStation}
-                onChangeText={setFuelStation}
-                placeholder={t('tankliste', 'placeholderFuelStation')}
-                placeholderTextColor="#9a9a9a"
-              />
+              <View style={styles.comboRow}>
+                <TextInput
+                  style={[styles.input, styles.comboInput]}
+                  value={fuelStation}
+                  onChangeText={setFuelStation}
+                  placeholder={t('tankliste', 'placeholderFuelStation')}
+                  placeholderTextColor="#9a9a9a"
+                />
+                <FluidPressable
+                  style={styles.comboChevronButton}
+                  onPress={() => setIsStationPickerOpen(true)}
+                >
+                  <Text style={styles.comboChevron}>▾</Text>
+                </FluidPressable>
+              </View>
 
               <FluidPressable
                 style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
@@ -290,6 +347,89 @@ export default function DriverTankListeScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={isPlatePickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPlatePickerOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('tankliste', 'fieldLicensePlate')}</Text>
+              <FluidPressable onPress={() => setIsPlatePickerOpen(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </FluidPressable>
+            </View>
+            <FlatList
+              data={plateOptions}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <FluidPressable
+                  style={styles.pickerOption}
+                  onPress={() => {
+                    setLicensePlate(item);
+                    setIsPlatePickerOpen(false);
+                  }}
+                >
+                  <Text style={styles.pickerOptionText}>{item}</Text>
+                  {item === assignedPlate && (
+                    <Text style={styles.pickerOptionHint}>
+                      {t('tankliste', 'assignedPlateHint')}
+                    </Text>
+                  )}
+                </FluidPressable>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isStationPickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsStationPickerOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('tankliste', 'fieldFuelStation')}</Text>
+              <FluidPressable onPress={() => setIsStationPickerOpen(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </FluidPressable>
+            </View>
+            <FlatList
+              data={FUEL_STATION_OPTIONS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <FluidPressable
+                  style={styles.pickerOption}
+                  onPress={() => {
+                    setFuelStation(item);
+                    setIsStationPickerOpen(false);
+                  }}
+                >
+                  <Text style={styles.pickerOptionText}>{item}</Text>
+                </FluidPressable>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -344,6 +484,71 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     fontSize: 14,
     color: Colors.ui.charcoal,
+  },
+  comboRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  comboInput: {
+    flex: 1,
+  },
+  comboChevronButton: {
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    backgroundColor: 'white',
+  },
+  comboChevron: {
+    fontSize: 14,
+    color: Colors.ui.darkGray,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  closeButton: {
+    fontSize: 24,
+    color: Colors.ui.darkGray,
+  },
+  pickerOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.charcoal,
+  },
+  pickerOptionHint: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    marginTop: 2,
   },
   saveButton: {
     backgroundColor: Colors.ui.primary,

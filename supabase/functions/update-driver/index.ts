@@ -22,19 +22,30 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  let body: { userId?: string; username?: string; password?: string };
+  let body: {
+    userId?: string;
+    username?: string;
+    password?: string;
+    licensePlate?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { userId, username, password } = body;
+  const { userId, username, password, licensePlate } = body;
   if (!userId) {
     return json({ error: "userId is required" }, 400);
   }
-  if (!username && !password) {
-    return json({ error: "Provide a new username and/or password" }, 400);
+  // Beim Kennzeichen zählt "wurde mitgeschickt", nicht "ist nicht leer" —
+  // sonst ließe sich ein falsch eingetragenes Kennzeichen nie wieder
+  // löschen.
+  if (!username && !password && licensePlate === undefined) {
+    return json(
+      { error: "Provide a new username, password and/or license plate" },
+      400
+    );
   }
 
   // Only edit driver accounts through this endpoint — never lets a boss
@@ -49,7 +60,11 @@ Deno.serve(async (req) => {
     return json({ error: "That account is not a driver" }, 403);
   }
 
-  const updates: { email?: string; password?: string } = {};
+  const updates: {
+    email?: string;
+    password?: string;
+    user_metadata?: Record<string, unknown>;
+  } = {};
 
   if (username) {
     if (!isValidUsername(username)) {
@@ -66,6 +81,20 @@ Deno.serve(async (req) => {
       return json({ error: "Password must be at least 6 characters" }, 400);
     }
     updates.password = password;
+  }
+
+  if (licensePlate !== undefined) {
+    const plate = licensePlate.trim().toUpperCase();
+    if (plate.length > 15) {
+      return json({ error: "License plate must be at most 15 characters" }, 400);
+    }
+    // Die bestehenden Metadaten mitschicken: Sonst fiele beim Speichern
+    // die Rolle "driver" weg — und der Fahrer käme nicht mehr in seine
+    // Ansichten (und in list-drivers gar nicht mehr vor).
+    updates.user_metadata = {
+      ...existing.user.user_metadata,
+      license_plate: plate,
+    };
   }
 
   const { error: updateError } = await adminClient.auth.admin.updateUserById(

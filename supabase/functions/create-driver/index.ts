@@ -27,14 +27,14 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  let body: { username?: string; password?: string };
+  let body: { username?: string; password?: string; licensePlate?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { username, password } = body;
+  const { username, password, licensePlate } = body;
   if (!username || !password) {
     return json({ error: "username and password are required" }, 400);
   }
@@ -48,11 +48,21 @@ Deno.serve(async (req) => {
     return json({ error: "Password must be at least 6 characters" }, 400);
   }
 
+  // Das Kennzeichen ist optional: Der Chef legt einen Fahrer oft an, bevor
+  // feststeht, welchen LKW er fährt. Kennzeichen sind in Österreich immer
+  // in Großbuchstaben — einheitlich gespeichert, damit später ein
+  // Vergleich mit dem Tanklisten-Eintrag nicht an der Schreibweise
+  // scheitert.
+  const plate = licensePlate?.trim().toUpperCase() ?? "";
+  if (plate.length > 15) {
+    return json({ error: "License plate must be at most 15 characters" }, 400);
+  }
+
   const { data, error: createError } = await adminClient.auth.admin.createUser({
     email: usernameToEmail(username),
     password,
     email_confirm: true,
-    user_metadata: { role: "driver" },
+    user_metadata: { role: "driver", license_plate: plate },
   });
 
   if (createError) {

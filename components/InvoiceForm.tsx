@@ -5,12 +5,22 @@ import {
   type Invoice,
 } from '@/app/services/invoiceService';
 import { DateField } from '@/components/DateField';
+import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
+import { PAYMENT_TERMS_OPTIONS } from '@/lib/transportauftragPdf';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 interface InvoiceFormProps {
   orderId: string;
@@ -35,6 +45,7 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -211,12 +222,15 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
         onChangeText={set('ustSatz')}
         keyboardType="decimal-pad"
       />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'zahlungszielLabel')}
-        value={form.zahlungsziel}
-        onChangeText={set('zahlungsziel')}
-      />
+      {/* Dieselbe Konditionsliste wie im Transportauftrag (siehe
+          ExternalOrderForm): So heißt dieselbe Kondition auf dem Auftrag
+          und auf der Rechnung auch gleich. */}
+      <FluidPressable style={styles.selectField} onPress={() => setIsPickerOpen(true)}>
+        <Text style={form.zahlungsziel ? styles.selectValue : styles.selectPlaceholder}>
+          {form.zahlungsziel || t('chefInvoice', 'zahlungszielLabel')}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </FluidPressable>
 
       <View style={styles.buttonRow}>
         <FluidPressable
@@ -245,6 +259,45 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
       </View>
 
       <Text style={styles.hint}>{t('chefInvoice', 'hint')}</Text>
+
+      <Modal
+        visible={isPickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPickerOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('chefInvoice', 'zahlungszielLabel')}</Text>
+              <FluidPressable onPress={() => setIsPickerOpen(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </FluidPressable>
+            </View>
+            <FlatList
+              data={PAYMENT_TERMS_OPTIONS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <FluidPressable
+                  style={styles.pickerOption}
+                  onPress={() => {
+                    set('zahlungsziel')(item);
+                    setIsPickerOpen(false);
+                  }}
+                >
+                  <Text style={styles.pickerOptionText}>{item}</Text>
+                </FluidPressable>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -267,6 +320,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.ui.charcoal,
     backgroundColor: 'white',
+  },
+  selectField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: 'white',
+  },
+  selectValue: {
+    fontSize: 14,
+    color: Colors.ui.charcoal,
+  },
+  selectPlaceholder: {
+    fontSize: 14,
+    color: '#9a9a9a',
+  },
+  selectChevron: {
+    fontSize: 14,
+    color: Colors.ui.darkGray,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  closeButton: {
+    fontSize: 24,
+    color: Colors.ui.darkGray,
+  },
+  pickerOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.charcoal,
   },
   buttonRow: {
     flexDirection: 'row',

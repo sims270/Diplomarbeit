@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
     .map((u) => ({
       id: u.id,
       username: u.email ? emailToUsername(u.email) : u.id,
+      licensePlate: (u.user_metadata?.license_plate as string | undefined) ?? "",
       createdAt: u.created_at,
     }))
     .sort((a, b) => a.username.localeCompare(b.username));

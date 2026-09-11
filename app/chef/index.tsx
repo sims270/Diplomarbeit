@@ -10,6 +10,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { getOrderStats } from '../services/orderService';
 import { downloadTankEntriesXlsx } from '../services/tankEntryService';
+import { getServiceStatus, getVehicles } from '../services/licensePlateService';
 
 export default function ChefDashboardScreen() {
   const { t } = useTranslation();
@@ -17,6 +18,9 @@ export default function ChefDashboardScreen() {
   const { isLoading, isAuthenticated } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0 });
   const [isExporting, setIsExporting] = useState(false);
+  // LKW mit fälligem Service. Ausgeflottete bleiben außen vor — die fahren
+  // nicht mehr.
+  const [serviceDue, setServiceDue] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -28,9 +32,29 @@ export default function ChefDashboardScreen() {
   // auch die Aufträge mit, die ein Fahrer gerade abgeschlossen hat.
   useFocusEffect(
     useCallback(() => {
-      if (isAuthenticated) loadStats();
+      if (isAuthenticated) {
+        loadStats();
+        loadServiceDue();
+      }
     }, [isAuthenticated])
   );
+
+  // Bei jedem Öffnen neu: Der Kilometerstand wächst durch die Tankungen der
+  // Fahrer, also auch dann, wenn der Chef die App gar nicht offen hat.
+  const loadServiceDue = async () => {
+    try {
+      const vehicles = await getVehicles();
+      setServiceDue(
+        vehicles
+          .filter((v) => v.retiredAt === null && getServiceStatus(v)?.isDue)
+          .map((v) => v.plate)
+      );
+    } catch {
+      // Wie die Kennzahlen darunter: eine Erinnerung, kein Grund das
+      // Dashboard daran scheitern zu lassen.
+      setServiceDue([]);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -78,6 +102,23 @@ export default function ChefDashboardScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Die Fahrerverwaltung erreicht der Chef über den 👤-Button im
             Header (components/header.tsx) — hier stand sie doppelt. */}
+        {serviceDue.length > 0 && (
+          <FluidPressable
+            style={styles.serviceBanner}
+            onPress={() => router.push('/chef/vehicles')}
+          >
+            <Text style={styles.serviceBannerTitle}>
+              🔧 {t('vehicles', 'serviceBannerTitle')}
+            </Text>
+            <Text style={styles.serviceBannerText}>
+              {serviceDue.length === 1
+                ? t('vehicles', 'serviceBannerOne')
+                : `${serviceDue.length} ${t('vehicles', 'serviceBannerMany')}`}
+            </Text>
+            <Text style={styles.serviceBannerPlates}>{serviceDue.join(' · ')}</Text>
+          </FluidPressable>
+        )}
+
         <View style={styles.quickActionsRow}>
           <FluidPressable
             style={[styles.quickActionButton, isExporting && styles.quickActionButtonDisabled]}
@@ -148,6 +189,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 16,
+  },
+  serviceBanner: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.ui.primary,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  serviceBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.ui.primary,
+  },
+  serviceBannerText: {
+    fontSize: 13,
+    color: Colors.ui.charcoal,
+    marginTop: 2,
+  },
+  serviceBannerPlates: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.ui.tertiary,
+    marginTop: 4,
   },
   quickActionsRow: {
     flexDirection: 'row',

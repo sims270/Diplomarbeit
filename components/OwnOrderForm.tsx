@@ -1,5 +1,10 @@
 import type { OrderFields } from '@/app/services/orderService';
-import { addSiteCompanyIfNew, getSiteCompanies, type SiteCompany } from '@/app/services/siteCompanyService';
+import {
+  addSiteCompanyIfNew,
+  formatSiteCompany,
+  getSiteCompanies,
+  type SiteCompany,
+} from '@/app/services/siteCompanyService';
 import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
@@ -69,17 +74,26 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   // Ladung und Entladung ziehen aus zwei getrennten Listen: an der
   // Ladestelle die importierten Kundenfirmen samt Adresse, an der
   // Entladestelle die selbst gewachsene Liste ohne Adresse.
+  //
+  // An der Ladestelle ist ein Eintrag ein Standort, keine Firma: Dieselbe
+  // Firma steht mehrfach in der Liste, wenn sie mehrere Werke hat. Deshalb
+  // trägt jede Zeile ihre Adresse sichtbar mit — sonst stünden mehrere
+  // Zeilen da, die gleich aussehen und Verschiedenes bedeuten.
   const isLoadingPicker = activePicker === 'loadingCompany';
-  const pickerCompanies = isLoadingPicker
-    ? siteCompanies.map((company) => company.name)
-    : unloadingCompanies;
+  const pickerCompanies: SiteCompany[] = isLoadingPicker
+    ? siteCompanies
+    : unloadingCompanies.map((name) => ({ name, address: '' }));
 
-  // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall im
-  // Namen — ein eingetippter Teil genügt, der Anfang muss es nicht sein.
+  // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall in
+  // Name und Adresse — ein eingetippter Teil genügt, der Anfang muss es
+  // nicht sein. Die Adresse zählt mit, damit sich der richtige Standort
+  // über den Ort finden lässt.
   const query = companySearch.trim().toLowerCase();
   const visibleCompanies =
     isLoadingPicker && query
-      ? pickerCompanies.filter((name) => name.toLowerCase().includes(query))
+      ? pickerCompanies.filter((company) =>
+          formatSiteCompany(company).toLowerCase().includes(query)
+        )
       : pickerCompanies;
 
   const openPicker = (field: PickerField) => {
@@ -87,16 +101,19 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
     setActivePicker(field);
   };
 
-  // Mit einer Ladestellen-Firma kommt gleich ihre Adresse ins Formular —
-  // sie ist pro Firma immer dieselbe und steht in site_companies. Ist dort
-  // keine hinterlegt, bleibt stehen, was schon im Adressfeld steht, statt
-  // es zu leeren. Die Entladeadresse wird immer von Hand eingetragen.
-  const pickCompany = (name: string) => {
+  // Mit einem Ladestellen-Standort kommt gleich seine Adresse ins Formular.
+  // Sie steckt im gewählten Eintrag selbst — nachschlagen über den Namen
+  // ginge hier fehl, denn bei mehreren Werken derselben Firma träfe man
+  // irgendeines davon. Ist keine Adresse hinterlegt, bleibt stehen, was
+  // schon im Feld steht, statt es zu leeren. Die Entladeadresse wird immer
+  // von Hand eingetragen.
+  const pickCompany = (company: SiteCompany) => {
     const field = activePicker as PickerField;
     setForm((prev) => {
-      const next = { ...prev, [field]: name };
-      const address = siteCompanies.find((company) => company.name === name)?.address;
-      if (address && field === 'loadingCompany') next.loadingAddress = address;
+      const next = { ...prev, [field]: company.name };
+      if (company.address && field === 'loadingCompany') {
+        next.loadingAddress = company.address;
+      }
       return next;
     });
     setActivePicker(null);
@@ -120,7 +137,7 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
       // Best-effort, after the fact: remembers freshly typed site companies
       // for next time's dropdowns. Never blocks saving if it fails (see
       // service) — fire-and-forget so it can't delay navigating back.
-      addSiteCompanyIfNew(form.loadingCompany);
+      addSiteCompanyIfNew(form.loadingCompany, form.loadingAddress);
       addUnloadingCompanyIfNew(form.unloadingCompany);
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
@@ -285,11 +302,14 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
             ) : (
               <FlatList
                 data={visibleCompanies}
-                keyExtractor={(item) => item}
+                keyExtractor={(item) => `${item.name}|${item.address}`}
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <FluidPressable style={styles.vehicleOption} onPress={() => pickCompany(item)}>
-                    <Text style={styles.vehicleOptionText}>{item}</Text>
+                    <Text style={styles.vehicleOptionText}>{item.name}</Text>
+                    {!!item.address && (
+                      <Text style={styles.vehicleOptionAddress}>{item.address}</Text>
+                    )}
                   </FluidPressable>
                 )}
               />
@@ -407,5 +427,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.ui.charcoal,
+  },
+  vehicleOptionAddress: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    marginTop: 2,
   },
 });

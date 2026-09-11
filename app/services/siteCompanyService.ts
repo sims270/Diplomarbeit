@@ -1,4 +1,5 @@
-import { createCompanyDirectory } from '@/app/services/companyDirectory';
+import { companyKey, normalizeCompanyName } from '@/app/services/companyDirectory';
+import { formatCompanyAddress, type AddressRow } from '@/app/services/companyAddress';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -15,9 +16,60 @@ export interface SiteCompany {
   address: string;
 }
 
-const siteCompanies = createCompanyDirectory('site_companies');
+/**
+ * Was im Dropdown steht: "voestalpine Stahl GmbH — voestalpine-Straße 3,
+ * A-4020 Linz". Die Adresse gehört sichtbar dazu, weil dieselbe Firma
+ * mehrere Standorte haben kann — ohne sie stünden mehrere Zeilen da, die
+ * gleich aussehen und Verschiedenes bedeuten.
+ */
+export function formatSiteCompany(company: SiteCompany): string {
+  return company.address ? `${company.name} — ${company.address}` : company.name;
+}
 
-export const addSiteCompanyIfNew = siteCompanies.addIfNew;
+/**
+ * Merkt einen frisch eingetippten Standort für das nächste Mal.
+ *
+ * Eigene Implementierung statt createCompanyDirectory: Dort ist der Name
+ * die Identität, hier ist es Name + Anschrift. Eine Firma mit einem
+ * zweiten Werk darf ein zweites Mal in die Tabelle — nur derselbe Standort
+ * nicht noch einmal.
+ *
+ * Fehlschläge werden geschluckt wie im companyDirectory: Das Anlegen eines
+ * Auftrags darf daran nie scheitern, die Firma lässt sich immer auch frei
+ * eintippen.
+ */
+export async function addSiteCompanyIfNew(name: string, address = ''): Promise<void> {
+  const cleanName = normalizeCompanyName(name);
+  if (!cleanName) return;
+
+  // Kein upsert: Sein Konfliktziel wäre das UNIQUE auf name allein, und
+  // genau das entfällt mit 20260911140000 — es verbot der Firma das zweite
+  // Werk. Stattdessen nachsehen und nur anlegen, was fehlt.
+  const { data, error: readError } = await supabase
+    .from('site_companies')
+    .select('name, strasse, plz, ort');
+
+  if (readError) {
+    console.warn('[siteCompanyService] could not check companies:', readError.message);
+    return;
+  }
+
+  const wanted = `${companyKey(cleanName)}|${companyKey(address)}`;
+  const exists = data.some(
+    (row) =>
+      `${companyKey(row.name as string)}|${companyKey(formatCompanyAddress(row as AddressRow))}` ===
+      wanted
+  );
+  if (exists) return;
+
+  const { error } = await supabase
+    .from('site_companies')
+    .insert({ name: cleanName, strasse: normalizeCompanyName(address) || null });
+
+  if (error) {
+    console.warn('[siteCompanyService] could not save company:', error.message);
+  }
+}
 
 /**
  * Fails soft (empty list) like the rest of the company directory: eine
@@ -36,35 +88,25 @@ export async function getSiteCompanies(): Promise<SiteCompany[]> {
     return [];
   }
 
-  return data.map((row) => ({
+  const companies = data.map((row) => ({
     name: row.name as string,
-    address: formatAddress(row as SiteCompanyRow),
+    address: formatCompanyAddress(row as AddressRow),
   }));
-}
 
-interface SiteCompanyRow {
-  strasse: string | null;
-  plz: string | null;
-  ort: string | null;
-}
-
-/**
- * "voestalpine-Straße 3, A-4020 Linz". Fehlt ein Teil in der Tabelle, fällt
- * er samt Trennzeichen weg, statt eine Lücke oder einen losen Beistrich zu
- * hinterlassen.
- */
-function formatAddress({ strasse, plz, ort }: SiteCompanyRow): string {
-  const postcode = plz?.trim();
-  const town = [postcode && withCountryCode(postcode), ort?.trim()].filter(Boolean).join(' ');
-  return [strasse?.trim(), town].filter(Boolean).join(', ');
-}
-
-/**
- * Österreichische Schreibweise mit Länderkürzel vor der Postleitzahl. Ein
- * Land steht nicht in der Tabelle, das Kürzel ist deshalb fix "A-" — eine
- * PLZ, die schon eines mitbringt (etwa "D-80331" bei einer deutschen
- * Firma), bleibt unangetastet.
- */
-function withCountryCode(postcode: string): string {
-  return /^[A-Za-z]{1,3}-/.test(postcode) ? postcode : `A-${postcode}`;
+  // Ein Standort, nicht eine Firma: Dieselbe Firma kommt mehrfach vor, wenn
+  // sie mehrere Lade-/Entladestellen hat — verschiedene Werke, verschiedene
+  // Straßen. Die gehören alle ins Dropdown, sonst fehlt dem Chef genau die
+  // Adresse, die er braucht.
+  //
+  // Zusammengelegt wird deshalb nur, was in Name UND Adresse übereinstimmt
+  // und sich bloß in Schreibweise oder Leerzeichen unterscheidet. Solche
+  // Zeilen sind echte Dubletten (typisch aus dem Import) — zwei Standorte
+  // sind sie nie, denn dann wäre die Adresse eine andere.
+  const seen = new Set<string>();
+  return companies.filter((company) => {
+    const key = `${companyKey(company.name)}|${companyKey(company.address)}`;
+    if (!companyKey(company.name) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

@@ -72,14 +72,26 @@ export function Header({ title, subtitle, code }: HeaderProps) {
             <Text style={styles.code}>{code}</Text>
           </FluidPressable>
         )}
+        {/* Fahrer- und LKW-Verwaltung. Beide nur für den Chef und nur
+            online: Ohne gültiges JWT erkennt weder die Edge Function noch
+            die RLS-Policy ihn als Chef, die Ansichten kämen leer zurück. */}
         {user?.role === 'boss' && !isOfflineMode && (
-          <FluidPressable
-            style={styles.settingsButton}
-            onPress={() => router.push('/chef/drivers')}
-            accessibilityLabel={t('chefProfile', 'createDriverCardButton')}
-          >
-            <Text style={styles.settingsButtonText}>👤</Text>
-          </FluidPressable>
+          <>
+            <FluidPressable
+              style={styles.settingsButton}
+              onPress={() => router.push('/chef/drivers')}
+              accessibilityLabel={t('chefProfile', 'createDriverCardButton')}
+            >
+              <Text style={styles.settingsButtonText}>👤</Text>
+            </FluidPressable>
+            <FluidPressable
+              style={styles.settingsButton}
+              onPress={() => router.push('/chef/vehicles')}
+              accessibilityLabel={t('chefProfile', 'vehiclesCardButton')}
+            >
+              <Text style={styles.settingsButtonText}>🚚</Text>
+            </FluidPressable>
+          </>
         )}
         <FluidPressable
           style={styles.settingsButton}

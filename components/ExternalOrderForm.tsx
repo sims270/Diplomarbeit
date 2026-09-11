@@ -1,6 +1,15 @@
 import type { ExternalOrderFields } from '@/app/services/externalOrderService';
-import { addCarrierCompanyIfNew, getCarrierCompanies } from '@/app/services/carrierCompanyService';
-import { addSiteCompanyIfNew, getSiteCompanies, type SiteCompany } from '@/app/services/siteCompanyService';
+import {
+  addCarrierCompanyIfNew,
+  getCarrierCompanies,
+  type CarrierCompany,
+} from '@/app/services/carrierCompanyService';
+import {
+  addSiteCompanyIfNew,
+  formatSiteCompany,
+  getSiteCompanies,
+  type SiteCompany,
+} from '@/app/services/siteCompanyService';
 import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
@@ -32,6 +41,7 @@ const emptyFields: ExternalOrderFields = {
   createdBy: '',
   orderNr: '',
   recipientCompany: '',
+  recipientAddress: '',
   recipientContact: '',
   loadingDate: '',
   loadingTimeFrom: '',
@@ -68,7 +78,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
   const { t } = useTranslation();
 
   const [form, setForm] = useState<ExternalOrderFields>({ ...emptyFields, ...initialValues });
-  const [carrierCompanies, setCarrierCompanies] = useState<string[]>([]);
+  const [carrierCompanies, setCarrierCompanies] = useState<CarrierCompany[]>([]);
   const [siteCompanies, setSiteCompanies] = useState<SiteCompany[]>([]);
   const [unloadingCompanies, setUnloadingCompanies] = useState<string[]>([]);
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
@@ -87,16 +97,25 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
   // Ladung und Entladung ziehen aus zwei getrennten Listen: an der
   // Ladestelle die importierten Kundenfirmen samt Adresse, an der
   // Entladestelle die selbst gewachsene Liste ohne Adresse.
-  const pickerOptions =
+  //
+  // An der Ladestelle ist ein Eintrag ein Standort, keine Firma: Dieselbe
+  // Firma steht mehrfach in der Liste, wenn sie mehrere Werke hat. Deshalb
+  // ist die Liste durchgehend {name, address} — die Adresse gehört sichtbar
+  // dazu, sonst stünden mehrere Zeilen da, die gleich aussehen und
+  // Verschiedenes bedeuten. Bei allen anderen Pickern bleibt sie leer.
+  const toOptions = (values: string[]): SiteCompany[] =>
+    values.map((name) => ({ name, address: '' }));
+
+  const pickerOptions: SiteCompany[] =
     activePicker === 'vehicleType'
-      ? VEHICLE_TYPE_OPTIONS
+      ? toOptions(VEHICLE_TYPE_OPTIONS)
       : activePicker === 'paymentTerms'
-        ? PAYMENT_TERMS_OPTIONS
+        ? toOptions(PAYMENT_TERMS_OPTIONS)
         : activePicker === 'recipientCompany'
           ? carrierCompanies
           : activePicker === 'unloadingCompany'
-            ? unloadingCompanies
-            : siteCompanies.map((company) => company.name);
+            ? toOptions(unloadingCompanies)
+            : siteCompanies;
   const pickerTitle =
     activePicker === 'vehicleType'
       ? t('chefExternalOrder', 'vehicleTypeLabel')
@@ -105,13 +124,20 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         : t('chefExternalOrder', 'companyLabel');
   const isClosedListPicker = activePicker === 'vehicleType' || activePicker === 'paymentTerms';
 
-  // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall im
-  // Namen — ein eingetippter Teil genügt, der Anfang muss es nicht sein.
-  const isSearchablePicker = activePicker === 'loadingCompany';
+  // Durchsucht werden die beiden gewachsenen Firmenlisten — Ladestellen
+  // und Frächter. Gesucht wird überall in Name und Adresse: Ein
+  // eingetippter Teil genügt, der Anfang muss es nicht sein, und über den
+  // Ort findet sich der richtige Standort. Bei Transportmittel,
+  // Zahlungskonditionen und Entladefirmen bleibt die Suche aus: Die Listen
+  // sind kurz genug, ein Suchfeld wäre dort nur im Weg.
+  const isSearchablePicker =
+    activePicker === 'loadingCompany' || activePicker === 'recipientCompany';
   const query = companySearch.trim().toLowerCase();
   const visibleOptions =
     isSearchablePicker && query
-      ? pickerOptions.filter((option) => option.toLowerCase().includes(query))
+      ? pickerOptions.filter((option) =>
+          formatSiteCompany(option).toLowerCase().includes(query)
+        )
       : pickerOptions;
 
   const openPicker = (field: PickerField) => {
@@ -119,16 +145,23 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
     setActivePicker(field);
   };
 
-  // Mit einer Ladestellen-Firma kommt gleich ihre Adresse ins Formular —
-  // sie ist pro Firma immer dieselbe und steht in site_companies. Ist dort
-  // keine hinterlegt, bleibt stehen, was schon im Adressfeld steht, statt
-  // es zu leeren. Die Entladeadresse wird immer von Hand eingetragen.
-  const pickOption = (value: string) => {
+  // Mit einem Ladestellen-Standort kommt gleich seine Adresse ins Formular.
+  // Sie steckt im gewählten Eintrag selbst — nachschlagen über den Namen
+  // ginge hier fehl, denn bei mehreren Werken derselben Firma träfe man
+  // irgendeines davon. Ist keine Adresse hinterlegt, bleibt stehen, was
+  // schon im Feld steht, statt es zu leeren. Die Entladeadresse wird immer
+  // von Hand eingetragen.
+  const pickOption = (option: SiteCompany) => {
     const field = activePicker as PickerField;
     setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      const address = siteCompanies.find((company) => company.name === value)?.address;
-      if (address && field === 'loadingCompany') next.loadingAddress = address;
+      const next = { ...prev, [field]: option.name };
+      if (option.address) {
+        // Beim Empfänger dieselbe Bequemlichkeit wie an der Ladestelle:
+        // Die hinterlegte Geschäftsanschrift des Frächters geht direkt ins
+        // Adressfeld, das auf dem Transportauftrag unter "An Firma" steht.
+        if (field === 'loadingCompany') next.loadingAddress = option.address;
+        if (field === 'recipientCompany') next.recipientAddress = option.address;
+      }
       return next;
     });
     setActivePicker(null);
@@ -156,8 +189,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
       // Best-effort, after the fact: remembers freshly typed companies for
       // next time's dropdowns. Never blocks saving if it fails (see
       // service) — fire-and-forget so it can't delay navigating back.
-      addCarrierCompanyIfNew(form.recipientCompany);
-      addSiteCompanyIfNew(form.loadingCompany);
+      addCarrierCompanyIfNew(form.recipientCompany, form.recipientAddress);
+      addSiteCompanyIfNew(form.loadingCompany, form.loadingAddress);
       addUnloadingCompanyIfNew(form.unloadingCompany);
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
@@ -195,6 +228,13 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
           <Text style={styles.selectChevron}>▾</Text>
         </FluidPressable>
       </View>
+      <TextInput
+        style={[styles.input, styles.multiline]}
+        placeholder={t('chefExternalOrder', 'recipientAddressLabel')}
+        value={form.recipientAddress}
+        onChangeText={set('recipientAddress')}
+        multiline
+      />
       <TextInput
         style={styles.input}
         placeholder={t('chefExternalOrder', 'recipientContactLabel')}
@@ -410,11 +450,14 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
             ) : (
               <FlatList
                 data={visibleOptions}
-                keyExtractor={(item) => item}
+                keyExtractor={(item) => `${item.name}|${item.address}`}
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <FluidPressable style={styles.vehicleOption} onPress={() => pickOption(item)}>
-                    <Text style={styles.vehicleOptionText}>{item}</Text>
+                    <Text style={styles.vehicleOptionText}>{item.name}</Text>
+                    {!!item.address && (
+                      <Text style={styles.vehicleOptionAddress}>{item.address}</Text>
+                    )}
                   </FluidPressable>
                 )}
               />
@@ -555,6 +598,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 6,
     backgroundColor: Colors.ui.lightGray,
+  },
+  vehicleOptionAddress: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    marginTop: 2,
   },
   vehicleOptionText: {
     fontSize: 14,

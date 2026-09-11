@@ -40,6 +40,19 @@ export default function ChefProfileScreen() {
     <View style={styles.container}>
       <Header title="TRANSLOG PRO" subtitle={t('chefProfile', 'headerSubtitle')} code="CH" />
 
+      {/* Über den Tabs, damit der Weg zurück in beiden Reitern gleich
+          bleibt. canGoBack(): Im Web lässt sich das Profil direkt über
+          seine URL öffnen — dann gibt es keinen Eintrag, zu dem back()
+          zurückspringen könnte, und ohne diesen Zweig passierte nichts. */}
+      <View style={styles.backBar}>
+        <FluidPressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/chef'))}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
+        </FluidPressable>
+      </View>
+
       <View style={styles.tabsContainer}>
         <FluidPressable
           style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
@@ -105,6 +118,18 @@ export default function ChefProfileScreen() {
             </View>
 
             <View style={styles.settingsSection}>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'vehiclesCardTitle')}</Text>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'vehiclesCardDesc')}</Text>
+
+              <FluidPressable
+                style={styles.createButton}
+                onPress={() => router.push('/chef/vehicles')}
+              >
+                <Text style={styles.createButtonText}>{t('chefProfile', 'vehiclesCardButton')}</Text>
+              </FluidPressable>
+            </View>
+
+            <View style={styles.settingsSection}>
               <Text style={styles.sectionTitle}>{t('chefProfile', 'accountSection')}</Text>
               <View style={styles.settingItem}>
                 <Text style={styles.settingLabel}>{t('chefProfile', 'usernameLabel')}</Text>
@@ -136,6 +161,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
+  },
+  backBar: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.primary,
   },
   tabsContainer: {
     flexDirection: 'row',

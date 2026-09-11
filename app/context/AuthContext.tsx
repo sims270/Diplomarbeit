@@ -49,6 +49,10 @@ export interface AppUser {
   role: UserRole;
   name: string;
   username: string;
+  // Der LKW, den der Chef diesem Fahrer zugeteilt hat (siehe
+  // supabase/functions/create-driver). Optional: nicht jeder Fahrer hat
+  // einen festen LKW, und die Offline-Sitzung kennt gar keinen.
+  licensePlate?: string;
 }
 
 interface AuthContextType {
@@ -79,6 +83,7 @@ function toAppUser(session: Session | null): AppUser | null {
     role: (user_metadata?.role as UserRole | undefined) ?? "driver",
     name: (user_metadata?.name as string | undefined) ?? username,
     username,
+    licensePlate: (user_metadata?.license_plate as string | undefined) ?? '',
   };
 }
 

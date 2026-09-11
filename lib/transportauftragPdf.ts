@@ -164,7 +164,16 @@ ${PDF_STYLES}
 
     <h1 class="title">TRANSPORTAUFTRAG</h1>
 
+    <!-- Empfänger wie auf dem Papier-Transportauftrag: Firma mit
+         vollständiger Anschrift darunter, eingerückt auf dieselbe Spalte —
+         genauso wie Lade- und Entladestelle weiter unten. "z.H." steht
+         darunter als eigene Zeile und nimmt nur den Namen des
+         Disponenten auf. Fehlt die Anschrift, fällt die Zeile weg statt
+         eine Lücke zu hinterlassen. -->
     <div class="field-row"><span class="field-label">An Firma:</span> ${escapeHtml(order.recipientCompany)}</div>
+    ${order.recipientAddress
+      ? `<div class="field-row"><span class="field-label"></span> ${escapeHtml(order.recipientAddress).replace(/\n/g, '<br/>')}</div>`
+      : ''}
     <div class="field-row"><span class="field-label">z.H.:</span> ${escapeHtml(order.recipientContact)}</div>
     <p>Wie bereits telefonisch mit Ihnen vereinbart, übernehmen Sie in unserem Auftrag folgenden Transport:</p>
 

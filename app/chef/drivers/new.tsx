@@ -1,3 +1,9 @@
+import {
+  formatVehicle,
+  getActiveVehicles,
+  type Vehicle,
+} from '@/app/services/licensePlateService';
+import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Colors } from '@/constants/theme';
@@ -5,9 +11,11 @@ import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,7 +28,24 @@ export default function CreateDriverScreen() {
   const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  // Zugeteilt wird der LKW, nicht das Kennzeichen — das gehört zum
+  // Fahrzeug und kommt mit ihm. Gespeichert wird trotzdem das Kennzeichen:
+  // Es ist der Schlüssel, über den die Tankungen des Fahrers seinem LKW
+  // zugeordnet werden (siehe supabase/migrations/20260911110000).
+  const [licensePlate, setLicensePlate] = useState('');
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [isPlatePickerOpen, setIsPlatePickerOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    // Fehlschlag heißt hier nur: keine Auswahl. Der Fahrer lässt sich
+    // trotzdem anlegen, der LKW wird später zugeteilt.
+    getActiveVehicles()
+      .then(setVehicles)
+      .catch(() => setVehicles([]));
+  }, []);
+
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.plate === licensePlate);
 
   const handleCreateDriver = async () => {
     if (!username.trim() || !password.trim()) {
@@ -34,6 +59,7 @@ export default function CreateDriverScreen() {
         body: {
           username: username.trim(),
           password,
+          licensePlate: licensePlate.trim(),
         },
       });
 
@@ -86,6 +112,23 @@ export default function CreateDriverScreen() {
             autoCapitalize="none"
           />
 
+          {/* Reines Auswahlfeld: Zugeteilt wird ein LKW aus der Flotte, und
+              den legt der Chef in der LKW-Verwaltung an — dort gehören
+              Marke und Baujahr dazu. Ein hier frei getipptes Kennzeichen
+              erzeugte dagegen einen LKW ohne jede Fahrzeugangabe. */}
+          <FluidPressable
+            style={styles.selectField}
+            onPress={() => setIsPlatePickerOpen(true)}
+            disabled={isCreating}
+          >
+            <Text style={licensePlate ? styles.selectValue : styles.selectPlaceholder}>
+              {selectedVehicle
+                ? formatVehicle(selectedVehicle)
+                : licensePlate || t('createDriver', 'vehiclePlaceholder')}
+            </Text>
+            <Text style={styles.comboChevron}>▾</Text>
+          </FluidPressable>
+
           <FluidPressable
             style={[styles.createButton, isCreating && styles.buttonDisabled]}
             onPress={handleCreateDriver}
@@ -99,6 +142,66 @@ export default function CreateDriverScreen() {
           </FluidPressable>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isPlatePickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPlatePickerOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurSurface
+            intensity={30}
+            tint="dark"
+            fallbackColor="rgba(0,0,0,0.6)"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('createDriver', 'vehicleLabel')}</Text>
+              <FluidPressable onPress={() => setIsPlatePickerOpen(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </FluidPressable>
+            </View>
+            {vehicles.length === 0 ? (
+              <Text style={styles.emptyPickerText}>
+                {t('createDriver', 'noVehiclesYet')}
+              </Text>
+            ) : (
+              <FlatList
+                data={vehicles}
+                keyExtractor={(item) => item.id}
+                ListHeaderComponent={
+                  // Zuteilung wieder aufheben: Ohne diesen Eintrag ließe
+                  // sich ein einmal zugeteilter LKW nie mehr entfernen.
+                  <FluidPressable
+                    style={styles.pickerOption}
+                    onPress={() => {
+                      setLicensePlate('');
+                      setIsPlatePickerOpen(false);
+                    }}
+                  >
+                    <Text style={styles.pickerOptionMuted}>
+                      {t('createDriver', 'vehicleNone')}
+                    </Text>
+                  </FluidPressable>
+                }
+                renderItem={({ item }) => (
+                  <FluidPressable
+                    style={styles.pickerOption}
+                    onPress={() => {
+                      setLicensePlate(item.plate);
+                      setIsPlatePickerOpen(false);
+                    }}
+                  >
+                    <Text style={styles.pickerOptionText}>{formatVehicle(item)}</Text>
+                  </FluidPressable>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -153,6 +256,83 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 14,
     color: Colors.ui.charcoal,
+  },
+  selectField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: 'white',
+  },
+  selectValue: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.ui.charcoal,
+  },
+  selectPlaceholder: {
+    flex: 1,
+    fontSize: 14,
+    color: '#9a9a9a',
+  },
+  comboChevron: {
+    fontSize: 14,
+    color: Colors.ui.darkGray,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  closeButton: {
+    fontSize: 24,
+    color: Colors.ui.darkGray,
+  },
+  emptyPickerText: {
+    fontSize: 13,
+    color: Colors.ui.darkGray,
+    lineHeight: 19,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  pickerOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.charcoal,
+  },
+  pickerOptionMuted: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.darkGray,
+    fontStyle: 'italic',
   },
   createButton: {
     backgroundColor: Colors.ui.primary,

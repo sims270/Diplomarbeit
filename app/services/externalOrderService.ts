@@ -19,6 +19,8 @@ export interface ExternalOrder {
 
   recipientCompany: string;
   recipientContact: string;
+  /** Vollständige Anschrift des Empfängers, mehrzeilig auf dem Transportauftrag unter der Firma. */
+  recipientAddress: string;
 
   loadingDate: string;
   loadingTimeFrom: string;
@@ -71,6 +73,7 @@ function rowToOrder(row: any): ExternalOrder {
     createdBy: row.created_by ?? '',
     recipientCompany: row.recipient_company,
     recipientContact: row.recipient_contact,
+    recipientAddress: row.recipient_address ?? '',
     loadingDate: fromDateColumn(row.loading_date),
     loadingTimeFrom: row.loading_time_from,
     loadingTimeUntil: row.loading_time_until,
@@ -102,6 +105,7 @@ function fieldsToRow(data: ExternalOrderFields): Record<string, unknown> {
   const row: Record<string, unknown> = {
     recipient_company: data.recipientCompany,
     recipient_contact: data.recipientContact,
+    recipient_address: data.recipientAddress,
     loading_date: toDateColumn(data.loadingDate),
     loading_time_from: data.loadingTimeFrom,
     loading_time_until: data.loadingTimeUntil,
