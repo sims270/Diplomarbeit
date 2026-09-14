@@ -2,20 +2,23 @@ import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 
 /**
- * Die Rechnung zu einem erledigten Auftrag: bearbeitbar im Chef-Dashboard,
- * herunterladbar als Excel-Datei.
+ * Rechnungen zu erledigten Aufträgen: als Einzelrechnung (eine Ladung) oder
+ * als Sammelrechnung (mehrere Ladungen auf einer Rechnung — große Kunden
+ * wollen nicht jede Fahrt einzeln verrechnet haben). Bearbeitbar im
+ * Chef-Dashboard, herunterladbar als Excel-Datei.
  *
- * Angelegt und vorbefüllt wird sie serverseitig von der Edge Function
- * export-invoice (dort wird auch die Belegnummer vergeben) — dieselbe
- * Aufteilung wie beim Tanklisten-Export in
+ * Angelegt, vorbefüllt und um Ladungen erweitert wird serverseitig von der
+ * Edge Function export-invoice (dort wird auch die Belegnummer vergeben) —
+ * dieselbe Aufteilung wie beim Tanklisten-Export in
  * app/services/tankEntryService.ts: exceljs ist keine Abhängigkeit der App,
  * und die Function prüft zugleich, dass wirklich ein Chef-Account fragt.
  *
- * Geändert wird danach direkt auf der Tabelle invoices — dafür genügt die
- * RLS-Policy "Boss can edit invoices", es braucht keinen Serverumweg.
- * Tabelle: supabase/migrations/20260910120000_create_invoices.sql
+ * Geändert wird danach direkt auf den Tabellen invoices und invoice_items —
+ * dafür genügen die RLS-Policies, es braucht keinen Serverumweg.
+ * Tabellen: supabase/migrations/20260914130000_add_collective_invoices.sql
  */
-export interface Invoice {
+export interface InvoiceHeader {
+  id: string;
   belegnummer: string;
   /** ISO 'YYYY-MM-DD', wie überall im Projekt (siehe lib/dateFormat.ts) */
   rechnungsdatum: string;
@@ -24,6 +27,16 @@ export interface Invoice {
   empfaengerOrt: string;
   kundennummer: string;
   uidNummer: string;
+  ustSatz: string;
+  zahlungsziel: string;
+}
+
+/** Eine Position = eine verrechnete Ladung (ein Auftrag). */
+export interface InvoiceItem {
+  id: string;
+  orderId: string;
+  /** Nur zur Anzeige — auf der Rechnung steht die bearbeitbare transportnr. */
+  orderNr: string;
   positionDatum: string;
   bezeichnung: string;
   transportnr: string;
@@ -33,55 +46,66 @@ export interface Invoice {
   entladedatum: string;
   /** Leer, solange kein Preis vereinbart ist — dann bleibt die Zelle leer. */
   preis: string;
-  ustSatz: string;
-  zahlungsziel: string;
 }
 
-interface InvoiceRow {
-  belegnummer: string | null;
-  rechnungsdatum: string | null;
-  empfaenger_name: string | null;
-  empfaenger_strasse: string | null;
-  empfaenger_ort: string | null;
-  kundennummer: string | null;
-  uid_nummer: string | null;
-  position_datum: string | null;
-  bezeichnung: string | null;
-  transportnr: string | null;
-  ladestelle: string | null;
-  ladedatum: string | null;
-  entladestelle: string | null;
-  entladedatum: string | null;
-  preis: string | number | null;
-  ust_satz: string | number | null;
-  zahlungsziel: string | null;
+export interface Invoice {
+  header: InvoiceHeader;
+  items: InvoiceItem[];
+}
+
+/** Ein erledigter Auftrag, der noch auf keiner Rechnung steht. */
+export interface BillableOrder {
+  id: string;
+  orderNr: string;
+  loadingCompany: string;
+  unloadingCompany: string;
+  /** ISO 'YYYY-MM-DD' — Ladedatum, sonst Entladedatum; leer, wenn beides fehlt. */
+  date: string;
+}
+
+type Nullable = string | number | null | undefined;
+
+interface InvoiceResponse {
+  invoice: Record<string, Nullable> | null;
+  items: Record<string, Nullable>[];
 }
 
 // Im Formular ist jedes Feld ein Textfeld — null aus der Datenbank wird
 // deshalb zum leeren String, nicht zu "null" im Eingabefeld.
-function text(value: string | number | null): string {
+function text(value: Nullable): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
-function rowToInvoice(row: InvoiceRow): Invoice {
+function toInvoice(response: InvoiceResponse): Invoice | null {
+  const row = response.invoice;
+  if (!row) return null;
+
   return {
-    belegnummer: text(row.belegnummer),
-    rechnungsdatum: text(row.rechnungsdatum),
-    empfaengerName: text(row.empfaenger_name),
-    empfaengerStrasse: text(row.empfaenger_strasse),
-    empfaengerOrt: text(row.empfaenger_ort),
-    kundennummer: text(row.kundennummer),
-    uidNummer: text(row.uid_nummer),
-    positionDatum: text(row.position_datum),
-    bezeichnung: text(row.bezeichnung),
-    transportnr: text(row.transportnr),
-    ladestelle: text(row.ladestelle),
-    ladedatum: text(row.ladedatum),
-    entladestelle: text(row.entladestelle),
-    entladedatum: text(row.entladedatum),
-    preis: text(row.preis),
-    ustSatz: text(row.ust_satz),
-    zahlungsziel: text(row.zahlungsziel),
+    header: {
+      id: text(row.id),
+      belegnummer: text(row.belegnummer),
+      rechnungsdatum: text(row.rechnungsdatum),
+      empfaengerName: text(row.empfaenger_name),
+      empfaengerStrasse: text(row.empfaenger_strasse),
+      empfaengerOrt: text(row.empfaenger_ort),
+      kundennummer: text(row.kundennummer),
+      uidNummer: text(row.uid_nummer),
+      ustSatz: text(row.ust_satz),
+      zahlungsziel: text(row.zahlungsziel),
+    },
+    items: (response.items ?? []).map((item) => ({
+      id: text(item.id),
+      orderId: text(item.order_id),
+      orderNr: text(item.order_nr),
+      positionDatum: text(item.position_datum),
+      bezeichnung: text(item.bezeichnung),
+      transportnr: text(item.transportnr),
+      ladestelle: text(item.ladestelle),
+      ladedatum: text(item.ladedatum),
+      entladestelle: text(item.entladestelle),
+      entladedatum: text(item.entladedatum),
+      preis: text(item.preis),
+    })),
   };
 }
 
@@ -142,71 +166,144 @@ async function describeFunctionError(error: { name?: string; message?: string })
   return error.message ?? 'Rechnung konnte nicht geladen werden.';
 }
 
-/**
- * Lädt die Rechnung zum Auftrag. Existiert noch keine, legt die Edge
- * Function sie an und füllt sie aus dem Auftrag vor — der Aufrufer bekommt
- * also immer eine vollständige Rechnung zurück.
- */
-export async function loadInvoice(orderId: string): Promise<Invoice> {
+/** Ruft eine JSON-Aktion der Function auf und liefert die Rechnung zurück. */
+async function invokeInvoiceAction(body: Record<string, unknown>): Promise<Invoice | null> {
   const { data, error } = await supabase.functions.invoke('export-invoice', {
     method: 'POST',
-    body: { orderId, action: 'load' },
+    body,
   });
 
   if (error) {
     throw new Error(await describeFunctionError(error));
   }
 
-  const row = (data as { invoice?: InvoiceRow } | null)?.invoice;
-  if (!row) {
+  if (!data || typeof data !== 'object' || !('invoice' in data)) {
     throw new Error('Unerwartete Antwort vom Server.');
   }
 
-  return rowToInvoice(row);
+  return toInvoice(data as InvoiceResponse);
 }
 
 /**
- * Speichert die Änderungen des Chefs. Die Belegnummer wird mitgeschrieben:
- * vergeben wird sie zwar automatisch, korrigieren darf er sie trotzdem —
- * etwa wenn in der Buchhaltung schon eine andere Nummer vergeben wurde.
+ * Die Rechnung, auf der der Auftrag steht — oder null, wenn er noch nicht
+ * verrechnet ist. Angelegt wird hier bewusst nichts: ob Einzel- oder
+ * Sammelrechnung, entscheidet der Chef.
  */
-export async function saveInvoice(orderId: string, invoice: Invoice): Promise<void> {
-  const { error } = await supabase
-    .from('invoices')
-    .update({
-      belegnummer: invoice.belegnummer.trim(),
-      rechnungsdatum: toDateColumn(invoice.rechnungsdatum),
-      empfaenger_name: invoice.empfaengerName.trim(),
-      empfaenger_strasse: invoice.empfaengerStrasse.trim(),
-      empfaenger_ort: invoice.empfaengerOrt.trim(),
-      kundennummer: invoice.kundennummer.trim(),
-      uid_nummer: invoice.uidNummer.trim(),
-      position_datum: toDateColumn(invoice.positionDatum),
-      bezeichnung: invoice.bezeichnung.trim(),
-      transportnr: invoice.transportnr.trim(),
-      ladestelle: invoice.ladestelle.trim(),
-      ladedatum: toDateColumn(invoice.ladedatum),
-      entladestelle: invoice.entladestelle.trim(),
-      entladedatum: toDateColumn(invoice.entladedatum),
-      preis: parseAmount(invoice.preis),
-      ust_satz: parseAmount(invoice.ustSatz),
-      zahlungsziel: invoice.zahlungsziel.trim(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('order_id', orderId);
-
-  if (error) throw new Error(error.message);
+export async function loadInvoiceForOrder(orderId: string): Promise<Invoice | null> {
+  return invokeInvoiceAction({ action: 'load', orderId });
 }
 
 /**
- * Lädt die Rechnung als Excel-Datei herunter. `orderNr` geht nur in den
- * Dateinamen ein — welcher Auftrag gemeint ist, entscheidet allein die id.
+ * Legt eine Rechnung über die Aufträge an: einer ergibt die
+ * Einzelrechnung, mehrere die Sammelrechnung. Vergibt die Belegnummer und
+ * füllt alles aus den Aufträgen vor.
+ */
+export async function createInvoice(orderIds: string[]): Promise<Invoice> {
+  const invoice = await invokeInvoiceAction({ action: 'create', orderIds });
+  if (!invoice) throw new Error('Rechnung konnte nicht angelegt werden.');
+  return invoice;
+}
+
+/** Nimmt weitere Ladungen auf eine bestehende Rechnung. */
+export async function addInvoiceItems(invoiceId: string, orderIds: string[]): Promise<Invoice> {
+  const invoice = await invokeInvoiceAction({ action: 'addItems', invoiceId, orderIds });
+  if (!invoice) throw new Error('Ladungen konnten nicht hinzugefügt werden.');
+  return invoice;
+}
+
+/** Nimmt eine Ladung wieder von der Rechnung — die letzte bleibt immer stehen. */
+export async function removeInvoiceItem(invoiceId: string, itemId: string): Promise<Invoice> {
+  const invoice = await invokeInvoiceAction({ action: 'removeItem', invoiceId, itemId });
+  if (!invoice) throw new Error('Ladung konnte nicht entfernt werden.');
+  return invoice;
+}
+
+/**
+ * Erledigte Aufträge, die noch auf keiner Rechnung stehen — die Auswahl für
+ * die Sammelrechnung. Direkt aus der Datenbank, die RLS-Policies des Chefs
+ * erlauben das Lesen beider Tabellen.
+ */
+export async function getBillableOrders(): Promise<BillableOrder[]> {
+  const [ordersResult, itemsResult] = await Promise.all([
+    supabase
+      .from('orders')
+      .select('id, order_nr, loading_company, unloading_company, loading_date, unloading_date')
+      .eq('status', 'completed')
+      .order('loading_date', { ascending: false, nullsFirst: false }),
+    supabase.from('invoice_items').select('order_id'),
+  ]);
+
+  if (ordersResult.error) throw new Error(ordersResult.error.message);
+  if (itemsResult.error) throw new Error(itemsResult.error.message);
+
+  const billed = new Set((itemsResult.data ?? []).map((row) => row.order_id as string));
+
+  return (ordersResult.data ?? [])
+    .filter((row) => !billed.has(row.id))
+    .map((row) => ({
+      id: row.id,
+      orderNr: row.order_nr ?? '',
+      loadingCompany: row.loading_company ?? '',
+      unloadingCompany: row.unloading_company ?? '',
+      date: row.loading_date ?? row.unloading_date ?? '',
+    }));
+}
+
+/**
+ * Speichert die Änderungen des Chefs — Kopf und alle Positionen. Die
+ * Belegnummer wird mitgeschrieben: vergeben wird sie zwar automatisch,
+ * korrigieren darf er sie trotzdem — etwa wenn in der Buchhaltung schon eine
+ * andere Nummer vergeben wurde.
+ */
+export async function saveInvoice(invoice: Invoice): Promise<void> {
+  const { header, items } = invoice;
+  const now = new Date().toISOString();
+
+  const results = await Promise.all([
+    supabase
+      .from('invoices')
+      .update({
+        belegnummer: header.belegnummer.trim(),
+        rechnungsdatum: toDateColumn(header.rechnungsdatum),
+        empfaenger_name: header.empfaengerName.trim(),
+        empfaenger_strasse: header.empfaengerStrasse.trim(),
+        empfaenger_ort: header.empfaengerOrt.trim(),
+        kundennummer: header.kundennummer.trim(),
+        uid_nummer: header.uidNummer.trim(),
+        ust_satz: parseAmount(header.ustSatz),
+        zahlungsziel: header.zahlungsziel.trim(),
+        updated_at: now,
+      })
+      .eq('id', header.id),
+    ...items.map((item) =>
+      supabase
+        .from('invoice_items')
+        .update({
+          position_datum: toDateColumn(item.positionDatum),
+          bezeichnung: item.bezeichnung.trim(),
+          transportnr: item.transportnr.trim(),
+          ladestelle: item.ladestelle.trim(),
+          ladedatum: toDateColumn(item.ladedatum),
+          entladestelle: item.entladestelle.trim(),
+          entladedatum: toDateColumn(item.entladedatum),
+          preis: parseAmount(item.preis),
+        })
+        .eq('id', item.id)
+    ),
+  ]);
+
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw new Error(failed.error.message);
+}
+
+/**
+ * Lädt die Rechnung als Excel-Datei herunter.
  *
  * Nur für Web: das Chef-Dashboard läuft im Browser (Vercel). Nativ gäbe es
  * keinen Ort, an den ein Browser-Download gehen könnte, deshalb hier ein
  * klarer Hinweis statt eines Buttons, der nichts tut.
  */
-export async function downloadInvoiceXlsx(orderId: string, orderNr: string): Promise<void> {
+export async function downloadInvoiceXlsx(invoice: Invoice): Promise<void> {
   if (Platform.OS !== 'web') {
     throw new Error(
       'Die Rechnung steht im Web-Dashboard zur Verfügung. Bitte dort herunterladen.'
@@ -215,7 +312,7 @@ export async function downloadInvoiceXlsx(orderId: string, orderNr: string): Pro
 
   const { data, error } = await supabase.functions.invoke('export-invoice', {
     method: 'POST',
-    body: { orderId },
+    body: { action: 'export', invoiceId: invoice.header.id },
   });
 
   if (error) {
@@ -237,9 +334,17 @@ export async function downloadInvoiceXlsx(orderId: string, orderNr: string): Pro
   // xlsx-Typ schlägt Windows die Datei von sich aus in Excel auf.
   const url = URL.createObjectURL(data.slice(0, data.size, XLSX_MIME));
 
+  // Die Einzelrechnung heißt weiter nach dem Auftrag; die Sammelrechnung hat
+  // keinen einzelnen Auftrag, sie heißt nach ihrer Belegnummer ("01/2026"
+  // wird zu "01-2026" — ein Schrägstrich ist im Dateinamen nicht erlaubt).
+  const fileName =
+    invoice.items.length === 1
+      ? `Rechnung_${invoice.items[0].orderNr}.xlsx`
+      : `Sammelrechnung_${invoice.header.belegnummer.replace(/\//g, '-')}.xlsx`;
+
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Rechnung_${orderNr}.xlsx`;
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

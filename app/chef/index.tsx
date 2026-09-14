@@ -9,7 +9,20 @@ import { showAlert } from '@/lib/alert';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { getOrderStats } from '../services/orderService';
-import { downloadTankEntriesXlsx } from '../services/tankEntryService';
+import {
+  exportTankEntries,
+  TANKLISTE_FILE_KEY,
+} from '../services/tankEntryService';
+import {
+  exportRevenueList,
+  UMSATZLISTE_FILE_KEY,
+} from '../services/revenueListService';
+import {
+  FileLockedError,
+  getRememberedFileName,
+  SaveCancelledError,
+  supportsRememberedFile,
+} from '@/lib/rememberedFile';
 import { getServiceStatus, getVehicles } from '../services/licensePlateService';
 
 export default function ChefDashboardScreen() {
@@ -18,6 +31,18 @@ export default function ChefDashboardScreen() {
   const { isLoading, isAuthenticated } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0 });
   const [isExporting, setIsExporting] = useState(false);
+  // In welche Datei der Export schreibt — null, solange noch keine gewählt
+  // ist oder der Browser das Speichern in eine Datei nicht kann.
+  const [exportFileName, setExportFileName] = useState<string | null>(null);
+
+  // Dasselbe für die Umsatzliste — eigene Datei, eigener Ladezustand.
+  const [isExportingRevenue, setIsExportingRevenue] = useState(false);
+  const [revenueFileName, setRevenueFileName] = useState<string | null>(null);
+
+  useEffect(() => {
+    getRememberedFileName(TANKLISTE_FILE_KEY).then(setExportFileName);
+    getRememberedFileName(UMSATZLISTE_FILE_KEY).then(setRevenueFileName);
+  }, []);
   // LKW mit fälligem Service. Ausgeflottete bleiben außen vor — die fahren
   // nicht mehr.
   const [serviceDue, setServiceDue] = useState<string[]>([]);
@@ -65,17 +90,54 @@ export default function ChefDashboardScreen() {
     }
   };
 
-  const handleExportTankliste = async () => {
+  // Direkt aus dem Klick heraus: Dateidialog und Erlaubnisabfrage zeigt der
+  // Browser nur unmittelbar nach einer Nutzeraktion (lib/rememberedFile.ts).
+  const handleExportTankliste = async (chooseNewFile = false) => {
     setIsExporting(true);
     try {
-      await downloadTankEntriesXlsx();
+      const result = await exportTankEntries({ chooseNewFile });
+      if (result.savedTo === 'file') {
+        setExportFileName(result.fileName);
+        showAlert(
+          t('common', 'success'),
+          `${t('chefDashboard', 'exportSavedTo')} "${result.fileName}"`
+        );
+      }
     } catch (error) {
+      // Dialog weggeklickt — der Chef weiß, dass er abgebrochen hat.
+      if (error instanceof SaveCancelledError) return;
+
+      showAlert(
+        t('common', 'error'),
+        error instanceof FileLockedError || error instanceof Error
+          ? error.message
+          : t('chefDashboard', 'exportTanklisteError')
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportUmsatzliste = async (chooseNewFile = false) => {
+    setIsExportingRevenue(true);
+    try {
+      const result = await exportRevenueList({ chooseNewFile });
+      if (result.savedTo === 'file') {
+        setRevenueFileName(result.fileName);
+        showAlert(
+          t('common', 'success'),
+          `${t('chefDashboard', 'exportUmsatzlisteSavedTo')} "${result.fileName}"`
+        );
+      }
+    } catch (error) {
+      if (error instanceof SaveCancelledError) return;
+
       showAlert(
         t('common', 'error'),
         error instanceof Error ? error.message : t('chefDashboard', 'exportTanklisteError')
       );
     } finally {
-      setIsExporting(false);
+      setIsExportingRevenue(false);
     }
   };
 
@@ -121,8 +183,16 @@ export default function ChefDashboardScreen() {
 
         <View style={styles.quickActionsRow}>
           <FluidPressable
+            style={styles.quickActionSecondary}
+            onPress={() => router.push('/chef/tankliste')}
+          >
+            <Text style={styles.quickActionSecondaryText}>
+              {t('chefDashboard', 'tanklistePricesButton')}
+            </Text>
+          </FluidPressable>
+          <FluidPressable
             style={[styles.quickActionButton, isExporting && styles.quickActionButtonDisabled]}
-            onPress={handleExportTankliste}
+            onPress={() => handleExportTankliste()}
             disabled={isExporting}
           >
             {isExporting ? (
@@ -134,6 +204,76 @@ export default function ChefDashboardScreen() {
             )}
           </FluidPressable>
         </View>
+
+        {/* Nur wo der Browser direkt in eine Datei schreiben kann (Edge,
+            Chrome am Computer). Sonst gibt es nichts zu wählen, der Export
+            geht wie bisher in "Downloads". */}
+        {supportsRememberedFile() && (
+          <View style={styles.exportFileRow}>
+            <Text style={styles.exportFileText} numberOfLines={1}>
+              {exportFileName
+                ? `${t('chefDashboard', 'exportSavesTo')} ${exportFileName}`
+                : t('chefDashboard', 'exportNoFileYet')}
+            </Text>
+            {exportFileName && (
+              <FluidPressable
+                onPress={() => handleExportTankliste(true)}
+                disabled={isExporting}
+              >
+                <Text style={styles.exportFileLink}>
+                  {t('chefDashboard', 'exportChangeFile')}
+                </Text>
+              </FluidPressable>
+            )}
+          </View>
+        )}
+
+        <View style={styles.quickActionsRow}>
+          <FluidPressable
+            style={styles.quickActionSecondary}
+            onPress={() => router.push('/chef/umsatzliste')}
+          >
+            <Text style={styles.quickActionSecondaryText}>
+              {t('chefDashboard', 'umsatzlisteDirectionButton')}
+            </Text>
+          </FluidPressable>
+          <FluidPressable
+            style={[
+              styles.quickActionButton,
+              isExportingRevenue && styles.quickActionButtonDisabled,
+            ]}
+            onPress={() => handleExportUmsatzliste()}
+            disabled={isExportingRevenue}
+          >
+            {isExportingRevenue ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.quickActionButtonText}>
+                {t('chefDashboard', 'exportUmsatzlisteButton')}
+              </Text>
+            )}
+          </FluidPressable>
+        </View>
+
+        {supportsRememberedFile() && (
+          <View style={styles.exportFileRow}>
+            <Text style={styles.exportFileText} numberOfLines={1}>
+              {revenueFileName
+                ? `${t('chefDashboard', 'exportSavesTo')} ${revenueFileName}`
+                : t('chefDashboard', 'exportNoFileYet')}
+            </Text>
+            {revenueFileName && (
+              <FluidPressable
+                onPress={() => handleExportUmsatzliste(true)}
+                disabled={isExportingRevenue}
+              >
+                <Text style={styles.exportFileLink}>
+                  {t('chefDashboard', 'exportChangeFile')}
+                </Text>
+              </FluidPressable>
+            )}
+          </View>
+        )}
 
         <View style={styles.statusContainer}>
           <StatusCard
@@ -235,6 +375,38 @@ const styles = StyleSheet.create({
   },
   quickActionButtonDisabled: {
     opacity: 0.6,
+  },
+  quickActionSecondary: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: Colors.ui.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  quickActionSecondaryText: {
+    color: Colors.ui.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  exportFileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  exportFileText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+  },
+  exportFileLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.ui.primary,
   },
   section: {
     paddingHorizontal: 16,

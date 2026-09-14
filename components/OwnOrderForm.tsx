@@ -24,11 +24,24 @@ import {
   View,
 } from 'react-native';
 
-type PickerField = 'loadingCompany' | 'unloadingCompany';
+type PickerField = 'loadingCompany' | 'unloadingCompany' | 'cargoType';
+
+interface PickerOption {
+  /** Was ins Formular geschrieben wird. */
+  value: string;
+  /** Was in der Liste steht. */
+  label: string;
+  /** Nur bei Ladestellen gefüllt — unterscheidet die Standorte einer Firma. */
+  address: string;
+}
 
 const emptyFields: OrderFields = {
   createdBy: '',
   orderNr: '',
+  // Der häufigere Fall, und die Vorgabe, bei der nichts unbemerkt fehlt:
+  // Bei einer Komplettladung fragt die App den Fahrer beim Erledigen nach
+  // den Kilometern, beim Beilader nicht.
+  cargoType: 'komplett',
   loadingDate: '',
   loadingTimeFrom: '',
   loadingTimeUntil: '',
@@ -79,10 +92,21 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   // Firma steht mehrfach in der Liste, wenn sie mehrere Werke hat. Deshalb
   // trägt jede Zeile ihre Adresse sichtbar mit — sonst stünden mehrere
   // Zeilen da, die gleich aussehen und Verschiedenes bedeuten.
+  //
+  // `value` ist, was ins Formular geschrieben wird, `label` was dasteht.
+  // Bei Firmen ist beides derselbe Name; bei der Ladungsart steht in der
+  // Spalte 'komplett'/'beilader', angezeigt wird der ausgeschriebene Text.
   const isLoadingPicker = activePicker === 'loadingCompany';
-  const pickerCompanies: SiteCompany[] = isLoadingPicker
-    ? siteCompanies
-    : unloadingCompanies.map((name) => ({ name, address: '' }));
+  const isCargoTypePicker = activePicker === 'cargoType';
+
+  const pickerCompanies: PickerOption[] = isCargoTypePicker
+    ? [
+        { value: 'komplett', label: t('chefOwnOrder', 'cargoTypeKomplett'), address: '' },
+        { value: 'beilader', label: t('chefOwnOrder', 'cargoTypeBeilader'), address: '' },
+      ]
+    : isLoadingPicker
+      ? siteCompanies.map((c) => ({ value: c.name, label: c.name, address: c.address }))
+      : unloadingCompanies.map((name) => ({ value: name, label: name, address: '' }));
 
   // Gesucht wird nur in der langen Ladestellen-Liste, und zwar überall in
   // Name und Adresse — ein eingetippter Teil genügt, der Anfang muss es
@@ -91,8 +115,10 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   const query = companySearch.trim().toLowerCase();
   const visibleCompanies =
     isLoadingPicker && query
-      ? pickerCompanies.filter((company) =>
-          formatSiteCompany(company).toLowerCase().includes(query)
+      ? pickerCompanies.filter((option) =>
+          formatSiteCompany({ name: option.label, address: option.address })
+            .toLowerCase()
+            .includes(query)
         )
       : pickerCompanies;
 
@@ -107,12 +133,12 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   // irgendeines davon. Ist keine Adresse hinterlegt, bleibt stehen, was
   // schon im Feld steht, statt es zu leeren. Die Entladeadresse wird immer
   // von Hand eingetragen.
-  const pickCompany = (company: SiteCompany) => {
+  const pickCompany = (option: PickerOption) => {
     const field = activePicker as PickerField;
     setForm((prev) => {
-      const next = { ...prev, [field]: company.name };
-      if (company.address && field === 'loadingCompany') {
-        next.loadingAddress = company.address;
+      const next = { ...prev, [field]: option.value };
+      if (option.address && field === 'loadingCompany') {
+        next.loadingAddress = option.address;
       }
       return next;
     });
@@ -157,6 +183,15 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
         onChangeText={set('orderNr')}
         keyboardType="numeric"
       />
+
+      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'cargoTypeLabel')}</Text>
+      <FluidPressable style={styles.selectField} onPress={() => openPicker('cargoType')}>
+        <Text style={styles.selectValue}>
+          {t('chefOwnOrder', form.cargoType === 'beilader' ? 'cargoTypeBeilader' : 'cargoTypeKomplett')}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </FluidPressable>
+      <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'cargoTypeHint')}</Text>
 
       <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'loadingSection')}</Text>
       <DateField
@@ -302,11 +337,11 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
             ) : (
               <FlatList
                 data={visibleCompanies}
-                keyExtractor={(item) => `${item.name}|${item.address}`}
+                keyExtractor={(item) => `${item.value}|${item.address}`}
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <FluidPressable style={styles.vehicleOption} onPress={() => pickCompany(item)}>
-                    <Text style={styles.vehicleOptionText}>{item.name}</Text>
+                    <Text style={styles.vehicleOptionText}>{item.label}</Text>
                     {!!item.address && (
                       <Text style={styles.vehicleOptionAddress}>{item.address}</Text>
                     )}
@@ -427,6 +462,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.ui.charcoal,
+  },
+  selectField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: 'white',
+  },
+  selectValue: {
+    fontSize: 14,
+    color: Colors.ui.charcoal,
+  },
+  cargoTypeHint: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    lineHeight: 17,
+    marginTop: 6,
   },
   vehicleOptionAddress: {
     fontSize: 12,

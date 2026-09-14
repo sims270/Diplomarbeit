@@ -1,3 +1,7 @@
+import {
+  saveToRememberedFile,
+  supportsRememberedFile,
+} from '@/lib/rememberedFile';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 
@@ -22,6 +26,12 @@ export interface TankEntry {
   litersAdBlue: number | null;
   fuelStation: string;
   createdAt: string;
+  /** "Preis AdBlue" — trägt der Chef nach; nur bei nachgefülltem AdBlue. */
+  priceAdBlue: number | null;
+  /** Preis/Liter Diesel laut Beleg — trägt der Chef nach, null solange nicht geschehen. */
+  pricePerLiter: number | null;
+  /** Gesamtbetrag laut Beleg — trägt der Chef nach, null solange nicht geschehen. */
+  priceTotal: number | null;
 }
 
 export interface NewTankEntry {
@@ -42,6 +52,15 @@ interface TankEntryRow {
   liters_adblue: string | number | null;
   fuel_station: string;
   created_at: string;
+  price_adblue?: string | number | null;
+  price_per_liter?: string | number | null;
+  price_total?: string | number | null;
+}
+
+// Die Preisspalten fehlen, solange die Migration noch nicht lief — dann
+// kommen sie gar nicht mit (undefined) statt als null.
+function toNumberOrNull(value: string | number | null | undefined): number | null {
+  return value === null || value === undefined ? null : toNumber(value);
 }
 
 // numeric kommt aus PostgREST als String, damit keine Nachkommastellen
@@ -60,6 +79,9 @@ function mapRow(row: TankEntryRow): TankEntry {
     litersAdBlue: row.liters_adblue === null ? null : toNumber(row.liters_adblue),
     fuelStation: row.fuel_station,
     createdAt: row.created_at,
+    priceAdBlue: toNumberOrNull(row.price_adblue),
+    pricePerLiter: toNumberOrNull(row.price_per_liter),
+    priceTotal: toNumberOrNull(row.price_total),
   };
 }
 
@@ -114,6 +136,49 @@ export async function getTankEntriesByDriver(driverId: string): Promise<TankEntr
   if (error) throw new Error(error.message);
 
   return (data ?? []).map(mapRow);
+}
+
+/**
+ * Alle Tankungen aller Fahrer, neueste zuerst — für die Preisübersicht des
+ * Chefs. Dass nur der Chef sie alle bekommt, entscheidet RLS ("Boss can read
+ * all tank entries"); ein Fahrer bekäme hier nur seine eigenen.
+ */
+export async function getAllTankEntries(): Promise<TankEntry[]> {
+  const { data, error } = await supabase
+    .from('tank_entries')
+    .select('*')
+    .order('entry_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map(mapRow);
+}
+
+/**
+ * Trägt Preis/Liter und Gesamtbetrag einer Tankung ein.
+ *
+ * Über die Funktion set_tank_entry_prices, nicht über ein UPDATE: Die
+ * Tankliste hat bewusst keine UPDATE-Policy, und eine für den Chef dürfte
+ * wegen RLS auch Kilometerstand und Liter ändern. Die Funktion kann nur die
+ * beiden Preise (siehe 20260914110000_add_prices_to_tank_entries.sql).
+ */
+export async function setTankEntryPrices(
+  entryId: string,
+  prices: {
+    priceAdBlue: number | null;
+    pricePerLiter: number | null;
+    priceTotal: number | null;
+  }
+): Promise<void> {
+  const { error } = await supabase.rpc('set_tank_entry_prices', {
+    entry_id: entryId,
+    price_adblue: prices.priceAdBlue,
+    price_per_liter: prices.pricePerLiter,
+    price_total: prices.priceTotal,
+  });
+
+  if (error) throw new Error(error.message);
 }
 
 export async function createTankEntry(input: NewTankEntry): Promise<TankEntry> {
@@ -196,13 +261,11 @@ async function describeFunctionError(error: { name?: string; message?: string })
  * keinen Ort, an den ein Browser-Download gehen könnte, deshalb hier ein
  * klarer Hinweis statt eines Buttons, der nichts tut.
  */
-export async function downloadTankEntriesXlsx(): Promise<void> {
-  if (Platform.OS !== 'web') {
-    throw new Error(
-      'Der Excel-Export steht im Web-Dashboard zur Verfügung. Bitte dort herunterladen.'
-    );
-  }
+/** Unter diesem Schlüssel merkt sich der Browser die Datei des Chefs. */
+export const TANKLISTE_FILE_KEY = 'tankliste';
 
+/** Lässt die Edge Function die Excel-Datei bauen und liefert sie als Blob. */
+async function fetchTankEntriesXlsx(): Promise<Blob> {
   const { data, error } = await supabase.functions.invoke('export-tank-entries', {
     method: 'POST',
   });
@@ -224,7 +287,55 @@ export async function downloadTankEntriesXlsx(): Promise<void> {
 
   // Der Blob trägt den generischen octet-stream-Typ; erst mit dem echten
   // xlsx-Typ schlägt Windows die Datei von sich aus in Excel auf.
-  const url = URL.createObjectURL(data.slice(0, data.size, XLSX_MIME));
+  return data.slice(0, data.size, XLSX_MIME);
+}
+
+/**
+ * Exportiert die Tankliste.
+ *
+ * In Edge und Chrome direkt in die Datei, die der Chef beim ersten Mal
+ * ausgewählt hat — jeder weitere Export aktualisiert genau diese Datei in
+ * seinem Ordner (siehe lib/rememberedFile.ts). Überall sonst wie bisher als
+ * Download.
+ *
+ * Muss direkt aus dem Klick heraus aufgerufen werden, sonst verweigert der
+ * Browser Dateidialog und Erlaubnisabfrage.
+ *
+ * Gibt zurück, wohin gespeichert wurde, damit das Dashboard es anzeigen kann.
+ */
+export async function exportTankEntries(
+  options: { chooseNewFile?: boolean } = {}
+): Promise<{ savedTo: 'file' | 'download'; fileName: string }> {
+  if (Platform.OS !== 'web') {
+    throw new Error(
+      'Der Excel-Export steht im Web-Dashboard zur Verfügung. Bitte dort herunterladen.'
+    );
+  }
+
+  if (supportsRememberedFile()) {
+    const fileName = await saveToRememberedFile({
+      key: TANKLISTE_FILE_KEY,
+      suggestedName: 'Tankliste.xlsx',
+      mimeType: XLSX_MIME,
+      extension: '.xlsx',
+      description: 'Excel-Tabelle',
+      produce: fetchTankEntriesXlsx,
+      chooseNew: options.chooseNewFile,
+    });
+    return { savedTo: 'file', fileName };
+  }
+
+  const fileName = await downloadTankEntriesXlsx();
+  return { savedTo: 'download', fileName };
+}
+
+/**
+ * Der klassische Weg über "Downloads" — für Browser ohne File System Access
+ * API (Firefox, Safari, Handy).
+ */
+async function downloadTankEntriesXlsx(): Promise<string> {
+  const blob = await fetchTankEntriesXlsx();
+  const url = URL.createObjectURL(blob);
   const fileName = `Tankliste_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
   // Bewusst ein <a download> statt location.href wie in lib/download.ts:
@@ -242,4 +353,6 @@ export async function downloadTankEntriesXlsx(): Promise<void> {
   // Erst im nächsten Tick: Safari bricht den gerade gestarteten Download
   // ab, wenn die URL noch im selben Durchlauf freigegeben wird.
   setTimeout(() => URL.revokeObjectURL(url), 0);
+
+  return fileName;
 }

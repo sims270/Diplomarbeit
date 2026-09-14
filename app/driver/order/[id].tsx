@@ -10,7 +10,14 @@ import { isoToGerman, timestampToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 const EMPTY = '—';
 
@@ -23,6 +30,8 @@ export default function DriverOrderDetailScreen() {
   // undefined = still loading, null = not found (or not this driver's order)
   const [order, setOrder] = useState<Order | undefined | null>(undefined);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [emptyKm, setEmptyKm] = useState('');
+  const [freightKm, setFreightKm] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -75,13 +84,45 @@ export default function DriverOrderDetailScreen() {
   const handleComplete = () => {
     if (!order) return;
 
+    // Beim Beilader lassen sich der einzelnen Ladung keine Kilometer
+    // zuordnen — dort wird gar nicht erst danach gefragt, und es geht
+    // nichts zu prüfen. Bei einer Komplettladung sind beide Pflicht; die
+    // Datenbank besteht darauf ebenfalls (complete_order), das hier ist
+    // die freundliche Fassung derselben Regel.
+    let km: { emptyKm: number | null; freightKm: number | null } = {
+      emptyKm: null,
+      freightKm: null,
+    };
+
+    if (order.cargoType === 'komplett') {
+      const leer = emptyKm.trim();
+      const fracht = freightKm.trim();
+
+      if (!leer || !fracht) {
+        showAlert(t('common', 'error'), t('driverOrderDetail', 'alertKmRequired'));
+        return;
+      }
+
+      const leerZahl = Number(leer);
+      const frachtZahl = Number(fracht);
+      if (
+        !Number.isInteger(leerZahl) || leerZahl < 0 ||
+        !Number.isInteger(frachtZahl) || frachtZahl < 0
+      ) {
+        showAlert(t('common', 'error'), t('driverOrderDetail', 'alertKmInvalid'));
+        return;
+      }
+
+      km = { emptyKm: leerZahl, freightKm: frachtZahl };
+    }
+
     showConfirm(
       t('driverOrderDetail', 'completeConfirmTitle'),
       t('driverOrderDetail', 'completeConfirmMessage'),
       async () => {
         setIsCompleting(true);
         try {
-          setOrder(await completeOrder(order.id));
+          setOrder(await completeOrder(order.id, km));
           showAlert(t('common', 'success'), t('driverOrderDetail', 'alertCompleted'));
         } catch (error) {
           const message =
@@ -182,6 +223,61 @@ export default function DriverOrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'cargoSection')}</Text>
           {renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)}
+          {renderRow(
+            t('driverOrderDetail', 'cargoTypeLabel'),
+            t(
+              'driverOrderDetail',
+              order.cargoType === 'beilader' ? 'cargoTypeBeilader' : 'cargoTypeKomplett'
+            )
+          )}
+        </View>
+
+        {/* Kilometer: bei einer Komplettladung vor dem Abschließen
+            einzutragen, danach nur noch zum Nachlesen. Beim Beilader
+            steht hier nur, warum nichts abgefragt wird. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'kmSection')}</Text>
+
+          {order.cargoType === 'beilader' ? (
+            <Text style={styles.kmNote}>{t('driverOrderDetail', 'kmBeilader')}</Text>
+          ) : order.status === 'completed' ? (
+            <>
+              {renderRow(
+                t('driverOrderDetail', 'emptyKmLabel'),
+                order.emptyKm === null ? '' : `${order.emptyKm.toLocaleString('de-DE')} km`
+              )}
+              {renderRow(
+                t('driverOrderDetail', 'freightKmLabel'),
+                order.freightKm === null ? '' : `${order.freightKm.toLocaleString('de-DE')} km`
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'emptyKmLabel')}</Text>
+              <TextInput
+                style={styles.kmInput}
+                value={emptyKm}
+                onChangeText={setEmptyKm}
+                placeholder={t('driverOrderDetail', 'emptyKmPlaceholder')}
+                placeholderTextColor="#9a9a9a"
+                keyboardType="numeric"
+                editable={!isCompleting}
+              />
+
+              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'freightKmLabel')}</Text>
+              <TextInput
+                style={styles.kmInput}
+                value={freightKm}
+                onChangeText={setFreightKm}
+                placeholder={t('driverOrderDetail', 'freightKmPlaceholder')}
+                placeholderTextColor="#9a9a9a"
+                keyboardType="numeric"
+                editable={!isCompleting}
+              />
+
+              <Text style={styles.kmNote}>{t('driverOrderDetail', 'kmHint')}</Text>
+            </>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -333,6 +429,29 @@ const styles = StyleSheet.create({
     color: Colors.ui.charcoal,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  kmLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.ui.darkGray,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  kmInput: {
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    fontSize: 14,
+    color: Colors.ui.charcoal,
+    backgroundColor: 'white',
+  },
+  kmNote: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    lineHeight: 17,
   },
   completeButton: {
     backgroundColor: Colors.ui.green,

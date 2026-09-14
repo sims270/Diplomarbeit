@@ -161,6 +161,40 @@ export default function ChefOrderDetailScreen() {
                 ✓ {timestampToGerman(order.completedAt)}
               </Text>
             </View>
+
+            {/* Was der Fahrer beim Abschließen eingetragen hat. Beim
+                Beilader gibt es die Angaben nicht — dort lässt sich der
+                einzelnen Ladung keine Fahrtstrecke zuordnen. */}
+            <View style={styles.row}>
+              <Text style={styles.label}>{t('chefOrderDetail', 'cargoTypeLabel')}</Text>
+              <Text style={styles.value}>
+                {t(
+                  'chefOrderDetail',
+                  order.cargoType === 'beilader' ? 'cargoTypeBeilader' : 'cargoTypeKomplett'
+                )}
+              </Text>
+            </View>
+
+            {order.cargoType === 'komplett' ? (
+              <>
+                <View style={styles.row}>
+                  <Text style={styles.label}>{t('chefOrderDetail', 'emptyKmLabel')}</Text>
+                  <Text style={styles.value}>
+                    {order.emptyKm === null
+                      ? '—'
+                      : `${order.emptyKm.toLocaleString('de-DE')} km`}
+                  </Text>
+                </View>
+                <View style={styles.row}>
+                  <Text style={styles.label}>{t('chefOrderDetail', 'freightKmLabel')}</Text>
+                  <Text style={styles.value}>
+                    {order.freightKm === null
+                      ? '—'
+                      : `${order.freightKm.toLocaleString('de-DE')} km`}
+                  </Text>
+                </View>
+              </>
+            ) : null}
           </View>
         ) : null}
 
@@ -168,7 +202,11 @@ export default function ChefOrderDetailScreen() {
         {order.status === 'completed' ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('chefInvoice', 'title')}</Text>
-            <InvoiceForm orderId={order.id} orderNr={order.orderNr} />
+            <InvoiceForm
+              orderId={order.id}
+              orderNr={order.orderNr}
+              loadingCompany={order.loadingCompany}
+            />
           </View>
         ) : null}
 

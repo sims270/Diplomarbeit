@@ -28,10 +28,22 @@ export default function LoginScreen() {
     const result = await login(username.trim(), password);
 
     if (!result.success) {
+      // "Invalid login credentials" ist der eine Fall, den ein freundlicher
+      // Satz besser beschreibt als die Rohmeldung. Alles andere — etwa
+      // "Email not confirmed" oder ein gesperrtes Konto — sagt der Server
+      // genauer, als wir es raten könnten. Das pauschal durch
+      // "Ungültiger Benutzername oder Passwort" zu ersetzen, schickt bei
+      // der Fehlersuche in die falsche Richtung.
+      const isWrongCredentials = result.error
+        ?.toLowerCase()
+        .includes("invalid login credentials");
+
       setError(
         result.isNetworkError
           ? t("login", "errorUnreachable")
-          : t("login", "errorInvalid"),
+          : isWrongCredentials || !result.error
+            ? t("login", "errorInvalid")
+            : result.error,
       );
     } else {
       setError("");

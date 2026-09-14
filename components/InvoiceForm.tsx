@@ -1,21 +1,30 @@
 import {
+  addInvoiceItems,
+  createInvoice,
   downloadInvoiceXlsx,
-  loadInvoice,
+  getBillableOrders,
+  loadInvoiceForOrder,
+  removeInvoiceItem,
   saveInvoice,
+  type BillableOrder,
   type Invoice,
+  type InvoiceHeader,
+  type InvoiceItem,
 } from '@/app/services/invoiceService';
 import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Colors } from '@/constants/theme';
 import { useTranslation } from '@/hooks/use-translation';
-import { showAlert } from '@/lib/alert';
+import { showAlert, showConfirm } from '@/lib/alert';
+import { isoToGerman } from '@/lib/dateFormat';
 import { PAYMENT_TERMS_OPTIONS } from '@/lib/transportauftragPdf';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,32 +34,50 @@ import {
 interface InvoiceFormProps {
   orderId: string;
   orderNr: string;
+  /** Zum Vorsortieren der Auswahl: Aufträge desselben Kunden stehen oben. */
+  loadingCompany: string;
+}
+
+/** Was gerade läuft — immer nur eine Aktion, alle Buttons sind so lange gesperrt. */
+type BusyAction = 'saving' | 'exporting' | 'creating' | 'adding' | 'removing';
+
+/** Wofür die Auftragsauswahl gerade offen ist. */
+type PickerMode = 'create' | 'add';
+
+function sameCompany(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 /**
- * Die Rechnung zum erledigten Auftrag — bearbeiten und als Excel-Datei
+ * Die Rechnung zum erledigten Auftrag — als Einzelrechnung oder als
+ * Sammelrechnung über mehrere Ladungen, bearbeiten und als Excel-Datei
  * herunterladen. Aufbau und Bedienung folgen OwnOrderForm/ExternalOrderForm:
  * Abschnittsüberschriften, dieselben Eingabefelder, unten der Button.
  *
- * Beim ersten Öffnen legt die Edge Function die Rechnung an und füllt sie
- * aus dem Auftrag vor (siehe app/services/invoiceService.ts). Ab dann zählt
- * nur noch, was hier steht: der Auftrag wird durch eine Änderung an der
- * Rechnung nie verändert, und ein erneuter Download liefert dieselbe
- * Belegnummer.
+ * Steht der Auftrag noch auf keiner Rechnung, wählt der Chef zuerst die Art.
+ * Erst dann legt die Edge Function die Rechnung an, vergibt die Belegnummer
+ * und füllt alles aus den Aufträgen vor (siehe
+ * app/services/invoiceService.ts). Ab dann zählt nur noch, was hier steht:
+ * der Auftrag wird durch eine Änderung an der Rechnung nie verändert, und
+ * ein erneuter Download liefert dieselbe Belegnummer.
  */
-export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
+export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormProps) {
   const { t } = useTranslation();
 
-  const [form, setForm] = useState<Invoice | null>(null);
+  // undefined: lädt noch, null: noch keine Rechnung.
+  const [form, setForm] = useState<Invoice | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [busy, setBusy] = useState<BusyAction | null>(null);
+  const [isTermsPickerOpen, setIsTermsPickerOpen] = useState(false);
+
+  const [pickerMode, setPickerMode] = useState<PickerMode | null>(null);
+  const [billable, setBillable] = useState<BillableOrder[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
 
-    loadInvoice(orderId)
+    loadInvoiceForOrder(orderId)
       .then((invoice) => {
         if (active) setForm(invoice);
       })
@@ -69,42 +96,113 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
     };
   }, [orderId]);
 
-  const set = (field: keyof Invoice) => (value: string) =>
-    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  const setHeader = (field: keyof InvoiceHeader) => (value: string) =>
+    setForm((prev) => (prev ? { ...prev, header: { ...prev.header, [field]: value } } : prev));
 
-  const handleSave = async () => {
-    if (!form) return;
-    setIsSaving(true);
+  const setItem = (index: number, field: keyof InvoiceItem) => (value: string) =>
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+          }
+        : prev
+    );
+
+  /** Führt eine Aktion aus und zeigt ihren Fehler — so sieht jeder Button gleich aus. */
+  const run = async (action: BusyAction, fallbackMessage: string, task: () => Promise<void>) => {
+    setBusy(action);
     try {
-      await saveInvoice(orderId, form);
-      showAlert(t('common', 'success'), t('chefInvoice', 'saved'));
+      await task();
     } catch (error) {
-      showAlert(
-        t('common', 'error'),
-        error instanceof Error ? error.message : t('chefInvoice', 'saveFailed')
-      );
+      showAlert(t('common', 'error'), error instanceof Error ? error.message : fallbackMessage);
     } finally {
-      setIsSaving(false);
+      setBusy(null);
     }
   };
+
+  const handleSave = () =>
+    run('saving', t('chefInvoice', 'saveFailed'), async () => {
+      if (!form) return;
+      await saveInvoice(form);
+      showAlert(t('common', 'success'), t('chefInvoice', 'saved'));
+    });
 
   // Erst speichern, dann exportieren: sonst lädt der Chef eine Datei
   // herunter, in der seine gerade getippten Änderungen fehlen — die Excel
   // Datei baut die Function aus der Datenbank, nicht aus dem Formular.
-  const handleExport = async () => {
-    if (!form) return;
-    setIsExporting(true);
+  const handleExport = () =>
+    run('exporting', t('chefInvoice', 'exportFailed'), async () => {
+      if (!form) return;
+      await saveInvoice(form);
+      await downloadInvoiceXlsx(form);
+    });
+
+  const handleCreateSingle = () =>
+    run('creating', t('chefInvoice', 'createFailed'), async () => {
+      setForm(await createInvoice([orderId]));
+    });
+
+  const openPicker = async (mode: PickerMode) => {
+    setPickerMode(mode);
+    setSelected(new Set());
+    setBillable(null);
     try {
-      await saveInvoice(orderId, form);
-      await downloadInvoiceXlsx(orderId, orderNr);
+      setBillable(await getBillableOrders());
     } catch (error) {
+      setPickerMode(null);
       showAlert(
         t('common', 'error'),
-        error instanceof Error ? error.message : t('chefInvoice', 'exportFailed')
+        error instanceof Error ? error.message : t('chefInvoice', 'billableLoadFailed')
       );
-    } finally {
-      setIsExporting(false);
     }
+  };
+
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const handlePickerConfirm = () => {
+    const mode = pickerMode;
+    const ids = [...selected];
+    setPickerMode(null);
+
+    if (mode === 'create') {
+      run('creating', t('chefInvoice', 'createFailed'), async () => {
+        setForm(await createInvoice([orderId, ...ids]));
+      });
+    } else if (mode === 'add') {
+      // Vorher speichern: die Function liefert die Rechnung frisch aus der
+      // Datenbank zurück, ungespeicherte Eingaben wären sonst weg.
+      run('adding', t('chefInvoice', 'saveFailed'), async () => {
+        if (!form) return;
+        await saveInvoice(form);
+        setForm(await addInvoiceItems(form.header.id, ids));
+      });
+    }
+  };
+
+  const handleRemoveItem = (item: InvoiceItem) => {
+    if (!form) return;
+    const current = form;
+
+    showConfirm(
+      t('chefInvoice', 'removeItemConfirmTitle'),
+      t('chefInvoice', 'removeItemConfirmMessage').replace('{orderNr}', item.orderNr),
+      () =>
+        run('removing', t('chefInvoice', 'saveFailed'), async () => {
+          await saveInvoice(current);
+          const updated = await removeInvoiceItem(current.header.id, item.id);
+          // Wurde die Ladung dieses Auftrags entfernt, gehört die Rechnung
+          // nicht mehr zu dieser Ansicht — dann wieder die Auswahl zeigen.
+          setForm(updated.items.some((i) => i.orderId === orderId) ? updated : null);
+        }),
+      { destructive: true, confirmText: t('chefInvoice', 'removeItem') }
+    );
   };
 
   if (loadError !== null) {
@@ -113,24 +211,175 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
     );
   }
 
-  if (!form) {
+  if (form === undefined) {
     return <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />;
   }
 
-  const busy = isSaving || isExporting;
+  // Aufträge in der Auswahl: der aktuelle ist bei "create" fest dabei und
+  // wird nicht angeboten; derselbe Kunde steht oben, weil eine
+  // Sammelrechnung in aller Regel an genau eine Firma geht.
+  const candidates = (billable ?? []).filter(
+    (order) => order.id !== orderId && !form?.items.some((item) => item.orderId === order.id)
+  );
+  const sameCustomer = candidates.filter((order) =>
+    sameCompany(order.loadingCompany, loadingCompany)
+  );
+  const otherCustomers = candidates.filter(
+    (order) => !sameCompany(order.loadingCompany, loadingCompany)
+  );
+
+  const renderCandidate = (order: BillableOrder) => {
+    const isSelected = selected.has(order.id);
+    return (
+      <FluidPressable
+        key={order.id}
+        style={[styles.candidate, isSelected && styles.candidateSelected]}
+        onPress={() => toggleSelected(order.id)}
+      >
+        <Text style={styles.checkbox}>{isSelected ? '☑' : '☐'}</Text>
+        <View style={styles.candidateText}>
+          <Text style={styles.candidateTitle}>
+            Nr. {order.orderNr}
+            {order.date ? ` · ${isoToGerman(order.date)}` : ''}
+          </Text>
+          <Text style={styles.candidateSubtitle}>
+            {order.loadingCompany || '—'} → {order.unloadingCompany || '—'}
+          </Text>
+        </View>
+      </FluidPressable>
+    );
+  };
+
+  const orderPicker = (
+    <Modal
+      visible={pickerMode !== null}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setPickerMode(null)}
+    >
+      <View style={styles.modalOverlay}>
+        <BlurSurface
+          intensity={30}
+          tint="dark"
+          fallbackColor="rgba(0,0,0,0.6)"
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {t('chefInvoice', pickerMode === 'add' ? 'pickerAddTitle' : 'pickerCreateTitle')}
+            </Text>
+            <FluidPressable onPress={() => setPickerMode(null)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </FluidPressable>
+          </View>
+          <Text style={styles.hint}>{t('chefInvoice', 'pickerHint')}</Text>
+
+          {billable === null ? (
+            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+          ) : (
+            <ScrollView style={styles.pickerList}>
+              {pickerMode === 'create' ? (
+                <View style={[styles.candidate, styles.candidateFixed]}>
+                  <Text style={styles.checkbox}>☑</Text>
+                  <Text style={styles.candidateTitle}>
+                    {t('chefInvoice', 'pickerCurrentOrder').replace('{orderNr}', orderNr)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {candidates.length === 0 ? (
+                <Text style={styles.hint}>{t('chefInvoice', 'pickerEmpty')}</Text>
+              ) : null}
+
+              {sameCustomer.length > 0 ? (
+                <>
+                  <Text style={styles.groupTitle}>{t('chefInvoice', 'pickerSameCustomer')}</Text>
+                  {sameCustomer.map(renderCandidate)}
+                </>
+              ) : null}
+
+              {otherCustomers.length > 0 ? (
+                <>
+                  <Text style={styles.groupTitle}>{t('chefInvoice', 'pickerOtherCustomers')}</Text>
+                  {otherCustomers.map(renderCandidate)}
+                </>
+              ) : null}
+            </ScrollView>
+          )}
+
+          <FluidPressable
+            style={[styles.exportButton, styles.pickerConfirm, selected.size === 0 && styles.buttonDisabled]}
+            onPress={handlePickerConfirm}
+            disabled={selected.size === 0}
+          >
+            <Text style={styles.exportButtonText}>
+              {pickerMode === 'add'
+                ? t('chefInvoice', 'pickerConfirmAdd').replace('{count}', String(selected.size))
+                : t('chefInvoice', 'pickerConfirmCreate').replace(
+                    '{count}',
+                    String(selected.size + 1)
+                  )}
+            </Text>
+          </FluidPressable>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // --- Noch keine Rechnung: Einzel- oder Sammelrechnung? --------------------
+  if (form === null) {
+    return (
+      <>
+        <Text style={styles.hint}>{t('chefInvoice', 'choiceHint')}</Text>
+        <View style={styles.buttonRow}>
+          <FluidPressable
+            style={[styles.saveButton, busy !== null && styles.buttonDisabled]}
+            onPress={() => openPicker('create')}
+            disabled={busy !== null}
+          >
+            <Text style={styles.saveButtonText}>{t('chefInvoice', 'collectiveButton')}</Text>
+          </FluidPressable>
+          <FluidPressable
+            style={[styles.exportButton, busy !== null && styles.buttonDisabled]}
+            onPress={handleCreateSingle}
+            disabled={busy !== null}
+          >
+            {busy === 'creating' ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.exportButtonText}>{t('chefInvoice', 'singleButton')}</Text>
+            )}
+          </FluidPressable>
+        </View>
+        {orderPicker}
+      </>
+    );
+  }
+
+  const { header, items } = form;
+  const isBusy = busy !== null;
 
   return (
     <>
+      <View style={styles.typeBadge}>
+        <Text style={styles.typeBadgeText}>
+          {items.length > 1
+            ? t('chefInvoice', 'typeCollective').replace('{count}', String(items.length))
+            : t('chefInvoice', 'typeSingle')}
+        </Text>
+      </View>
+
       <Text style={styles.sectionTitle}>{t('chefInvoice', 'headSection')}</Text>
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'belegnummerLabel')}
-        value={form.belegnummer}
-        onChangeText={set('belegnummer')}
+        value={header.belegnummer}
+        onChangeText={setHeader('belegnummer')}
       />
       <DateField
-        value={form.rechnungsdatum}
-        onChange={set('rechnungsdatum')}
+        value={header.rechnungsdatum}
+        onChange={setHeader('rechnungsdatum')}
         placeholder={t('chefInvoice', 'rechnungsdatumLabel')}
       />
 
@@ -138,107 +387,138 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'empfaengerNameLabel')}
-        value={form.empfaengerName}
-        onChangeText={set('empfaengerName')}
+        value={header.empfaengerName}
+        onChangeText={setHeader('empfaengerName')}
       />
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'empfaengerStrasseLabel')}
-        value={form.empfaengerStrasse}
-        onChangeText={set('empfaengerStrasse')}
+        value={header.empfaengerStrasse}
+        onChangeText={setHeader('empfaengerStrasse')}
       />
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'empfaengerOrtLabel')}
-        value={form.empfaengerOrt}
-        onChangeText={set('empfaengerOrt')}
+        value={header.empfaengerOrt}
+        onChangeText={setHeader('empfaengerOrt')}
       />
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'kundennummerLabel')}
-        value={form.kundennummer}
-        onChangeText={set('kundennummer')}
+        value={header.kundennummer}
+        onChangeText={setHeader('kundennummer')}
       />
       <TextInput
         style={styles.input}
         placeholder={t('chefInvoice', 'uidNummerLabel')}
-        value={form.uidNummer}
-        onChangeText={set('uidNummer')}
+        value={header.uidNummer}
+        onChangeText={setHeader('uidNummer')}
       />
 
       <Text style={styles.sectionTitle}>{t('chefInvoice', 'positionSection')}</Text>
-      <DateField
-        value={form.positionDatum}
-        onChange={set('positionDatum')}
-        placeholder={t('chefInvoice', 'positionDatumLabel')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'bezeichnungLabel')}
-        value={form.bezeichnung}
-        onChangeText={set('bezeichnung')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'transportnrLabel')}
-        value={form.transportnr}
-        onChangeText={set('transportnr')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'ladestelleLabel')}
-        value={form.ladestelle}
-        onChangeText={set('ladestelle')}
-      />
-      <DateField
-        value={form.ladedatum}
-        onChange={set('ladedatum')}
-        placeholder={t('chefInvoice', 'ladedatumLabel')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'entladestelleLabel')}
-        value={form.entladestelle}
-        onChangeText={set('entladestelle')}
-      />
-      <DateField
-        value={form.entladedatum}
-        onChange={set('entladedatum')}
-        placeholder={t('chefInvoice', 'entladedatumLabel')}
-      />
+      {items.map((item, index) => (
+        <View key={item.id} style={styles.itemBlock}>
+          <View style={styles.itemHeader}>
+            <Text style={styles.itemTitle}>
+              {t('chefInvoice', 'itemTitle')
+                .replace('{index}', String(index + 1))
+                .replace('{orderNr}', item.orderNr)}
+            </Text>
+            {/* Die letzte Ladung bleibt: eine Rechnung ohne Position hätte
+                trotzdem eine Belegnummer verbraucht. */}
+            {items.length > 1 ? (
+              <FluidPressable onPress={() => handleRemoveItem(item)} disabled={isBusy}>
+                <Text style={styles.removeLink}>{t('chefInvoice', 'removeItem')}</Text>
+              </FluidPressable>
+            ) : null}
+          </View>
+
+          <DateField
+            value={item.positionDatum}
+            onChange={setItem(index, 'positionDatum')}
+            placeholder={t('chefInvoice', 'positionDatumLabel')}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t('chefInvoice', 'bezeichnungLabel')}
+            value={item.bezeichnung}
+            onChangeText={setItem(index, 'bezeichnung')}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t('chefInvoice', 'transportnrLabel')}
+            value={item.transportnr}
+            onChangeText={setItem(index, 'transportnr')}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t('chefInvoice', 'ladestelleLabel')}
+            value={item.ladestelle}
+            onChangeText={setItem(index, 'ladestelle')}
+          />
+          <DateField
+            value={item.ladedatum}
+            onChange={setItem(index, 'ladedatum')}
+            placeholder={t('chefInvoice', 'ladedatumLabel')}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t('chefInvoice', 'entladestelleLabel')}
+            value={item.entladestelle}
+            onChangeText={setItem(index, 'entladestelle')}
+          />
+          <DateField
+            value={item.entladedatum}
+            onChange={setItem(index, 'entladedatum')}
+            placeholder={t('chefInvoice', 'entladedatumLabel')}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t('chefInvoice', 'preisLabel')}
+            value={item.preis}
+            onChangeText={setItem(index, 'preis')}
+            keyboardType="decimal-pad"
+          />
+        </View>
+      ))}
+
+      <FluidPressable
+        style={[styles.addButton, isBusy && styles.buttonDisabled]}
+        onPress={() => openPicker('add')}
+        disabled={isBusy}
+      >
+        {busy === 'adding' || busy === 'removing' ? (
+          <ActivityIndicator color={Colors.ui.primary} />
+        ) : (
+          <Text style={styles.addButtonText}>{t('chefInvoice', 'addItemsButton')}</Text>
+        )}
+      </FluidPressable>
 
       <Text style={styles.sectionTitle}>{t('chefInvoice', 'amountSection')}</Text>
       <TextInput
         style={styles.input}
-        placeholder={t('chefInvoice', 'preisLabel')}
-        value={form.preis}
-        onChangeText={set('preis')}
-        keyboardType="decimal-pad"
-      />
-      <TextInput
-        style={styles.input}
         placeholder={t('chefInvoice', 'ustSatzLabel')}
-        value={form.ustSatz}
-        onChangeText={set('ustSatz')}
+        value={header.ustSatz}
+        onChangeText={setHeader('ustSatz')}
         keyboardType="decimal-pad"
       />
       {/* Dieselbe Konditionsliste wie im Transportauftrag (siehe
           ExternalOrderForm): So heißt dieselbe Kondition auf dem Auftrag
           und auf der Rechnung auch gleich. */}
-      <FluidPressable style={styles.selectField} onPress={() => setIsPickerOpen(true)}>
-        <Text style={form.zahlungsziel ? styles.selectValue : styles.selectPlaceholder}>
-          {form.zahlungsziel || t('chefInvoice', 'zahlungszielLabel')}
+      <FluidPressable style={styles.selectField} onPress={() => setIsTermsPickerOpen(true)}>
+        <Text style={header.zahlungsziel ? styles.selectValue : styles.selectPlaceholder}>
+          {header.zahlungsziel || t('chefInvoice', 'zahlungszielLabel')}
         </Text>
         <Text style={styles.selectChevron}>▾</Text>
       </FluidPressable>
 
       <View style={styles.buttonRow}>
         <FluidPressable
-          style={[styles.saveButton, busy && styles.buttonDisabled]}
+          style={[styles.saveButton, isBusy && styles.buttonDisabled]}
           onPress={handleSave}
-          disabled={busy}
+          disabled={isBusy}
         >
-          {isSaving ? (
+          {busy === 'saving' ? (
             <ActivityIndicator color={Colors.ui.primary} />
           ) : (
             <Text style={styles.saveButtonText}>{t('chefInvoice', 'saveButton')}</Text>
@@ -246,11 +526,11 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
         </FluidPressable>
 
         <FluidPressable
-          style={[styles.exportButton, busy && styles.buttonDisabled]}
+          style={[styles.exportButton, isBusy && styles.buttonDisabled]}
           onPress={handleExport}
-          disabled={busy}
+          disabled={isBusy}
         >
-          {isExporting ? (
+          {busy === 'exporting' ? (
             <ActivityIndicator color="white" />
           ) : (
             <Text style={styles.exportButtonText}>{t('chefInvoice', 'exportButton')}</Text>
@@ -260,11 +540,13 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
 
       <Text style={styles.hint}>{t('chefInvoice', 'hint')}</Text>
 
+      {orderPicker}
+
       <Modal
-        visible={isPickerOpen}
+        visible={isTermsPickerOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setIsPickerOpen(false)}
+        onRequestClose={() => setIsTermsPickerOpen(false)}
       >
         <View style={styles.modalOverlay}>
           <BlurSurface
@@ -276,7 +558,7 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefInvoice', 'zahlungszielLabel')}</Text>
-              <FluidPressable onPress={() => setIsPickerOpen(false)}>
+              <FluidPressable onPress={() => setIsTermsPickerOpen(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </FluidPressable>
             </View>
@@ -287,8 +569,8 @@ export function InvoiceForm({ orderId, orderNr }: InvoiceFormProps) {
                 <FluidPressable
                   style={styles.pickerOption}
                   onPress={() => {
-                    set('zahlungsziel')(item);
-                    setIsPickerOpen(false);
+                    setHeader('zahlungsziel')(item);
+                    setIsTermsPickerOpen(false);
                   }}
                 >
                   <Text style={styles.pickerOptionText}>{item}</Text>
@@ -311,6 +593,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
+  typeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.ui.lightGray,
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.ui.charcoal,
+  },
   input: {
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -320,6 +614,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.ui.charcoal,
     backgroundColor: 'white',
+  },
+  itemBlock: {
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 10,
+    padding: 12,
+    paddingBottom: 2,
+    marginBottom: 12,
+    backgroundColor: Colors.ui.lightGray,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.ui.charcoal,
+    flexShrink: 1,
+  },
+  removeLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.ui.orange,
+    marginLeft: 12,
+  },
+  addButton: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.ui.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  addButtonText: {
+    color: Colors.ui.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   selectField: {
     flexDirection: 'row',
@@ -354,7 +689,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 20,
     paddingBottom: 40,
-    maxHeight: '70%',
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -370,6 +705,57 @@ const styles = StyleSheet.create({
   closeButton: {
     fontSize: 24,
     color: Colors.ui.darkGray,
+  },
+  pickerList: {
+    marginTop: 12,
+    flexGrow: 0,
+  },
+  groupTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.ui.darkGray,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  candidate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: Colors.ui.lightGray,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  candidateSelected: {
+    borderColor: Colors.ui.primary,
+  },
+  candidateFixed: {
+    opacity: 0.7,
+  },
+  checkbox: {
+    fontSize: 18,
+    color: Colors.ui.primary,
+    marginRight: 10,
+  },
+  candidateText: {
+    flexShrink: 1,
+  },
+  candidateTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.charcoal,
+  },
+  candidateSubtitle: {
+    fontSize: 12,
+    color: Colors.ui.darkGray,
+    marginTop: 2,
+  },
+  pickerConfirm: {
+    flex: 0,
+    marginTop: 16,
   },
   pickerOption: {
     paddingVertical: 14,
@@ -394,6 +780,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.ui.primary,
     borderRadius: 8,
     paddingVertical: 14,
+    paddingHorizontal: 8,
     alignItems: 'center',
     backgroundColor: 'white',
   },
@@ -401,18 +788,21 @@ const styles = StyleSheet.create({
     color: Colors.ui.primary,
     fontSize: 15,
     fontWeight: '600',
+    textAlign: 'center',
   },
   exportButton: {
     flex: 1,
     backgroundColor: Colors.ui.primary,
     borderRadius: 8,
     paddingVertical: 14,
+    paddingHorizontal: 8,
     alignItems: 'center',
   },
   exportButtonText: {
     color: 'white',
     fontSize: 15,
     fontWeight: '600',
+    textAlign: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,
