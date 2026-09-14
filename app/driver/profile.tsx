@@ -39,6 +39,19 @@ export default function DriverProfileScreen() {
         code={user?.username?.[0]?.toUpperCase() || 'U'}
       />
 
+      {/* Über den Tabs, damit der Weg zurück in beiden Reitern gleich
+          bleibt. canGoBack(): Im Web lässt sich das Profil direkt über
+          seine URL öffnen — dann gibt es keinen Eintrag, zu dem back()
+          zurückspringen könnte, und ohne diesen Zweig passierte nichts. */}
+      <View style={styles.backBar}>
+        <FluidPressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/driver'))}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
+        </FluidPressable>
+      </View>
+
       <View style={styles.tabsContainer}>
         <FluidPressable
           style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
@@ -117,6 +130,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.ui.lightGray,
+  },
+  backBar: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.ui.primary,
   },
   tabsContainer: {
     flexDirection: 'row',

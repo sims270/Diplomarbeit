@@ -87,6 +87,9 @@ interface TankEntryRow {
   liters_diesel: string | number;
   liters_adblue: string | number | null;
   fuel_station: string;
+  price_adblue: string | number | null;
+  price_per_liter: string | number | null;
+  price_total: string | number | null;
 }
 
 // numeric kommt aus PostgREST als String — als Text in die Zelle
@@ -248,7 +251,7 @@ Deno.serve(async (req) => {
   const { data, error: queryError } = await adminClient
     .from("tank_entries")
     .select(
-      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station",
+      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_per_liter, price_total",
     )
     .order("license_plate_key", { ascending: true })
     .order("entry_date", { ascending: true });
@@ -278,16 +281,18 @@ Deno.serve(async (req) => {
     const sheet = workbook.addWorksheet(toSheetName(group, takenSheetNames));
     const entries = group.entries;
 
-    // Preis/Liter und Preis ges. sind bewusst nur Überschriften: die Preise
-    // stehen nicht auf dem Zettel des Fahrers, liegen also auch nicht in
-    // der Datenbank. Beide Spalten bleiben leer, der Chef trägt sie wie
-    // bisher von Hand nach — auch die Gesamtsumme, hier steht bewusst
-    // keine Formel.
+    // Preis/Liter und Preis ges. trägt der Chef in der App ein (siehe
+    // 20260914110000_add_prices_to_tank_entries.sql). Stehen sie hier mit
+    // drin, ist jeder Export vollständig — die Datei darf bei jedem Export
+    // neu geschrieben werden, ohne dass nachgetragene Preise verloren gehen.
+    // Keine Formel für die Gesamtsumme: Auf dem Beleg steht sie oft inklusive
+    // AdBlue oder mit Rabatt, Liter mal Literpreis wäre dann falsch.
     sheet.columns = [
       { header: "Datum", key: "date", width: 14 },
       { header: "km-Stand", key: "km", width: 14 },
       { header: "Liter Diesel", key: "diesel", width: 14 },
       { header: "Liter AdBlue", key: "adblue", width: 14 },
+      { header: "Preis AdBlue", key: "priceAdblue", width: 14 },
       { header: "Tankstelle/Ort", key: "station", width: 32 },
       { header: "Preis/Liter", key: "pricePerLiter", width: 14 },
       { header: "Preis ges.", key: "priceTotal", width: 16 },
@@ -343,9 +348,12 @@ Deno.serve(async (req) => {
             // Leer lassen statt 0 — auf dem Zettel steht dort ein Strich,
             // wenn nichts nachgefüllt wurde.
             adblue: entry.liters_adblue === null ? null : toNumber(entry.liters_adblue),
+            priceAdblue: entry.price_adblue === null ? null : toNumber(entry.price_adblue),
             station: entry.fuel_station,
-            // pricePerLiter und priceTotal werden nicht gesetzt: die Zellen
-            // bleiben leer, damit der Chef sie selbst befüllt.
+            // Leer, solange der Chef den Preis noch nicht eingetragen hat —
+            // so fällt eine fehlende Zeile in Excel sofort auf.
+            pricePerLiter: entry.price_per_liter === null ? null : toNumber(entry.price_per_liter),
+            priceTotal: entry.price_total === null ? null : toNumber(entry.price_total),
           });
         }
       }
@@ -355,6 +363,9 @@ Deno.serve(async (req) => {
     sheet.getColumn("km").numFmt = "#,##0";
     sheet.getColumn("diesel").numFmt = "#,##0.00";
     sheet.getColumn("adblue").numFmt = "#,##0.00";
+    // Zwei bis vier Nachkommastellen: zeigt einen Literpreis (0,8900) wie
+    // einen Betrag (12,50) so, wie er eingetragen wurde.
+    sheet.getColumn("priceAdblue").numFmt = "#,##0.00##";
     // Vier Nachkommastellen, weil Literpreise so notiert werden (1,3775).
     sheet.getColumn("pricePerLiter").numFmt = "#,##0.0000";
     sheet.getColumn("priceTotal").numFmt = '"EUR" #,##0.00';

@@ -16,35 +16,44 @@
 
 // Supabase Edge Function: export-invoice
 //
-// Zwei Aufgaben rund um die Rechnung zu einem erledigten Auftrag:
+// Alles rund um die Rechnung zu erledigten Aufträgen — als Einzelrechnung
+// (eine Ladung) oder als Sammelrechnung (mehrere Ladungen, meist für große
+// Kunden, die nicht jede Fahrt einzeln verrechnet haben wollen):
 //
-//   action "load"   — liefert den Rechnungsinhalt als JSON für das
-//                     Bearbeitungsformular im Chef-Dashboard. Existiert
-//                     noch keine Rechnung, wird sie hier angelegt: die
-//                     Belegnummer vergeben und die Felder aus dem Auftrag
-//                     vorbefüllt.
-//   action "export" — baut daraus die .xlsx-Datei (Vorgabe, wenn nichts
-//                     angegeben ist).
+//   action "load"        — { orderId }: die Rechnung, auf der der Auftrag
+//                          steht, samt allen Positionen. Gibt es keine,
+//                          kommt invoice: null zurück — angelegt wird hier
+//                          nichts, denn erst der Chef entscheidet, ob Einzel-
+//                          oder Sammelrechnung.
+//   action "create"      — { orderIds }: legt die Rechnung über diese
+//                          Aufträge an, vergibt die Belegnummer und füllt
+//                          Kopf und Positionen aus den Aufträgen vor.
+//   action "addItems"    — { invoiceId, orderIds }: weitere Ladungen auf
+//                          eine bestehende Rechnung.
+//   action "removeItem"  — { invoiceId, itemId }: eine Ladung wieder von der
+//                          Rechnung nehmen (nie die letzte).
+//   action "export"      — { invoiceId }: baut daraus die .xlsx-Datei.
 //
-// Beide Wege gehen durch dieselbe Vorbefüllung (ensureInvoice), damit es
-// nur eine Stelle gibt, die weiß, wie aus einem Auftrag eine Rechnung wird.
-// Gedruckt wird ausschließlich, was in der Tabelle invoices steht — der
-// Auftrag wird nach dem Anlegen nicht mehr gelesen. Ändert der Chef die
-// Rechnung, bleibt der Auftrag unangetastet: er dokumentiert die Fahrt, die
-// Rechnung das Geschäft.
+// Alle Wege, die Positionen erzeugen, gehen durch dieselbe Vorbefüllung
+// (prefillInvoice), damit es nur eine Stelle gibt, die weiß, wie aus einem
+// Auftrag eine Rechnungsposition wird. Gedruckt wird ausschließlich, was in
+// invoices und invoice_items steht. Ändert der Chef die Rechnung, bleibt
+// der Auftrag unangetastet: er dokumentiert die Fahrt, die Rechnung das
+// Geschäft.
 //
 // Bewusst nur "der Rest" der Rechnung: Briefkopf oben und das Foto der
 // LKW-Flotte unten sind auf dem Rechnungspapier vorgedruckt. Die Datei
 // füllt also nur den freien Bereich dazwischen — freigehalten wird er über
-// die Druckränder (siehe PAGE_SETUP), nicht über leere Zeilen. Auf dem
-// Bildschirm beginnt die Rechnung damit ganz oben im Blatt, beim Druck
-// rutscht sie unter den vorgedruckten Briefkopf.
+// die Druckränder (siehe PAGE_SETUP), nicht über leere Zeilen. Reicht bei
+// einer Sammelrechnung eine Seite nicht, wird zwischen zwei Positionen
+// umgebrochen; jede Folgeseite liegt wieder auf dem vorgedruckten Papier.
 //
 // Warum Edge Function und nicht im Client: exceljs ist keine Abhängigkeit
 // der App (siehe package.json), und alle privilegierten Serveraufgaben
 // dieses Projekts laufen bereits als Edge Function mit verifyBoss — so wie
 // export-tank-entries, an dem sich diese Function auch sonst orientiert.
 //
+// Tabellen: supabase/migrations/20260914130000_add_collective_invoices.sql
 
 import ExcelJS from "npm:exceljs@4.4.0";
 import {
@@ -111,6 +120,7 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
 }
 
 interface OrderRow {
+  id: string;
   order_nr: string;
   status: string;
   loading_date: string | null;
@@ -122,16 +132,16 @@ interface OrderRow {
   unloading_address: string;
 }
 
+const ORDER_COLUMNS =
+  "id, order_nr, status, loading_date, loading_company, loading_address, loading_meters, " +
+  "unloading_date, unloading_company, unloading_address";
+
 /**
- * Der Rechnungsinhalt, wie er in public.invoices steht — jedes Feld
+ * Der Rechnungskopf, wie er in public.invoices steht — jedes Feld
  * bearbeitbar im Formular des Chef-Dashboards.
- *
- * numeric-Spalten liefert PostgREST als String, damit keine
- * Nachkommastellen verloren gehen; für die Excel-Zelle werden sie in echte
- * Zahlen umgewandelt (toNumber).
  */
 interface InvoiceRow {
-  order_id: string;
+  id: string;
   belegnummer: string | null;
   rechnungsdatum: string | null;
   empfaenger_name: string | null;
@@ -139,6 +149,25 @@ interface InvoiceRow {
   empfaenger_ort: string | null;
   kundennummer: string | null;
   uid_nummer: string | null;
+  ust_satz: string | number | null;
+  zahlungsziel: string | null;
+}
+
+const INVOICE_COLUMNS =
+  "id, belegnummer, rechnungsdatum, empfaenger_name, empfaenger_strasse, " +
+  "empfaenger_ort, kundennummer, uid_nummer, ust_satz, zahlungsziel";
+
+/**
+ * Eine Position = ein verrechneter Auftrag.
+ *
+ * numeric-Spalten liefert PostgREST als String, damit keine
+ * Nachkommastellen verloren gehen; für die Excel-Zelle werden sie in echte
+ * Zahlen umgewandelt (toNumber).
+ */
+interface ItemRow {
+  id: string;
+  order_id: string;
+  reihenfolge: number;
   position_datum: string | null;
   bezeichnung: string | null;
   transportnr: string | null;
@@ -147,22 +176,24 @@ interface InvoiceRow {
   entladestelle: string | null;
   entladedatum: string | null;
   preis: string | number | null;
-  ust_satz: string | number | null;
-  zahlungsziel: string | null;
+  /** Nur zur Anzeige im Formular — welcher Auftrag hinter der Position steht. */
+  order_nr?: string;
 }
 
-const INVOICE_COLUMNS =
-  "order_id, belegnummer, rechnungsdatum, empfaenger_name, empfaenger_strasse, " +
-  "empfaenger_ort, kundennummer, uid_nummer, position_datum, bezeichnung, " +
-  "transportnr, ladestelle, ladedatum, entladestelle, entladedatum, preis, " +
-  "ust_satz, zahlungsziel";
+const ITEM_COLUMNS =
+  "id, order_id, reihenfolge, position_datum, bezeichnung, transportnr, ladestelle, " +
+  "ladedatum, entladestelle, entladedatum, preis, orders(order_nr)";
+
+interface InvoiceWithItems {
+  invoice: InvoiceRow;
+  items: ItemRow[];
+}
 
 /**
  * Ränder in Zoll, damit der Druck in die Lücke des vorgedruckten Papiers
  * fällt. Gemessen an der Musterrechnung: der Briefkopf endet rund 60 mm
  * unter der Blattkante, das Flottenfoto beginnt rund 75 mm über der
- * Unterkante. Dazwischen bleiben auf A4 etwa 160 mm für die Rechnung
- * selbst — mehr als genug für die gut 20 Zeilen, die hier entstehen.
+ * Unterkante. Dazwischen bleiben auf A4 etwa 160 mm für die Rechnung.
  */
 const PAGE_SETUP = {
   paperSize: 9, // A4
@@ -176,6 +207,15 @@ const PAGE_SETUP = {
     footer: 0,
   },
 };
+
+/**
+ * Feste Zeilenhöhe in Punkt, damit sich ausrechnen lässt, wie viel auf eine
+ * Seite passt. 160 mm sind rund 453 pt, bei 13 pt also knapp 35 Zeilen —
+ * mit etwas Luft, damit Excel nicht von sich aus schon früher umbricht und
+ * mitten in einer Position eine zweite, eigene Seite beginnt.
+ */
+const ROW_HEIGHT = 13;
+const ROWS_PER_PAGE = 33;
 
 /** Vorgabe für neue Rechnungen; im Formular änderbar. */
 const MWST_SATZ = 20;
@@ -358,60 +398,58 @@ async function loadCustomer(
   return found;
 }
 
+/** Eigener Fehlertyp, damit der HTTP-Status bis zur Antwort durchkommt. */
+class HttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 /**
- * Die Rechnung zum Auftrag, angelegt und aus dem Auftrag vorbefüllt, falls
- * es sie noch nicht gibt. Existiert sie bereits, wird sie unverändert
- * zurückgegeben — was der Chef im Formular geändert hat, überschreibt hier
- * nichts.
+ * Die Aufträge zu den ids — geprüft, dass es sie gibt und dass sie erledigt
+ * sind. Sortiert nach Ladedatum, damit eine Sammelrechnung die Fahrten in
+ * der Reihenfolge aufführt, in der sie stattgefunden haben.
  */
-async function ensureInvoice(
+async function loadCompletedOrders(
   adminClient: SupabaseClient,
-  orderId: string,
-  order: OrderRow,
-): Promise<InvoiceRow> {
-  const existing = await adminClient
-    .from("invoices")
-    .select(INVOICE_COLUMNS)
-    .eq("order_id", orderId)
-    .maybeSingle();
+  orderIds: string[],
+): Promise<OrderRow[]> {
+  const { data, error } = await adminClient
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .in("id", orderIds);
 
-  if (existing.error) throw new Error(existing.error.message);
-  if (existing.data && (existing.data as InvoiceRow).belegnummer !== null) {
-    return existing.data as InvoiceRow;
+  if (error) throw new HttpError(error.message, 400);
+
+  const orders = (data ?? []) as OrderRow[];
+  if (orders.length !== orderIds.length) {
+    throw new HttpError("Mindestens ein Auftrag wurde nicht gefunden.", 404);
   }
 
-  // Ab hier zwei Fälle, die beide dieselbe Behandlung brauchen: es gibt
-  // noch keine Zeile, oder es gibt eine ohne Inhalt — letzteres bei
-  // Rechnungen, die vor Einführung der bearbeitbaren Felder erzeugt wurden.
-  //
-  // assign_invoice_number deckt beides ab: eine vorhandene Nummer gibt sie
-  // unverändert zurück, sonst vergibt sie die nächste — beim ersten Mal
-  // "01/2026", im nächsten Jahr wieder "01/2027" (siehe
-  // supabase/migrations/20260910120000_create_invoices.sql).
-  const rechnungsdatum = heuteInOesterreich();
-  const { data: belegnummer, error: belegError } = await adminClient.rpc(
-    "assign_invoice_number",
-    { p_order_id: orderId, p_jahr: Number(rechnungsdatum.slice(0, 4)) },
+  // Abgerechnet wird, was gefahren wurde. Die Oberfläche bietet ohnehin nur
+  // erledigte Aufträge an — die Regel gehört trotzdem hierher, damit sie
+  // nicht allein an der Oberfläche hängt.
+  const open = orders.find((order) => order.status !== "completed");
+  if (open) {
+    throw new HttpError(
+      `Auftrag Nr. ${open.order_nr} ist noch nicht erledigt — verrechnet wird erst, was gefahren wurde.`,
+      409,
+    );
+  }
+
+  return orders.sort((a, b) =>
+    (a.loading_date ?? a.unloading_date ?? "").localeCompare(
+      b.loading_date ?? b.unloading_date ?? "",
+    )
   );
+}
 
-  if (belegError) {
-    throw new Error(`Belegnummer konnte nicht vergeben werden: ${belegError.message}`);
-  }
-
+/** Position aus dem Auftrag vorbefüllt. Der Preis bleibt leer — er wird ausgehandelt. */
+function itemPrefill(order: OrderRow) {
   const loading = splitAddress(order.loading_address);
   const unloading = splitAddress(order.unloading_address);
-  const customer = await loadCustomer(adminClient, order.loading_company);
 
-  // Der Preis bleibt leer: er wird pro Fahrt ausgehandelt und steht
-  // nirgends in der App. Genau dafür gibt es das Formular.
-  const prefill = {
-    belegnummer,
-    rechnungsdatum,
-    empfaenger_name: order.loading_company,
-    empfaenger_strasse: loading.street,
-    empfaenger_ort: loading.town,
-    kundennummer: buildKundennummer(customer?.bmd_kto_nr, loading.town),
-    uid_nummer: customer?.uid_nummer ?? "",
+  return {
     position_datum: order.loading_date,
     bezeichnung: buildDescription(order.loading_meters),
     transportnr: order.order_nr,
@@ -420,26 +458,202 @@ async function ensureInvoice(
     entladestelle: unloading.town ? `lt. Weisung in ${unloading.town}` : "",
     entladedatum: order.unloading_date,
     preis: null,
-    ust_satz: MWST_SATZ,
-    zahlungsziel: ZAHLUNGSZIEL,
   };
+}
 
-  const filled = await adminClient
-    .from("invoices")
-    .update(prefill)
+/**
+ * Füllt, was noch nie befüllt wurde: den Kopf (erkennbar an
+ * empfaenger_name = null) aus dem Auftrag der ersten Position, jede
+ * Position (bezeichnung = null) aus ihrem Auftrag. Was der Chef im
+ * Formular geändert hat, überschreibt hier nichts — das Formular speichert
+ * immer Strings, nie null.
+ */
+async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): Promise<void> {
+  const { invoice, items } = await loadInvoiceById(adminClient, invoiceId);
+
+  const emptyItems = items.filter((item) => item.bezeichnung === null);
+  const needsHeader = invoice.empfaenger_name === null;
+  if (!needsHeader && emptyItems.length === 0) return;
+
+  const orderIds = [
+    ...new Set([...emptyItems.map((item) => item.order_id), ...(needsHeader ? [items[0]?.order_id] : [])]),
+  ].filter((id): id is string => Boolean(id));
+
+  const { data, error } = await adminClient.from("orders").select(ORDER_COLUMNS).in("id", orderIds);
+  if (error) throw new HttpError(error.message, 400);
+  const orders = new Map(((data ?? []) as OrderRow[]).map((order) => [order.id, order]));
+
+  for (const item of emptyItems) {
+    const order = orders.get(item.order_id);
+    if (!order) continue;
+    const { error: itemError } = await adminClient
+      .from("invoice_items")
+      .update(itemPrefill(order))
+      .eq("id", item.id);
+    if (itemError) throw new HttpError(itemError.message, 400);
+  }
+
+  const firstOrder = items[0] ? orders.get(items[0].order_id) : undefined;
+  if (needsHeader && firstOrder) {
+    const loading = splitAddress(firstOrder.loading_address);
+    const customer = await loadCustomer(adminClient, firstOrder.loading_company);
+
+    const { error: headerError } = await adminClient
+      .from("invoices")
+      .update({
+        rechnungsdatum: invoice.rechnungsdatum ?? heuteInOesterreich(),
+        empfaenger_name: firstOrder.loading_company,
+        empfaenger_strasse: loading.street,
+        empfaenger_ort: loading.town,
+        kundennummer: buildKundennummer(customer?.bmd_kto_nr, loading.town),
+        uid_nummer: customer?.uid_nummer ?? "",
+        ust_satz: invoice.ust_satz ?? MWST_SATZ,
+        zahlungsziel: invoice.zahlungsziel ?? ZAHLUNGSZIEL,
+      })
+      .eq("id", invoiceId);
+    if (headerError) throw new HttpError(headerError.message, 400);
+  }
+}
+
+async function loadInvoiceById(
+  adminClient: SupabaseClient,
+  invoiceId: string,
+): Promise<InvoiceWithItems> {
+  const [invoiceResult, itemsResult] = await Promise.all([
+    adminClient.from("invoices").select(INVOICE_COLUMNS).eq("id", invoiceId).maybeSingle(),
+    adminClient
+      .from("invoice_items")
+      .select(ITEM_COLUMNS)
+      .eq("invoice_id", invoiceId)
+      .order("reihenfolge", { ascending: true }),
+  ]);
+
+  if (invoiceResult.error) throw new HttpError(invoiceResult.error.message, 400);
+  if (itemsResult.error) throw new HttpError(itemsResult.error.message, 400);
+  if (!invoiceResult.data) throw new HttpError("Rechnung nicht gefunden.", 404);
+
+  // Die eingebettete Auftragsnummer flach machen — der Client soll nicht
+  // wissen müssen, wie PostgREST Beziehungen verschachtelt.
+  const items = ((itemsResult.data ?? []) as (ItemRow & { orders?: { order_nr?: string } | null })[])
+    .map(({ orders, ...item }) => ({ ...item, order_nr: orders?.order_nr ?? "" }));
+
+  return { invoice: invoiceResult.data as InvoiceRow, items };
+}
+
+/** Prüft die ids aus dem Request-Body: nicht leer, keine Doppelten. */
+function parseOrderIds(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new HttpError("orderIds fehlt.", 400);
+  const ids = [...new Set(value.filter((id): id is string => typeof id === "string" && id !== ""))];
+  if (ids.length === 0) throw new HttpError("Keine Aufträge ausgewählt.", 400);
+  return ids;
+}
+
+/** Einzelne Zeile oder unique-Verletzung — beides heißt: schon verrechnet. */
+function alreadyBilled(message: string): boolean {
+  return message.includes("bereits auf einer Rechnung") || message.includes("duplicate key");
+}
+
+async function handleLoad(adminClient: SupabaseClient, orderId: string) {
+  const { data, error } = await adminClient
+    .from("invoice_items")
+    .select("invoice_id")
     .eq("order_id", orderId)
-    .select(INVOICE_COLUMNS)
-    .single();
+    .maybeSingle();
 
-  if (filled.error) throw new Error(filled.error.message);
-  return filled.data as InvoiceRow;
+  if (error) throw new HttpError(error.message, 400);
+  if (!data) return { invoice: null, items: [] };
+
+  const invoiceId = (data as { invoice_id: string }).invoice_id;
+  // Rechnungen, die vor dieser Fassung angelegt wurden, können noch
+  // unbefüllte Felder haben — beim Öffnen nachholen.
+  await prefillInvoice(adminClient, invoiceId);
+  return await loadInvoiceById(adminClient, invoiceId);
+}
+
+async function handleCreate(adminClient: SupabaseClient, orderIds: string[]) {
+  const orders = await loadCompletedOrders(adminClient, orderIds);
+
+  // Belegnummer und Positionen in einer Transaktion (siehe create_invoice):
+  // scheitert eine Position, ist auch die Nummer nicht verbraucht.
+  const rechnungsdatum = heuteInOesterreich();
+  const { data: invoiceId, error } = await adminClient.rpc("create_invoice", {
+    p_order_ids: orders.map((order) => order.id),
+    p_jahr: Number(rechnungsdatum.slice(0, 4)),
+  });
+
+  if (error) {
+    throw new HttpError(
+      alreadyBilled(error.message)
+        ? "Mindestens einer der Aufträge steht bereits auf einer Rechnung."
+        : `Rechnung konnte nicht angelegt werden: ${error.message}`,
+      409,
+    );
+  }
+
+  await prefillInvoice(adminClient, invoiceId as string);
+  return await loadInvoiceById(adminClient, invoiceId as string);
+}
+
+async function handleAddItems(
+  adminClient: SupabaseClient,
+  invoiceId: string,
+  orderIds: string[],
+) {
+  const { items } = await loadInvoiceById(adminClient, invoiceId);
+  const orders = await loadCompletedOrders(adminClient, orderIds);
+
+  const start = items.reduce((max, item) => Math.max(max, item.reihenfolge), 0);
+  const { error } = await adminClient.from("invoice_items").insert(
+    orders.map((order, index) => ({
+      invoice_id: invoiceId,
+      order_id: order.id,
+      reihenfolge: start + index + 1,
+      ...itemPrefill(order),
+    })),
+  );
+
+  if (error) {
+    throw new HttpError(
+      alreadyBilled(error.message)
+        ? "Mindestens einer der Aufträge steht bereits auf einer Rechnung."
+        : error.message,
+      409,
+    );
+  }
+
+  return await loadInvoiceById(adminClient, invoiceId);
+}
+
+async function handleRemoveItem(
+  adminClient: SupabaseClient,
+  invoiceId: string,
+  itemId: string,
+) {
+  const { items } = await loadInvoiceById(adminClient, invoiceId);
+
+  if (!items.some((item) => item.id === itemId)) {
+    throw new HttpError("Position nicht gefunden.", 404);
+  }
+  // Eine Rechnung ohne Position hätte trotzdem eine Belegnummer verbraucht —
+  // und würde leer gedruckt. Die letzte Ladung bleibt deshalb stehen.
+  if (items.length <= 1) {
+    throw new HttpError("Die letzte Ladung einer Rechnung kann nicht entfernt werden.", 409);
+  }
+
+  const { error } = await adminClient.from("invoice_items").delete().eq("id", itemId);
+  if (error) throw new HttpError(error.message, 400);
+
+  return await loadInvoiceById(adminClient, invoiceId);
 }
 
 /** Baut die .xlsx-Datei — ausschließlich aus dem gespeicherten Inhalt. */
-async function buildWorkbook(invoice: InvoiceRow): Promise<ArrayBuffer> {
+async function buildWorkbook({ invoice, items }: InvoiceWithItems): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.created = new Date();
-  const sheet = workbook.addWorksheet("Rechnung", { pageSetup: PAGE_SETUP });
+  const sheet = workbook.addWorksheet("Rechnung", {
+    pageSetup: PAGE_SETUP,
+    properties: { defaultRowHeight: ROW_HEIGHT },
+  });
 
   // Arial 10 wie auf der bisherigen Rechnung — ExcelJS' Standard wäre
   // Calibri 11 und damit sichtbar breiter als der vorgedruckte Briefkopf.
@@ -466,8 +680,22 @@ async function buildWorkbook(invoice: InvoiceRow): Promise<ArrayBuffer> {
       if (value !== undefined) row.getCell(key).value = value as never;
     }
     row.font = BASE_FONT;
+    row.height = ROW_HEIGHT;
     return row;
   }
+
+  function writeTableHeader(rowNumber: number) {
+    const headerRow = writeRow(rowNumber, { a: "Datum", b: "Bezeichnung", e: "Preis" });
+    headerRow.font = { ...BASE_FONT, bold: true };
+    headerRow.getCell("e").alignment = { horizontal: "center" };
+    for (const key of ["a", "b", "c", "d", "e"]) {
+      headerRow.getCell(key).border = { bottom: { style: "thin" } };
+    }
+  }
+
+  // Die Seitenzahl im Kopf steht erst fest, wenn alle Positionen verteilt
+  // sind — deshalb wird sie am Ende nachgetragen.
+  const pageNumberCells: Array<{ row: number; page: number }> = [];
 
   // --- Empfänger und Rechnungskopf -----------------------------------------
   const titleRow = writeRow(1, {
@@ -487,7 +715,8 @@ async function buildWorkbook(invoice: InvoiceRow): Promise<ArrayBuffer> {
     c: "Datum:",
     e: toExcelDate(invoice.rechnungsdatum),
   });
-  writeRow(4, { c: "Seite:", e: 1 });
+  writeRow(4, { c: "Seite:" });
+  pageNumberCells.push({ row: 4, page: 1 });
   writeRow(5, { c: "Kundennummer:", e: invoice.kundennummer ?? "" });
   writeRow(6, { c: "Ihre UID-Nr.:", e: invoice.uid_nummer ?? "" });
 
@@ -497,68 +726,125 @@ async function buildWorkbook(invoice: InvoiceRow): Promise<ArrayBuffer> {
   sheet.getRow(3).getCell("e").numFmt = "dd.mm.yyyy";
   sheet.getRow(3).getCell("e").alignment = { horizontal: "right" };
 
-  // --- Positionstabelle ----------------------------------------------------
-  const headerRow = writeRow(8, { a: "Datum", b: "Bezeichnung", e: "Preis" });
-  headerRow.font = { ...BASE_FONT, bold: true };
-  headerRow.getCell("e").alignment = { horizontal: "center" };
-  for (const key of ["a", "b", "c", "d", "e"]) {
-    headerRow.getCell(key).border = { bottom: { style: "thin" } };
+  writeTableHeader(8);
+
+  let page = 1;
+  let pageStart = 1;
+  let next = 9;
+
+  /**
+   * Bricht vor einem Block um, der nicht mehr ganz auf die Seite passt —
+   * eine Position soll nie auf zwei Blätter zerfallen. Die Folgeseite
+   * beginnt mit Belegnummer, Seitenzahl und dem Tabellenkopf, damit jedes
+   * Blatt für sich zuzuordnen ist.
+   */
+  function ensureRoom(rows: number) {
+    if (next - pageStart + rows <= ROWS_PER_PAGE) return;
+
+    sheet.getRow(next - 1).addPageBreak();
+    page += 1;
+    pageStart = next;
+
+    const continued = writeRow(next, {
+      a: invoice.belegnummer ? `Rechnung ${invoice.belegnummer}` : "Rechnung",
+      c: "Seite:",
+    });
+    continued.getCell("a").font = { ...BASE_FONT, bold: true };
+    continued.getCell("e").alignment = { horizontal: "right" };
+    pageNumberCells.push({ row: next, page });
+
+    writeTableHeader(next + 2);
+    next += 3;
   }
 
-  const positionRow = writeRow(9, {
-    a: toExcelDate(invoice.position_datum),
-    b: invoice.bezeichnung ?? "",
-  });
-  positionRow.getCell("a").numFmt = "dd.mm.yyyy";
-  positionRow.getCell("b").font = { ...BASE_FONT, bold: true };
+  // --- Positionen ------------------------------------------------------------
+  // Die Einzelrechnung sieht aus wie bisher: Ort und "am <Datum>"
+  // zweizeilig, sieben Zeilen je Position. Auf der Sammelrechnung steht
+  // beides in einer Zeile ("lt. Weisung in A-8770 Musterdorf am 01.09.2026")
+  // — sonst passen schon drei Ladungen samt Summen nicht mehr auf ein Blatt.
+  // Dazu je eine Leerzeile als Abstand.
+  const compact = items.length > 1;
+  const ITEM_ROWS = compact ? 6 : 8;
 
-  // Ohne Transportnummer bleibt die Zeile leer, statt ein nacktes
-  // "Transportnr." zu drucken.
-  const transportnr = invoice.transportnr?.trim();
-  const transportRow = writeRow(10, { b: transportnr ? `Transportnr. ${transportnr}` : "" });
-  transportRow.getCell("b").font = { ...BASE_FONT, bold: true };
+  /** "lt. Weisung in <Ort>" plus Datum — je nach Layout angehängt oder als eigene Zeile. */
+  function siteLines(site: string | null, isoDate: string | null): [string, string] {
+    const date = toGermanDate(isoDate);
+    const text = site ?? "";
+    if (!compact) return [text, date ? `am ${date}` : ""];
+    return [date ? `${text} am ${date}`.trim() : text, ""];
+  }
 
-  // "lt. Weisung in <Ort>" und darunter "am <Datum>" — zweizeilig wie auf
-  // der bisherigen Rechnung.
-  const ladedatum = toGermanDate(invoice.ladedatum);
-  const entladedatum = toGermanDate(invoice.entladedatum);
+  for (const item of items) {
+    ensureRoom(ITEM_ROWS);
+    const r = next;
 
-  writeRow(11, { b: "Ladestelle:", c: invoice.ladestelle ?? "" });
-  writeRow(12, { c: ladedatum ? `am ${ladedatum}` : "" });
-  writeRow(13, { b: "Entladestelle:", c: invoice.entladestelle ?? "" });
-  writeRow(14, { c: entladedatum ? `am ${entladedatum}` : "" });
+    const positionRow = writeRow(r, {
+      a: toExcelDate(item.position_datum),
+      b: item.bezeichnung ?? "",
+    });
+    positionRow.getCell("a").numFmt = "dd.mm.yyyy";
+    positionRow.getCell("b").font = { ...BASE_FONT, bold: true };
 
-  const pauschalRow = writeRow(15, { b: "pauschal", d: "€", e: toNumber(invoice.preis) });
-  pauschalRow.getCell("e").border = { bottom: { style: "thin" } };
+    // Ohne Transportnummer bleibt die Zeile leer, statt ein nacktes
+    // "Transportnr." zu drucken.
+    const transportnr = item.transportnr?.trim();
+    const transportRow = writeRow(r + 1, { b: transportnr ? `Transportnr. ${transportnr}` : "" });
+    transportRow.getCell("b").font = { ...BASE_FONT, bold: true };
+
+    const [ladeText, ladeDatum] = siteLines(item.ladestelle, item.ladedatum);
+    const [entladeText, entladeDatum] = siteLines(item.entladestelle, item.entladedatum);
+
+    let line = r + 2;
+    writeRow(line++, { b: "Ladestelle:", c: ladeText });
+    if (!compact) writeRow(line++, { c: ladeDatum });
+    writeRow(line++, { b: "Entladestelle:", c: entladeText });
+    if (!compact) writeRow(line++, { c: entladeDatum });
+
+    const pauschalRow = writeRow(line, { b: "pauschal", d: "€", e: toNumber(item.preis) });
+    pauschalRow.getCell("e").border = { bottom: { style: "thin" } };
+    pauschalRow.getCell("e").numFmt = "#,##0.00";
+    pauschalRow.getCell("e").alignment = { horizontal: "right" };
+    pauschalRow.getCell("d").alignment = { horizontal: "right" };
+
+    next = r + ITEM_ROWS;
+  }
 
   // --- Summen --------------------------------------------------------------
   // Nur die Beschriftungen: die Beträge trägt die Buchhaltung wie bisher
   // selbst ein, hier steht bewusst keine Formel.
-  const nettoRow = writeRow(17, { a: "Nettobetrag gesamt:", d: "€" });
+  ensureRoom(5);
+  const s = next;
+
+  const nettoRow = writeRow(s, { a: "Nettobetrag gesamt:", d: "€" });
   nettoRow.font = { ...BASE_FONT, bold: true };
 
   // Der Satz ist im Formular änderbar; numeric kommt als "20.00" an und
   // soll auf der Rechnung als "20 %" stehen.
   const ustSatz = toNumber(invoice.ust_satz);
-  const ustRow = writeRow(18, {
+  const ustRow = writeRow(s + 1, {
     a: ustSatz === null ? "Ust von EUR" : `${ustSatz} % Ust von EUR`,
     d: "€",
   });
   ustRow.getCell("e").border = { bottom: { style: "thin" } };
 
-  const endRow = writeRow(19, { a: "Rechnungsendbetrag:", d: "€" });
+  const endRow = writeRow(s + 2, { a: "Rechnungsendbetrag:", d: "€" });
   endRow.font = { ...BASE_FONT, bold: true };
   endRow.getCell("e").border = { bottom: { style: "double" } };
 
-  writeRow(21, { a: "Zahlungsziel:", b: invoice.zahlungsziel ?? "" });
-  sheet.getRow(21).getCell("a").font = { ...BASE_FONT, bold: true };
+  writeRow(s + 4, { a: "Zahlungsziel:", b: invoice.zahlungsziel ?? "" });
+  sheet.getRow(s + 4).getCell("a").font = { ...BASE_FONT, bold: true };
 
   // Beträge einheitlich mit zwei Nachkommastellen, rechtsbündig.
-  for (const rowNumber of [15, 17, 18, 19]) {
+  for (const rowNumber of [s, s + 1, s + 2]) {
     const cell = sheet.getRow(rowNumber).getCell("e");
     cell.numFmt = "#,##0.00";
     cell.alignment = { horizontal: "right" };
     sheet.getRow(rowNumber).getCell("d").alignment = { horizontal: "right" };
+  }
+
+  // "1" bei einer Seite wie bisher, sonst "1 von 2".
+  for (const { row, page: pageNumber } of pageNumberCells) {
+    sheet.getRow(row).getCell("e").value = page === 1 ? 1 : `${pageNumber} von ${page}`;
   }
 
   return await workbook.xlsx.writeBuffer();
@@ -577,71 +863,60 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  let orderId: string | undefined;
-  let action = "export";
+  let body: Record<string, unknown> = {};
   try {
-    const body = await req.json();
-    orderId = body?.orderId;
-    if (body?.action === "load") action = "load";
+    body = (await req.json()) ?? {};
   } catch {
-    // Kein oder kaputtes JSON — unten als fehlende orderId behandelt.
+    // Kein oder kaputtes JSON — unten als fehlende Angaben behandelt.
   }
 
-  if (!orderId) {
-    return json({ error: "orderId fehlt." }, 400);
-  }
+  const action = typeof body.action === "string" ? body.action : "export";
+  const invoiceId = typeof body.invoiceId === "string" ? body.invoiceId : "";
+  const orderId = typeof body.orderId === "string" ? body.orderId : "";
 
-  const { data, error: queryError } = await adminClient
-    .from("orders")
-    .select(
-      "order_nr, status, loading_date, loading_company, loading_address, loading_meters, unloading_date, unloading_company, unloading_address",
-    )
-    .eq("id", orderId)
-    .maybeSingle();
-
-  if (queryError) {
-    return json({ error: queryError.message }, 400);
-  }
-  if (!data) {
-    return json({ error: "Auftrag nicht gefunden." }, 404);
-  }
-
-  const order = data as OrderRow;
-
-  // Abgerechnet wird, was gefahren wurde. Der Bereich erscheint ohnehin
-  // erst beim erledigten Auftrag — die Regel gehört trotzdem hierher, damit
-  // sie nicht allein an der Oberfläche hängt (gleiche Aufteilung wie bei
-  // den Auftragsdokumenten, siehe app/services/orderDocumentService.ts).
-  if (order.status !== "completed") {
-    return json(
-      { error: "Die Rechnung gibt es erst, wenn der Fahrer den Auftrag als erledigt markiert hat." },
-      409,
-    );
-  }
-
-  let invoice: InvoiceRow;
   try {
-    invoice = await ensureInvoice(adminClient, orderId, order);
+    switch (action) {
+      case "load":
+        if (!orderId) throw new HttpError("orderId fehlt.", 400);
+        return json(await handleLoad(adminClient, orderId));
+
+      case "create":
+        return json(await handleCreate(adminClient, parseOrderIds(body.orderIds)));
+
+      case "addItems":
+        if (!invoiceId) throw new HttpError("invoiceId fehlt.", 400);
+        return json(await handleAddItems(adminClient, invoiceId, parseOrderIds(body.orderIds)));
+
+      case "removeItem": {
+        const itemId = typeof body.itemId === "string" ? body.itemId : "";
+        if (!invoiceId || !itemId) throw new HttpError("invoiceId oder itemId fehlt.", 400);
+        return json(await handleRemoveItem(adminClient, invoiceId, itemId));
+      }
+
+      case "export": {
+        if (!invoiceId) throw new HttpError("invoiceId fehlt.", 400);
+        const invoice = await loadInvoiceById(adminClient, invoiceId);
+        const buffer = await buildWorkbook(invoice);
+        const fileName = `Rechnung_${(invoice.invoice.belegnummer ?? "").replace(/\//g, "-")}.xlsx`;
+
+        return new Response(buffer, {
+          headers: {
+            ...corsHeaders,
+            // octet-stream, nicht der exakte xlsx-Typ: supabase-js entscheidet in
+            // functions.invoke am Content-Type, wie der Body gelesen wird, und
+            // macht aus allem Unbekannten UTF-8-Text — die Binärdatei wäre
+            // zerstört. Den richtigen Typ setzt der Client beim Speichern.
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": `attachment; filename="${fileName}"`,
+          },
+        });
+      }
+
+      default:
+        return json({ error: `Unbekannte Aktion "${action}".` }, 400);
+    }
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : "Rechnung konnte nicht angelegt werden." }, 400);
+    if (e instanceof HttpError) return json({ error: e.message }, e.status);
+    return json({ error: e instanceof Error ? e.message : "Rechnung konnte nicht verarbeitet werden." }, 400);
   }
-
-  if (action === "load") {
-    return json({ invoice });
-  }
-
-  const buffer = await buildWorkbook(invoice);
-  const fileName = `Rechnung_${order.order_nr}.xlsx`;
-
-  return new Response(buffer, {
-    headers: {
-      ...corsHeaders,
-      // octet-stream, nicht der exakte xlsx-Typ: supabase-js entscheidet in
-      // functions.invoke am Content-Type, wie der Body gelesen wird, und
-      // macht aus allem Unbekannten UTF-8-Text — die Binärdatei wäre
-      // zerstört. Den richtigen Typ setzt der Client beim Speichern.
-      "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
-    },
-  });
 });

@@ -10,6 +10,8 @@ import { supabase } from '@/lib/supabase';
  * Persisted in Supabase (table: orders, see
  * supabase/migrations/20260907150000_create_orders.sql).
  */
+export type CargoType = 'komplett' | 'beilader';
+
 export interface Order {
   id: string;
   orderNr: string;
@@ -21,6 +23,18 @@ export interface Order {
   status: string;
   // Gesetzt, sobald der Fahrer den Auftrag als erledigt markiert hat.
   completedAt: string | null;
+
+  /**
+   * Komplettladung oder Beilader — der Chef legt das beim Auftrag fest.
+   * Daran hängt, ob der Fahrer beim Erledigen Kilometer eintragen muss:
+   * Bei einer Komplettladung sind sie Pflicht, beim Beilader lassen sie
+   * sich dieser Ladung gar nicht zuordnen und werden nicht abgefragt.
+   */
+  cargoType: CargoType;
+  /** Anfahrt zur Ladestelle. Nur bei Komplettladung, vom Fahrer erfasst. */
+  emptyKm: number | null;
+  /** Ladestelle bis Entladestelle. Nur bei Komplettladung, vom Fahrer erfasst. */
+  freightKm: number | null;
 
   loadingDate: string;
   loadingTimeFrom: string;
@@ -40,9 +54,19 @@ export interface Order {
 // from the sequence shared with externalOrderService (see fieldsToRow and
 // the order_nr_seq comment in the migration) — eigene Aufträge and
 // Fremdaufträge never collide on the same number. Typing one overrides it.
+// emptyKm/freightKm sind hier bewusst nicht dabei: Die trägt der Fahrer
+// beim Erledigen ein, nicht der Chef beim Anlegen — geschrieben werden sie
+// ausschließlich über complete_order.
 export type OrderFields = Omit<
   Order,
-  'id' | 'createdAt' | 'updatedAt' | 'assignedTo' | 'status' | 'completedAt'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'assignedTo'
+  | 'status'
+  | 'completedAt'
+  | 'emptyKm'
+  | 'freightKm'
 >;
 
 // orders.loading_date/unloading_date are real `date` columns — an empty
@@ -65,6 +89,9 @@ function rowToOrder(row: any): Order {
     assignedTo: row.assigned_to,
     status: row.status,
     completedAt: row.completed_at ?? null,
+    cargoType: (row.cargo_type as CargoType | null) ?? 'komplett',
+    emptyKm: row.empty_km ?? null,
+    freightKm: row.freight_km ?? null,
     loadingDate: fromDateColumn(row.loading_date),
     loadingTimeFrom: row.loading_time_from,
     loadingTimeUntil: row.loading_time_until,
@@ -85,6 +112,7 @@ function rowToOrder(row: any): Order {
 // overwritten with an empty string.
 function fieldsToRow(data: OrderFields): Record<string, unknown> {
   const row: Record<string, unknown> = {
+    cargo_type: data.cargoType,
     loading_date: toDateColumn(data.loadingDate),
     loading_time_from: data.loadingTimeFrom,
     loading_time_until: data.loadingTimeUntil,
@@ -185,8 +213,21 @@ export async function assignOrderToDriver(orderId: string, driverId: string): Pr
 // supabase/migrations/20260908110000_driver_complete_order.sql), die den
 // Status setzt und dabei selbst prüft, dass der Auftrag dem angemeldeten
 // Fahrer gehört — die orders-Policies erlauben Fahrern kein UPDATE.
-export async function completeOrder(orderId: string): Promise<Order> {
-  const { data, error } = await supabase.rpc('complete_order', { order_id: orderId });
+// Die Kilometer gehen hier mit durch: Bei einer Komplettladung besteht die
+// Funktion selbst darauf (siehe 20260914100000), beim Beilader verwirft sie
+// sie — zu dieser Ladung allein gehören keine Kilometer.
+export async function completeOrder(
+  orderId: string,
+  km: { emptyKm: number | null; freightKm: number | null } = {
+    emptyKm: null,
+    freightKm: null,
+  }
+): Promise<Order> {
+  const { data, error } = await supabase.rpc('complete_order', {
+    order_id: orderId,
+    empty_km: km.emptyKm,
+    freight_km: km.freightKm,
+  });
 
   if (error) throw new Error(error.message);
   return rowToOrder(data);
