@@ -12,7 +12,9 @@ import { OrderDocuments } from '@/components/OrderDocuments';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { timestampToGerman } from '@/lib/dateFormat';
 import { showAlert } from '@/lib/alert';
@@ -22,6 +24,8 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function ChefOrderDetailScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
@@ -115,7 +119,7 @@ export default function ChefOrderDetailScreen() {
     return (
       <View style={styles.container}>
         <Header title="TRANSLOG PRO" subtitle={t('chefOwnOrder', 'editHeaderSubtitle')} code="CH" />
-        <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+        <ActivityIndicator style={styles.loading} color={c.tint} />
       </View>
     );
   }
@@ -210,50 +214,58 @@ export default function ChefOrderDetailScreen() {
           </View>
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'driverSection')}</Text>
-          {assignedDriver ? (
-            <View style={styles.row}>
-              <Text style={styles.label}>{t('chefOrderDetail', 'assignedDriverLabel')}</Text>
-              <Text style={styles.value}>{assignedDriver.username}</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'notAssigned')}</Text>
-              <Text style={styles.selectDriverTitle}>{t('chefOrderDetail', 'selectDriver')}</Text>
-              {drivers.length === 0 ? (
-                <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'noDriversYet')}</Text>
+        {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+        <View style={styles.pair}>
+          <View style={styles.pairItem}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('chefOrderDetail', 'driverSection')}</Text>
+              {assignedDriver ? (
+                <View style={styles.row}>
+                  <Text style={styles.label}>{t('chefOrderDetail', 'assignedDriverLabel')}</Text>
+                  <Text style={styles.value}>{assignedDriver.username}</Text>
+                </View>
               ) : (
-                <FlatList
-                  scrollEnabled={false}
-                  data={drivers}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <FluidPressable
-                      style={styles.driverOption}
-                      onPress={() => handleAssign(item.id)}
-                      disabled={isAssigning}
-                    >
-                      <Text style={styles.driverName}>{item.username}</Text>
-                    </FluidPressable>
+                <>
+                  <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'notAssigned')}</Text>
+                  <Text style={styles.selectDriverTitle}>{t('chefOrderDetail', 'selectDriver')}</Text>
+                  {drivers.length === 0 ? (
+                    <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'noDriversYet')}</Text>
+                  ) : (
+                    <FlatList
+                      scrollEnabled={false}
+                      data={drivers}
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                        <FluidPressable
+                          style={styles.driverOption}
+                          onPress={() => handleAssign(item.id)}
+                          disabled={isAssigning}
+                        >
+                          <Text style={styles.driverName}>{item.username}</Text>
+                        </FluidPressable>
+                      )}
+                    />
                   )}
-                />
+                </>
               )}
-            </>
-          )}
-        </View>
+            </View>
 
-        {order.status === 'completed' ? (
-          <OrderDocuments orderId={order.id} />
-        ) : (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('orderDocuments', 'title')}</Text>
-            <Text style={styles.documentsHint}>
-              {t('orderDocuments', 'hiddenUntilCompleted')}
-            </Text>
           </View>
-        )}
+          <View style={styles.pairItem}>
+            {order.status === 'completed' ? (
+              <OrderDocuments orderId={order.id} />
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('orderDocuments', 'title')}</Text>
+                <Text style={styles.documentsHint}>
+                  {t('orderDocuments', 'hiddenUntilCompleted')}
+                </Text>
+              </View>
+            )}
 
+          </View>
+        </View>
+        
         <OwnOrderForm
           initialValues={order}
           submitLabel={t('chefOwnOrder', 'saveButton')}
@@ -264,129 +276,92 @@ export default function ChefOrderDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  backLink: {
-    marginBottom: 12,
-  },
-  backLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  loading: {
-    marginTop: 32,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-  },
-  orderHeaderCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusBadgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  section: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  label: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-  },
-  value: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  completedValue: {
-    color: Colors.ui.green,
-  },
-  documentsHint: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    lineHeight: 18,
-  },
-  notAssignedText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginBottom: 12,
-  },
-  selectDriverTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    marginBottom: 8,
-  },
-  driverOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  driverName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    pair: u.pair,
+    pairItem: u.pairItem,
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: u.formColumn,
+    backLink: u.backButton,
+    backLinkText: u.backButtonText,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: Spacing.lg,
+    },
+    emptyStateText: u.emptyStateText,
+    orderHeaderCard: {
+      ...u.card,
+      marginBottom: Spacing.md,
+      alignItems: 'flex-start',
+    },
+    statusBadge: {
+      ...u.badge,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xxs + 1,
+    },
+    statusBadgeText: u.badgeText,
+    section: {
+      ...u.card,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title3,
+      color: c.text,
+      marginBottom: Spacing.xs,
+    },
+    row: {
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+    },
+    label: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    value: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
+    completedValue: {
+      color: c.success,
+    },
+    documentsHint: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    notAssignedText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.sm,
+    },
+    selectDriverTitle: {
+      ...u.sectionTitle,
+      marginTop: Spacing.xs,
+    },
+    driverOption: {
+      ...u.option,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    driverName: u.optionText,
+  });
+};

@@ -1,7 +1,9 @@
 import { type ExternalOrder, getAllExternalOrders } from '@/app/services/externalOrderService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { isoToGerman } from '@/lib/dateFormat';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -16,6 +18,8 @@ import {
 } from 'react-native';
 
 export default function ExternalOrdersListScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const [orders, setOrders] = useState<ExternalOrder[]>([]);
@@ -68,7 +72,7 @@ export default function ExternalOrdersListScreen() {
         </View>
 
         {isLoading ? (
-          <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+          <ActivityIndicator style={styles.loading} color={c.tint} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('chefExternalOrdersList', 'loadFailed')}</Text>
         ) : orders.length === 0 ? (
@@ -78,6 +82,10 @@ export default function ExternalOrdersListScreen() {
           </View>
         ) : (
           <FlatList
+            // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+            key={`grid-${columns}`}
+            numColumns={columns}
+            columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
             data={orders}
             keyExtractor={(item) => item.id}
             refreshControl={
@@ -112,116 +120,78 @@ export default function ExternalOrdersListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-  },
-  addButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loading: {
-    marginTop: 32,
-  },
-  errorText: {
-    textAlign: 'center',
-    marginTop: 32,
-    color: Colors.ui.primary,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-  },
-  orderCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  orderCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  orderNr: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  editLabel: {
-    fontSize: 12,
-    color: Colors.ui.primary,
-    fontWeight: '600',
-  },
-  recipient: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-    marginBottom: 4,
-  },
-  route: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      ...u.column,
+      flex: 1,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      flexShrink: 1,
+    },
+    addButton: u.smallButton,
+    addButtonText: u.smallButtonText,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    errorText: u.errorText,
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSubtext: u.emptyStateSubtext,
+    gridRow: u.gridRow,
+    orderCard: {
+      ...u.gridItem,
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(2, scheme),
+    },
+    orderCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    orderNr: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    editLabel: {
+      ...Typography.subhead,
+      color: c.tint,
+      fontWeight: '600',
+    },
+    recipient: {
+      ...Typography.callout,
+      fontWeight: '600',
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    route: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.xxs,
+    },
+    date: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+    },
+  });
+};

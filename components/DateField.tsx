@@ -1,5 +1,7 @@
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Colors } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { dateToIso, isoToDate, isoToGerman } from '@/lib/dateFormat';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
@@ -16,6 +18,8 @@ interface DateFieldProps {
 // in a sheet with an explicit "Fertig" to close it. Web gets its own
 // implementation in DateField.web.tsx — this module never renders there.
 export function DateField({ value, onChange, placeholder }: DateFieldProps) {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const [showIosPicker, setShowIosPicker] = useState(false);
   const dateValue = value ? isoToDate(value) : new Date();
 
@@ -57,6 +61,8 @@ export function DateField({ value, onChange, placeholder }: DateFieldProps) {
                 value={dateValue}
                 mode="date"
                 display="inline"
+                themeVariant={scheme}
+                accentColor={c.tint}
                 onChange={(_event, selected) => {
                   if (selected) onChange(dateToIso(selected));
                 }}
@@ -72,50 +78,28 @@ export function DateField({ value, onChange, placeholder }: DateFieldProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  field: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  value: {
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  placeholder: {
-    fontSize: 14,
-    color: '#9a9a9a',
-  },
-  icon: {
-    fontSize: 14,
-  },
-  iosOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  iosSheet: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  doneButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  doneButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    field: u.field,
+    value: u.fieldValue,
+    placeholder: u.fieldPlaceholder,
+    icon: {
+      fontSize: 16,
+    },
+    iosOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.c.overlay,
+    },
+    iosSheet: {
+      ...u.modalSheet,
+      maxHeight: undefined,
+    },
+    doneButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.md,
+    },
+    doneButtonText: u.primaryButtonText,
+  });
+};

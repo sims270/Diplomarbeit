@@ -7,6 +7,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
+import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider } from "@/app/context/AuthContext";
 import { SettingsProvider } from "@/contexts/settings-context";
@@ -21,11 +22,30 @@ function RootContent() {
   // of hardcoding animations off for everyone.
   const stackOptions = useStackScreenOptions();
 
+  // Navigations-Theme auf die App-Palette abgestimmt, damit Übergänge
+  // zwischen Screens im Dark Mode nicht weiß aufblitzen.
+  const scheme = colorScheme === "dark" ? "dark" : "light";
+  const baseTheme = scheme === "dark" ? DarkTheme : DefaultTheme;
+  const palette = Colors[scheme];
+  const navigationTheme = {
+    ...baseTheme,
+    colors: {
+      ...baseTheme.colors,
+      primary: palette.tint,
+      background: palette.background,
+      card: palette.barSolid,
+      text: palette.text,
+      border: palette.separator,
+      notification: palette.tintFill,
+    },
+  };
+
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme}>
       <Stack
         screenOptions={{
           headerShown: false,
+          contentStyle: { backgroundColor: palette.background },
           ...stackOptions,
         }}
       >

@@ -4,7 +4,9 @@ import { assignOrderToDriver, getAllOrders, type Order } from '@/app/services/or
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman, timestampToGermanDate } from '@/lib/dateFormat';
@@ -21,6 +23,8 @@ import {
 } from 'react-native';
 
 export default function OrdersListScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
@@ -149,7 +153,7 @@ export default function OrdersListScreen() {
         </View>
 
         {isLoading ? (
-          <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+          <ActivityIndicator style={styles.loading} color={c.tint} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('chefOrdersList', 'loadFailed')}</Text>
         ) : orders.length === 0 ? (
@@ -159,6 +163,10 @@ export default function OrdersListScreen() {
           </View>
         ) : (
           <FlatList
+            // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+            key={`grid-${columns}`}
+            numColumns={columns}
+            columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
             data={orders}
             keyExtractor={(item) => item.id}
             refreshControl={
@@ -299,256 +307,171 @@ export default function OrdersListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-  },
-  addButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loading: {
-    marginTop: 32,
-  },
-  errorText: {
-    textAlign: 'center',
-    marginTop: 32,
-    color: Colors.ui.primary,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-  },
-  orderCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  orderCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  orderNr: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  route: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-    marginBottom: 6,
-  },
-  completedAt: {
-    fontSize: 11,
-    color: Colors.ui.green,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  assignedDriver: {
-    fontSize: 11,
-    color: Colors.ui.green,
-    fontWeight: '600',
-  },
-  assignButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingVertical: 8,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  assignButtonText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  orderInfoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  orderInfo: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginBottom: 4,
-  },
-  driversTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  noDriversText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-    paddingVertical: 12,
-  },
-  driverOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  driverOptionSelected: {
-    backgroundColor: '#FBEAEA',
-    borderWidth: 1,
-    borderColor: Colors.ui.primary,
-  },
-  driverRadio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: Colors.ui.darkGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  driverRadioSelected: {
-    borderColor: Colors.ui.primary,
-  },
-  driverRadioMark: {
-    color: Colors.ui.primary,
-    fontSize: 12,
-  },
-  driverName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-    flex: 1,
-  },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.ui.lightGray,
-  },
-  cancelButtonText: {
-    color: Colors.light.text,
-    fontWeight: '600',
-  },
-  submitButton: {
-    backgroundColor: Colors.ui.primary,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      ...u.column,
+      flex: 1,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      flexShrink: 1,
+    },
+    addButton: u.smallButton,
+    addButtonText: u.smallButtonText,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    errorText: u.errorText,
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSubtext: u.emptyStateSubtext,
+    gridRow: u.gridRow,
+    orderCard: {
+      ...u.gridItem,
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(2, scheme),
+    },
+    orderCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    orderNr: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    statusBadge: u.badge,
+    statusBadgeText: u.badgeText,
+    route: {
+      ...Typography.callout,
+      fontWeight: '600',
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    date: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginBottom: Spacing.xs,
+    },
+    completedAt: {
+      ...Typography.footnote,
+      color: c.success,
+      fontWeight: '600',
+      marginBottom: Spacing.xs,
+    },
+    assignedDriver: {
+      ...Typography.footnote,
+      color: c.text,
+      fontWeight: '600',
+    },
+    assignButton: {
+      ...u.tintedButton,
+      minHeight: Layout.minTouch,
+      marginTop: Spacing.xs,
+    },
+    assignButtonText: {
+      ...u.tintedButtonText,
+      ...Typography.subhead,
+      fontWeight: '600',
+    },
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: {
+      ...u.modalHeader,
+      marginBottom: Spacing.lg,
+    },
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    orderInfoTitle: {
+      ...Typography.headline,
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    orderInfo: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginBottom: Spacing.xxs,
+    },
+    driversTitle: {
+      ...u.sectionTitle,
+      marginTop: Spacing.lg,
+    },
+    noDriversText: {
+      ...u.emptyStateSubtext,
+      paddingVertical: Spacing.sm,
+    },
+    driverOption: {
+      ...u.option,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    driverOptionSelected: {
+      backgroundColor: c.tintSoft,
+      borderColor: c.tint,
+    },
+    driverRadio: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: c.textTertiary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: Spacing.sm,
+    },
+    driverRadioSelected: {
+      borderColor: c.tint,
+    },
+    driverRadioMark: {
+      color: c.tint,
+      fontSize: 12,
+      lineHeight: 14,
+    },
+    driverName: {
+      ...u.optionText,
+      flex: 1,
+    },
+    modalButtonContainer: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginTop: Spacing.lg,
+    },
+    modalButton: {
+      ...u.primaryButton,
+      flex: 1,
+      paddingHorizontal: Spacing.sm,
+    },
+    cancelButton: {
+      backgroundColor: c.surfaceSecondary,
+    },
+    cancelButtonText: u.secondaryButtonText,
+    submitButton: {
+      backgroundColor: c.tintFill,
+    },
+    submitButtonDisabled: u.disabled,
+    submitButtonText: u.primaryButtonText,
+  });
+};

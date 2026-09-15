@@ -7,7 +7,9 @@ import {
 } from '@/app/services/tankEntryService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
@@ -57,6 +59,8 @@ const hasAllPrices = (entry: TankEntry) =>
   (entry.litersAdBlue === null || entry.priceAdBlue !== null);
 
 export default function ChefTanklisteScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
@@ -149,7 +153,7 @@ export default function ChefTanklisteScreen() {
           {isOfflineMode ? (
             <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
           ) : isLoading ? (
-            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+            <ActivityIndicator style={styles.loading} color={c.tint} />
           ) : loadError !== null ? (
             <>
               <Text style={styles.errorText}>{t('chefTankliste', 'loadFailed')}</Text>
@@ -165,6 +169,10 @@ export default function ChefTanklisteScreen() {
             </View>
           ) : (
             <FlatList
+              // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+              key={`grid-${columns}`}
+              numColumns={columns}
+              columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
               data={visible}
               keyExtractor={(item) => item.id}
               keyboardShouldPersistTaps="handled"
@@ -198,6 +206,8 @@ function PriceRow({
   entry: TankEntry;
   onSaved: (entry: TankEntry) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
   const [priceAdBlue, setPriceAdBlue] = useState(formatInput(entry.priceAdBlue, 2));
   const [pricePerLiter, setPricePerLiter] = useState(formatInput(entry.pricePerLiter, 4));
@@ -275,11 +285,12 @@ function PriceRow({
           <View style={styles.priceField}>
             <Text style={styles.priceLabel}>{t('chefTankliste', 'priceAdBlueLabel')}</Text>
             <TextInput
+              placeholderTextColor={c.placeholder}
+              keyboardAppearance={scheme}
               style={styles.input}
               value={priceAdBlue}
               onChangeText={setPriceAdBlue}
               placeholder="0,00"
-              placeholderTextColor="#9a9a9a"
               keyboardType="decimal-pad"
               editable={!isSaving}
             />
@@ -288,11 +299,12 @@ function PriceRow({
         <View style={styles.priceField}>
           <Text style={styles.priceLabel}>{t('chefTankliste', 'pricePerLiterLabel')}</Text>
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             value={pricePerLiter}
             onChangeText={setPricePerLiter}
             placeholder="1,3775"
-            placeholderTextColor="#9a9a9a"
             keyboardType="decimal-pad"
             editable={!isSaving}
           />
@@ -300,11 +312,12 @@ function PriceRow({
         <View style={styles.priceField}>
           <Text style={styles.priceLabel}>{t('chefTankliste', 'priceTotalLabel')}</Text>
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             value={priceTotal}
             onChangeText={setPriceTotal}
             placeholder="567,43"
-            placeholderTextColor="#9a9a9a"
             keyboardType="decimal-pad"
             editable={!isSaving}
           />
@@ -327,166 +340,146 @@ function PriceRow({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginBottom: 12,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterChip: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'white',
-  },
-  filterChipActive: {
-    backgroundColor: Colors.ui.primary,
-    borderColor: Colors.ui.primary,
-  },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  filterTextActive: {
-    color: 'white',
-  },
-  loading: {
-    marginTop: 24,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    lineHeight: 18,
-  },
-  errorDetail: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-  },
-  cardComplete: {
-    borderLeftColor: Colors.ui.green,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardDate: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  cardPlate: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.tertiary,
-  },
-  cardMeta: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  priceField: {
-    flex: 1,
-    // Mit AdBlue sind es drei Felder plus Button — am Handy bricht die Zeile
-    // dann um, statt die Felder unlesbar schmal zu drücken.
-    minWidth: 110,
-  },
-  priceLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  saveButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    minWidth: 90,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    flex: {
+      flex: 1,
+    },
+    content: {
+      ...u.column,
+      flex: 1,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    hint: {
+      ...u.hint,
+      marginTop: 0,
+      marginBottom: Spacing.sm,
+    },
+    // Filter als iOS-Pills
+    filterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+      marginBottom: Spacing.md,
+    },
+    filterChip: {
+      minHeight: Layout.minTouch,
+      justifyContent: 'center',
+      borderRadius: Radius.pill,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: c.surfaceTertiary,
+    },
+    filterChipActive: {
+      backgroundColor: c.tintFill,
+    },
+    filterText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+    },
+    filterTextActive: {
+      color: c.onTint,
+    },
+    loading: {
+      marginTop: Spacing.lg,
+    },
+    errorText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    errorDetail: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginTop: Spacing.xs - 2,
+      fontStyle: 'italic',
+    },
+    emptyState: u.emptyState,
+    emptyStateText: {
+      ...u.emptyStateSubtext,
+      fontWeight: '600',
+    },
+    gridRow: u.gridRow,
+    card: {
+      ...u.gridItem,
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(1, scheme),
+    },
+    cardComplete: {
+      borderLeftColor: c.success,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    cardDate: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    cardPlate: {
+      ...Typography.footnote,
+      fontWeight: '700',
+      color: c.tint,
+      backgroundColor: c.tintSoft,
+      paddingHorizontal: Spacing.xs,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+    },
+    cardMeta: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginTop: Spacing.xxs,
+      marginBottom: Spacing.sm,
+    },
+    priceRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'flex-end',
+      gap: Spacing.xs,
+    },
+    priceField: {
+      flex: 1,
+      // Mit AdBlue sind es drei Felder plus Button — am Handy bricht die Zeile
+      // dann um, statt die Felder unlesbar schmal zu drücken.
+      minWidth: 110,
+    },
+    priceLabel: {
+      ...Typography.caption2,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: Spacing.xxs,
+    },
+    input: {
+      ...u.input,
+      marginBottom: 0,
+      paddingHorizontal: Spacing.sm,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+      fontVariant: ['tabular-nums'],
+    },
+    saveButton: {
+      ...u.primaryButton,
+      minHeight: 48,
+      minWidth: 96,
+      paddingHorizontal: Spacing.md,
+    },
+    saveButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+  });
+};

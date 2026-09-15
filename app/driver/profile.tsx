@@ -1,6 +1,8 @@
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Layout, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { useRouter } from 'expo-router';
@@ -8,6 +10,8 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function DriverProfileScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const { user, isLoading, isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
@@ -22,7 +26,7 @@ export default function DriverProfileScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.ui.primary} />
+        <ActivityIndicator size="large" color={c.tint} />
       </View>
     );
   }
@@ -120,164 +124,130 @@ export default function DriverProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.ui.lightGray,
-  },
-  backBar: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: Colors.ui.primary,
-  },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.ui.darkGray,
-  },
-  tabTextActive: {
-    color: Colors.ui.primary,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  profileCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.ui.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatar: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  profileName: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-    color: Colors.ui.charcoal,
-  },
-  profileRole: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  profileUsername: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    fontStyle: 'italic',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.ui.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-  },
-  settingsSection: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-    color: Colors.ui.charcoal,
-  },
-  settingItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingLabel: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  settingValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    loadingContainer: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    backBar: {
+      ...u.formInset,
+      paddingTop: Spacing.xs,
+    },
+    backButton: {
+      ...u.backButton,
+      marginBottom: 0,
+    },
+    backButtonText: u.backButtonText,
+    tabsContainer: {
+      ...u.segmented,
+      ...u.formInset,
+    },
+    tab: u.segment,
+    tabActive: u.segmentActive,
+    tabText: u.segmentText,
+    tabTextActive: u.segmentTextActive,
+    content: {
+      flex: 1,
+    },
+    contentInner: u.formColumn,
+    profileCard: {
+      ...u.card,
+      padding: Spacing.lg,
+      alignItems: 'center',
+      marginBottom: Spacing.lg,
+      ...shadow(2, scheme),
+    },
+    avatarContainer: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: c.tintFill,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: Spacing.md,
+    },
+    avatar: {
+      fontSize: 36,
+      lineHeight: 42,
+      fontWeight: '700',
+      color: c.onTint,
+    },
+    profileName: {
+      ...Typography.title2,
+      textAlign: 'center',
+      marginBottom: Spacing.xxs,
+      color: c.text,
+    },
+    profileRole: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.xs,
+    },
+    profileUsername: {
+      ...Typography.footnote,
+      color: c.textTertiary,
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      marginBottom: Spacing.lg,
+      gap: Spacing.sm,
+    },
+    statBox: {
+      ...u.card,
+      flexGrow: 1,
+      flexBasis: 96,
+      alignItems: 'center',
+    },
+    statValue: {
+      ...Typography.title3,
+      fontWeight: '700',
+      color: c.tint,
+      marginBottom: Spacing.xxs,
+      fontVariant: ['tabular-nums'],
+    },
+    statLabel: {
+      ...Typography.caption1,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    settingsSection: {
+      ...u.card,
+      paddingVertical: Spacing.xs,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.headline,
+      paddingTop: Spacing.xs,
+      marginBottom: Spacing.xxs,
+      color: c.text,
+    },
+    settingItem: {
+      minHeight: Layout.minTouch,
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
+    },
+    settingLabel: {
+      ...Typography.callout,
+      color: c.textSecondary,
+    },
+    settingValue: {
+      ...Typography.callout,
+      fontWeight: '600',
+      color: c.text,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
+  });
+};

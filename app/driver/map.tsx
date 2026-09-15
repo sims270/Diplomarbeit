@@ -1,8 +1,11 @@
 import { Header } from "@/components/header";
-import { Colors } from "@/constants/theme";
+import { Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { uiStyles } from "@/constants/ui-styles";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function DriverMapScreen() {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.container}>
       <Header title="TRANSLOG PRO" subtitle="Driver map" code="DR" />
@@ -16,25 +19,27 @@ export default function DriverMapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  placeholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  placeholderText: {
-    fontSize: 24,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  placeholderSubtext: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    textAlign: "center",
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    placeholder: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: Spacing.lg,
+    },
+    placeholderText: {
+      ...Typography.title2,
+      color: c.text,
+      marginBottom: Spacing.xs,
+      textAlign: 'center',
+    },
+    placeholderSubtext: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+  });
+};

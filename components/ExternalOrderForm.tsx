@@ -15,7 +15,9 @@ import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Colors } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
@@ -75,6 +77,8 @@ interface ExternalOrderFormProps {
 // all the field UI and validation lives here; each screen only supplies
 // starting values and what "submit" actually does (create vs. update).
 export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: ExternalOrderFormProps) {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
 
   const [form, setForm] = useState<ExternalOrderFields>({ ...emptyFields, ...initialValues });
@@ -206,6 +210,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
 
       <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'orderNrLabel')}</Text>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'orderNrPlaceholder')}
         value={form.orderNr}
@@ -216,6 +222,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
       <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'recipientSection')}</Text>
       <View style={styles.comboRow}>
         <TextInput
+          placeholderTextColor={c.placeholder}
+          keyboardAppearance={scheme}
           style={[styles.input, styles.comboInput]}
           placeholder={t('chefExternalOrder', 'recipientCompanyLabel')}
           value={form.recipientCompany}
@@ -229,6 +237,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         </FluidPressable>
       </View>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={[styles.input, styles.multiline]}
         placeholder={t('chefExternalOrder', 'recipientAddressLabel')}
         value={form.recipientAddress}
@@ -236,36 +246,43 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         multiline
       />
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'recipientContactLabel')}
         value={form.recipientContact}
         onChangeText={set('recipientContact')}
       />
 
-      <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'loadingSection')}</Text>
-      <DateField
-        value={form.loadingDate}
-        onChange={set('loadingDate')}
-        placeholder={t('chefExternalOrder', 'dateLabel')}
-      />
-      <View style={styles.timeRow}>
-        <View style={styles.timeInput}>
-          <TimeField
-            value={form.loadingTimeFrom}
-            onChange={set('loadingTimeFrom')}
-            placeholder={t('chefExternalOrder', 'timeFromLabel')}
+      {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'loadingSection')}</Text>
+          <DateField
+            value={form.loadingDate}
+            onChange={set('loadingDate')}
+            placeholder={t('chefExternalOrder', 'dateLabel')}
           />
-        </View>
-        <View style={styles.timeInput}>
-          <TimeField
-            value={form.loadingTimeUntil}
-            onChange={set('loadingTimeUntil')}
-            placeholder={t('chefExternalOrder', 'timeUntilLabel')}
-          />
+          <View style={styles.timeRow}>
+            <View style={styles.timeInput}>
+              <TimeField
+                value={form.loadingTimeFrom}
+                onChange={set('loadingTimeFrom')}
+                placeholder={t('chefExternalOrder', 'timeFromLabel')}
+              />
+            </View>
+            <View style={styles.timeInput}>
+              <TimeField
+                value={form.loadingTimeUntil}
+                onChange={set('loadingTimeUntil')}
+                placeholder={t('chefExternalOrder', 'timeUntilLabel')}
+              />
         </View>
       </View>
       <View style={styles.comboRow}>
         <TextInput
+          placeholderTextColor={c.placeholder}
+          keyboardAppearance={scheme}
           style={[styles.input, styles.comboInput]}
           placeholder={t('chefExternalOrder', 'companyLabel')}
           value={form.loadingCompany}
@@ -279,30 +296,40 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         </FluidPressable>
       </View>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'addressLabel')}
         value={form.loadingAddress}
         onChangeText={set('loadingAddress')}
       />
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'loadingNumberLabel')}
         value={form.loadingNumber}
         onChangeText={set('loadingNumber')}
       />
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'cargoDescriptionLabel')}
         value={form.cargoDescription}
         onChangeText={set('cargoDescription')}
       />
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'loadingMetersLabel')}
         value={form.loadingMeters}
         onChangeText={set('loadingMeters')}
       />
 
+        </View>
+        <View style={styles.pairItem}>
       <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'unloadingSection')}</Text>
       <DateField
         value={form.unloadingDate}
@@ -327,6 +354,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
       </View>
       <View style={styles.comboRow}>
         <TextInput
+          placeholderTextColor={c.placeholder}
+          keyboardAppearance={scheme}
           style={[styles.input, styles.comboInput]}
           placeholder={t('chefExternalOrder', 'companyLabel')}
           value={form.unloadingCompany}
@@ -340,64 +369,86 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
         </FluidPressable>
       </View>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefExternalOrder', 'addressLabel')}
         value={form.unloadingAddress}
         onChangeText={set('unloadingAddress')}
       />
 
-      <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'conditionsSection')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefExternalOrder', 'freightRateLabel')}
-        value={form.freightRate}
-        onChangeText={set('freightRate')}
-        keyboardType="numeric"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefExternalOrder', 'deadlineSurchargeLabel')}
-        value={form.deadlineSurcharge}
-        onChangeText={set('deadlineSurcharge')}
-        keyboardType="numeric"
-      />
+        </View>
+      </View>
+      
+      {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'conditionsSection')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefExternalOrder', 'freightRateLabel')}
+            value={form.freightRate}
+            onChangeText={set('freightRate')}
+            keyboardType="numeric"
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefExternalOrder', 'deadlineSurchargeLabel')}
+            value={form.deadlineSurcharge}
+            onChangeText={set('deadlineSurcharge')}
+            keyboardType="numeric"
+          />
 
-      <FluidPressable style={styles.selectField} onPress={() => openPicker('paymentTerms')}>
-        <Text style={form.paymentTerms ? styles.selectValue : styles.selectPlaceholder}>
-          {form.paymentTerms || t('chefExternalOrder', 'paymentTermsLabel')}
-        </Text>
-        <Text style={styles.selectChevron}>▾</Text>
-      </FluidPressable>
+          <FluidPressable style={styles.selectField} onPress={() => openPicker('paymentTerms')}>
+            <Text style={form.paymentTerms ? styles.selectValue : styles.selectPlaceholder}>
+              {form.paymentTerms || t('chefExternalOrder', 'paymentTermsLabel')}
+            </Text>
+            <Text style={styles.selectChevron}>▾</Text>
+          </FluidPressable>
 
-      <FluidPressable style={styles.selectField} onPress={() => openPicker('vehicleType')}>
-        <Text style={form.vehicleType ? styles.selectValue : styles.selectPlaceholder}>
-          {form.vehicleType || t('chefExternalOrder', 'vehicleTypeLabel')}
-        </Text>
-        <Text style={styles.selectChevron}>▾</Text>
-      </FluidPressable>
+          <FluidPressable style={styles.selectField} onPress={() => openPicker('vehicleType')}>
+            <Text style={form.vehicleType ? styles.selectValue : styles.selectPlaceholder}>
+              {form.vehicleType || t('chefExternalOrder', 'vehicleTypeLabel')}
+            </Text>
+            <Text style={styles.selectChevron}>▾</Text>
+          </FluidPressable>
 
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        placeholder={t('chefExternalOrder', 'notesLabel')}
-        value={form.notes}
-        onChangeText={set('notes')}
-        multiline
-      />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={[styles.input, styles.multiline]}
+            placeholder={t('chefExternalOrder', 'notesLabel')}
+            value={form.notes}
+            onChangeText={set('notes')}
+            multiline
+          />
 
-      <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'optionalSection')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefExternalOrder', 'licensePlateLabel')}
-        value={form.licensePlate}
-        onChangeText={set('licensePlate')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefExternalOrder', 'driverNameLabel')}
-        value={form.driverName}
-        onChangeText={set('driverName')}
-      />
+        </View>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'optionalSection')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefExternalOrder', 'licensePlateLabel')}
+            value={form.licensePlate}
+            onChangeText={set('licensePlate')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefExternalOrder', 'driverNameLabel')}
+            value={form.driverName}
+            onChangeText={set('driverName')}
+          />
 
+        </View>
+      </View>
       <FluidPressable
         style={[styles.createButton, isSaving && styles.buttonDisabled]}
         onPress={handleSubmit}
@@ -432,6 +483,8 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
             </View>
             {isSearchablePicker && (
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={styles.input}
                 placeholder={t('chefExternalOrder', 'companySearchPlaceholder')}
                 value={companySearch}
@@ -469,144 +522,65 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
   );
 }
 
-const styles = StyleSheet.create({
-  hint: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    textTransform: 'uppercase',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  multiline: {
-    minHeight: 70,
-    textAlignVertical: 'top',
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timeInput: {
-    flex: 1,
-  },
-  comboRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  comboInput: {
-    flex: 1,
-  },
-  comboChevronButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  emptyPickerText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-    paddingVertical: 24,
-  },
-  selectField: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  selectValue: {
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  selectPlaceholder: {
-    fontSize: 14,
-    color: '#9a9a9a',
-  },
-  selectChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  createButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  createButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  vehicleOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  vehicleOptionAddress: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 2,
-  },
-  vehicleOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    pair: u.pair,
+    pairItem: u.pairItem,
+    hint: {
+      ...u.hint,
+      marginTop: 0,
+      marginBottom: Spacing.xs,
+      paddingHorizontal: Spacing.xxs,
+    },
+    sectionTitle: u.sectionTitle,
+    input: u.input,
+    multiline: {
+      minHeight: 96,
+      textAlignVertical: 'top',
+    },
+    timeRow: {
+      flexDirection: 'row',
+      gap: Spacing.xs,
+    },
+    timeInput: {
+      flex: 1,
+    },
+    comboRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.xs,
+    },
+    comboInput: {
+      flex: 1,
+    },
+    comboChevronButton: {
+      ...u.field,
+      width: 48,
+      paddingHorizontal: 0,
+      justifyContent: 'center',
+    },
+    emptyPickerText: {
+      ...u.emptyStateSubtext,
+      paddingVertical: Spacing.lg,
+    },
+    selectField: u.field,
+    selectValue: u.fieldValue,
+    selectPlaceholder: u.fieldPlaceholder,
+    selectChevron: u.chevron,
+    createButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.lg,
+    },
+    createButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    vehicleOption: u.option,
+    vehicleOptionAddress: u.optionSubtext,
+    vehicleOptionText: u.optionText,
+  });
+};

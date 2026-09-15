@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Radius, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 
 export interface StatusCardProps {
   count: number;
@@ -9,6 +10,7 @@ export interface StatusCardProps {
 }
 
 export function StatusCard({ count, label, color }: StatusCardProps) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.card, { borderTopColor: color }]}>
       <Text style={styles.count}>{count}</Text>
@@ -17,31 +19,36 @@ export function StatusCard({ count, label, color }: StatusCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderTopWidth: 3,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  count: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-  },
-});
+const createStyles = ({ c, scheme }: AppTheme) =>
+  StyleSheet.create({
+    // iOS-Widget-Kachel: weiche Fläche, Statusfarbe als schmaler Streifen oben
+    card: {
+      flex: 1,
+      minWidth: 96,
+      backgroundColor: c.surface,
+      borderRadius: Radius.lg,
+      borderTopWidth: 4,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      ...shadow(2, scheme),
+    },
+    count: {
+      ...Typography.title1,
+      fontSize: 32,
+      lineHeight: 38,
+      color: c.text,
+      marginBottom: Spacing.xxs,
+      fontVariant: ['tabular-nums'],
+    },
+    label: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      textAlign: 'center',
+    },
+  });

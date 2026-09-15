@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import React from "react";
+import { StyleSheet } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -8,11 +9,28 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const palette = Colors[colorScheme ?? "light"];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: palette.tint,
+        tabBarInactiveTintColor: palette.tabIconDefault,
+        // iOS-Tab-Bar: Materialfarbe mit Haarlinie statt Schatten
+        tabBarStyle: {
+          backgroundColor: palette.barSolid,
+          borderTopColor: palette.separator,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          letterSpacing: 0.1,
+        },
+        tabBarItemStyle: { minHeight: 44 },
+        sceneStyle: { backgroundColor: palette.background },
         headerShown: false,
         tabBarButton: HapticTab,
       }}

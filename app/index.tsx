@@ -1,6 +1,7 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { PageMeta } from "@/components/page-meta";
-import { Colors, Gradients } from "@/constants/theme";
+import { Colors, Gradients, Layout, Radius, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
@@ -17,6 +18,7 @@ import {
 } from "react-native";
 
 export default function WelcomeScreen() {
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const { isLoading } = useAuth();
   const colorScheme = useColorScheme();
@@ -128,141 +130,167 @@ export default function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  logoImage: {
-    width: 40,
-    height: 40,
-    resizeMode: "contain",
-  },
-  navLinks: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  navLink: {
-    fontSize: 13,
-    color: "#fff",
-    opacity: 0.8,
-  },
-  navDivider: {
-    color: "#fff",
-    opacity: 0.5,
-  },
-  hero: {
-    height: 600,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: 60,
-    position: "relative",
-    overflow: "hidden",
-  },
-  sunContainer: {
-    position: "absolute",
-    top: "25%",
-    zIndex: 1,
-  },
-  sun: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#9b2321",
-    opacity: 0.9,
-    shadowColor: "#9b2321",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-    elevation: 10,
-  },
-  mountains: {
-    position: "absolute",
-    bottom: 0,
-    width: "120%",
-    height: "50%",
-    zIndex: 2,
-  },
-  mountain: {
-    position: "absolute",
-    bottom: 0,
-    backgroundColor: "#1A1A1A",
-  },
-  mountain1: {
-    left: -50,
-    width: 200,
-    height: 250,
-    borderTopLeftRadius: 500,
-    borderTopRightRadius: 500,
-  },
-  mountain2: {
-    left: 50,
-    width: 280,
-    height: 200,
-    borderTopLeftRadius: 500,
-    borderTopRightRadius: 500,
-  },
-  mountain3: {
-    right: -50,
-    width: 250,
-    height: 220,
-    borderTopLeftRadius: 500,
-    borderTopRightRadius: 500,
-  },
-  mountain4: {
-    left: 150,
-    width: 220,
-    height: 180,
-    borderTopLeftRadius: 500,
-    borderTopRightRadius: 500,
-    opacity: 0.8,
-  },
-  mountain5: {
-    right: 150,
-    width: 200,
-    height: 200,
-    borderTopLeftRadius: 500,
-    borderTopRightRadius: 500,
-    opacity: 0.8,
-  },
-  content: {
-    alignItems: "center",
-    zIndex: 3,
-  },
-  mainTitle: {
-    fontSize: 64,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#fff",
-    opacity: 0.8,
-    marginBottom: 32,
-  },
-  seeMoreBtn: {
-    borderWidth: 2,
-    borderColor: "#fff",
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    borderRadius: 4,
-  },
-  seeMoreText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-});
+// Die Startseite ist bewusst eine dunkle Markenseite (Schwarz → Rot) und
+// sieht in Light und Dark Mode gleich aus. Angepasst werden nur Typografie,
+// Touch-Ziele und die Größen je Bildschirmbreite.
+const createStyles = ({ isTablet, gutter }: AppTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.ui.charcoal,
+    },
+    header: {
+      paddingHorizontal: gutter,
+      paddingVertical: Spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.15)',
+    },
+    headerContent: {
+      width: '100%',
+      maxWidth: Layout.wideMaxWidth,
+      alignSelf: 'center',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      columnGap: Spacing.md,
+    },
+    logoImage: {
+      width: 44,
+      height: 44,
+      resizeMode: 'contain',
+    },
+    navLinks: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      columnGap: isTablet ? Spacing.md : Spacing.xxs,
+    },
+    navLink: {
+      ...Typography.subhead,
+      fontWeight: '500',
+      color: '#FFFFFF',
+      opacity: 0.9,
+      minHeight: Layout.minTouch,
+      lineHeight: Layout.minTouch,
+      paddingHorizontal: Spacing.xxs,
+    },
+    navDivider: {
+      color: '#FFFFFF',
+      opacity: 0.35,
+    },
+    hero: {
+      height: isTablet ? 640 : 560,
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      paddingBottom: isTablet ? 72 : Spacing.xxl,
+      paddingHorizontal: gutter,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    sunContainer: {
+      position: 'absolute',
+      top: '22%',
+      zIndex: 1,
+    },
+    sun: {
+      width: isTablet ? 140 : 112,
+      height: isTablet ? 140 : 112,
+      borderRadius: isTablet ? 70 : 56,
+      backgroundColor: Colors.ui.primary,
+      opacity: 0.9,
+      shadowColor: Colors.ui.primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.45,
+      shadowRadius: 36,
+      elevation: 10,
+    },
+    mountains: {
+      position: 'absolute',
+      bottom: 0,
+      width: '120%',
+      height: '50%',
+      zIndex: 2,
+    },
+    mountain: {
+      position: 'absolute',
+      bottom: 0,
+      backgroundColor: Colors.ui.charcoal,
+    },
+    mountain1: {
+      left: -50,
+      width: 200,
+      height: 250,
+      borderTopLeftRadius: 500,
+      borderTopRightRadius: 500,
+    },
+    mountain2: {
+      left: 50,
+      width: 280,
+      height: 200,
+      borderTopLeftRadius: 500,
+      borderTopRightRadius: 500,
+    },
+    mountain3: {
+      right: -50,
+      width: 250,
+      height: 220,
+      borderTopLeftRadius: 500,
+      borderTopRightRadius: 500,
+    },
+    mountain4: {
+      left: 150,
+      width: 220,
+      height: 180,
+      borderTopLeftRadius: 500,
+      borderTopRightRadius: 500,
+      opacity: 0.8,
+    },
+    mountain5: {
+      right: 150,
+      width: 200,
+      height: 200,
+      borderTopLeftRadius: 500,
+      borderTopRightRadius: 500,
+      opacity: 0.8,
+    },
+    content: {
+      width: '100%',
+      maxWidth: 720,
+      alignItems: 'center',
+      zIndex: 3,
+    },
+    mainTitle: {
+      fontSize: isTablet ? 64 : 44,
+      lineHeight: isTablet ? 70 : 50,
+      fontWeight: '800',
+      letterSpacing: isTablet ? -1 : -0.5,
+      color: '#FFFFFF',
+      textAlign: 'center',
+      marginBottom: Spacing.xs,
+    },
+    subtitle: {
+      ...Typography.body,
+      color: '#FFFFFF',
+      opacity: 0.85,
+      textAlign: 'center',
+      marginBottom: Spacing.xl,
+    },
+    // Weiße Pill im iOS-Stil — auf dem roten Verlauf klar sichtbar
+    seeMoreBtn: {
+      minHeight: 52,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.xl,
+      borderRadius: Radius.pill,
+      backgroundColor: '#FFFFFF',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 6,
+    },
+    seeMoreText: {
+      ...Typography.headline,
+      color: '#111111',
+    },
+  });

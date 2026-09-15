@@ -1,7 +1,9 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors } from "@/constants/theme";
+import { Colors, Layout, Radius, shadow, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { uiStyles } from "@/constants/ui-styles";
 import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
@@ -10,6 +12,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 
 export default function LogoutScreen() {
+  const styles = useThemedStyles(createStyles);
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { logout, isLoading } = useAuth();
@@ -41,8 +44,8 @@ export default function LogoutScreen() {
         </ThemedText>
 
         {error ? (
-          <ThemedView style={[styles.errorBox, { backgroundColor: "#ffebee" }]}>
-            <ThemedText style={{ color: "#c62828" }}>{error}</ThemedText>
+          <ThemedView style={[styles.errorBox, { backgroundColor: themeColors.dangerSoft }]}>
+            <ThemedText style={{ color: themeColors.danger }}>{error}</ThemedText>
           </ThemedView>
         ) : null}
 
@@ -50,7 +53,7 @@ export default function LogoutScreen() {
           style={[
             styles.logoutButton,
             {
-              backgroundColor: themeColors.tint,
+              backgroundColor: themeColors.tintFill,
               opacity: isLoading ? 0.6 : 1,
             },
           ]}
@@ -78,46 +81,51 @@ export default function LogoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  contentContainer: {
-    width: "100%",
-    maxWidth: 400,
-  },
-  title: {
-    fontSize: 28,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 24,
-    textAlign: "center",
-    opacity: 0.7,
-  },
-  errorBox: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  logoutButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "white",
-  },
-  cancelButton: {
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: theme.gutter,
+      paddingVertical: Spacing.xl,
+    },
+    // Zentrale Karte wie ein iOS-Sheet
+    contentContainer: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: c.surface,
+      borderRadius: Radius.xl,
+      padding: theme.isTablet ? Spacing.xl : Spacing.lg,
+      ...shadow(3, theme.scheme),
+    },
+    title: {
+      ...Typography.title1,
+      marginBottom: Spacing.xs,
+      textAlign: 'center',
+    },
+    subtitle: {
+      ...Typography.body,
+      color: c.textSecondary,
+      marginBottom: Spacing.lg,
+      textAlign: 'center',
+    },
+    errorBox: {
+      padding: Spacing.sm,
+      borderRadius: Radius.md,
+      marginBottom: Spacing.md,
+    },
+    logoutButton: {
+      ...u.primaryButton,
+      marginBottom: Spacing.xs,
+    },
+    logoutButtonText: u.primaryButtonText,
+    cancelButton: {
+      minHeight: Layout.minTouch,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+};

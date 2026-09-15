@@ -10,7 +10,9 @@ import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Radius, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { dateToIso, isoToGerman } from '@/lib/dateFormat';
@@ -46,6 +48,8 @@ const FUEL_STATION_OPTIONS = [
  * Migration).
  */
 export default function DriverTankListeScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { user, isLoading, isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
@@ -181,7 +185,7 @@ export default function DriverTankListeScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.ui.primary} />
+        <ActivityIndicator size="large" color={c.tint} />
       </View>
     );
   }
@@ -199,99 +203,109 @@ export default function DriverTankListeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('tankliste', 'formTitle')}</Text>
+          {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+          <View style={styles.pair}>
+            <View style={styles.pairItem}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('tankliste', 'formTitle')}</Text>
 
-            <View style={styles.card}>
-              <Text style={styles.label}>{t('tankliste', 'fieldDate')}</Text>
-              <DateField
-                value={entryDate}
-                onChange={setEntryDate}
-                placeholder={t('tankliste', 'fieldDate')}
-              />
+                <View style={styles.card}>
+                  <Text style={styles.label}>{t('tankliste', 'fieldDate')}</Text>
+                  <DateField
+                    value={entryDate}
+                    onChange={setEntryDate}
+                    placeholder={t('tankliste', 'fieldDate')}
+                  />
 
-              <Text style={styles.label}>{t('tankliste', 'fieldLicensePlate')}</Text>
-              <View style={styles.comboRow}>
-                <TextInput
-                  style={[styles.input, styles.comboInput]}
-                  value={licensePlate}
-                  onChangeText={setLicensePlate}
-                  placeholder={t('tankliste', 'placeholderLicensePlate')}
-                  placeholderTextColor="#9a9a9a"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
-                {plateOptions.length > 0 && (
+                  <Text style={styles.label}>{t('tankliste', 'fieldLicensePlate')}</Text>
+                  <View style={styles.comboRow}>
+                    <TextInput
+                      placeholderTextColor={c.placeholder}
+                      keyboardAppearance={scheme}
+                      style={[styles.input, styles.comboInput]}
+                      value={licensePlate}
+                      onChangeText={setLicensePlate}
+                      placeholder={t('tankliste', 'placeholderLicensePlate')}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    {plateOptions.length > 0 && (
+                      <FluidPressable
+                        style={styles.comboChevronButton}
+                        onPress={() => setIsPlatePickerOpen(true)}
+                      >
+                        <Text style={styles.comboChevron}>▾</Text>
+                      </FluidPressable>
+                    )}
+                  </View>
+
+                  <Text style={styles.label}>{t('tankliste', 'fieldKmStand')}</Text>
+                  <TextInput
+                    placeholderTextColor={c.placeholder}
+                    keyboardAppearance={scheme}
+                    style={styles.input}
+                    value={kmStand}
+                    onChangeText={setKmStand}
+                    placeholder={t('tankliste', 'placeholderKmStand')}
+                    keyboardType="numeric"
+                  />
+
+                  <Text style={styles.label}>{t('tankliste', 'fieldLitersDiesel')}</Text>
+                  <TextInput
+                    placeholderTextColor={c.placeholder}
+                    keyboardAppearance={scheme}
+                    style={styles.input}
+                    value={litersDiesel}
+                    onChangeText={setLitersDiesel}
+                    placeholder={t('tankliste', 'placeholderLiters')}
+                    keyboardType="numeric"
+                  />
+
+                  <Text style={styles.label}>{t('tankliste', 'fieldLitersAdBlue')}</Text>
+                  <TextInput
+                    placeholderTextColor={c.placeholder}
+                    keyboardAppearance={scheme}
+                    style={styles.input}
+                    value={litersAdBlue}
+                    onChangeText={setLitersAdBlue}
+                    placeholder={t('tankliste', 'placeholderLiters')}
+                    keyboardType="numeric"
+                  />
+
+                  <Text style={styles.label}>{t('tankliste', 'fieldFuelStation')}</Text>
+                  <View style={styles.comboRow}>
+                    <TextInput
+                      placeholderTextColor={c.placeholder}
+                      keyboardAppearance={scheme}
+                      style={[styles.input, styles.comboInput]}
+                      value={fuelStation}
+                      onChangeText={setFuelStation}
+                      placeholder={t('tankliste', 'placeholderFuelStation')}
+                    />
+                    <FluidPressable
+                      style={styles.comboChevronButton}
+                      onPress={() => setIsStationPickerOpen(true)}
+                    >
+                      <Text style={styles.comboChevron}>▾</Text>
+                    </FluidPressable>
+                  </View>
+
                   <FluidPressable
-                    style={styles.comboChevronButton}
-                    onPress={() => setIsPlatePickerOpen(true)}
+                    style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                    onPress={handleSave}
+                    disabled={isSaving}
                   >
-                    <Text style={styles.comboChevron}>▾</Text>
+                    {isSaving ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>{t('tankliste', 'saveButton')}</Text>
+                    )}
                   </FluidPressable>
-                )}
-              </View>
-
-              <Text style={styles.label}>{t('tankliste', 'fieldKmStand')}</Text>
-              <TextInput
-                style={styles.input}
-                value={kmStand}
-                onChangeText={setKmStand}
-                placeholder={t('tankliste', 'placeholderKmStand')}
-                placeholderTextColor="#9a9a9a"
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.label}>{t('tankliste', 'fieldLitersDiesel')}</Text>
-              <TextInput
-                style={styles.input}
-                value={litersDiesel}
-                onChangeText={setLitersDiesel}
-                placeholder={t('tankliste', 'placeholderLiters')}
-                placeholderTextColor="#9a9a9a"
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.label}>{t('tankliste', 'fieldLitersAdBlue')}</Text>
-              <TextInput
-                style={styles.input}
-                value={litersAdBlue}
-                onChangeText={setLitersAdBlue}
-                placeholder={t('tankliste', 'placeholderLiters')}
-                placeholderTextColor="#9a9a9a"
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.label}>{t('tankliste', 'fieldFuelStation')}</Text>
-              <View style={styles.comboRow}>
-                <TextInput
-                  style={[styles.input, styles.comboInput]}
-                  value={fuelStation}
-                  onChangeText={setFuelStation}
-                  placeholder={t('tankliste', 'placeholderFuelStation')}
-                  placeholderTextColor="#9a9a9a"
-                />
-                <FluidPressable
-                  style={styles.comboChevronButton}
-                  onPress={() => setIsStationPickerOpen(true)}
-                >
-                  <Text style={styles.comboChevron}>▾</Text>
-                </FluidPressable>
-              </View>
-
-              <FluidPressable
-                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.saveButtonText}>{t('tankliste', 'saveButton')}</Text>
-                )}
-              </FluidPressable>
             </View>
           </View>
 
+            </View>
+            <View style={styles.pairItem}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('tankliste', 'listTitle')}</Text>
 
@@ -299,7 +313,7 @@ export default function DriverTankListeScreen() {
               <ActivityIndicator
                 style={styles.loading}
                 size="large"
-                color={Colors.ui.primary}
+                color={c.tint}
               />
             ) : entries.length === 0 ? (
               <View style={styles.emptyState}>
@@ -344,6 +358,8 @@ export default function DriverTankListeScreen() {
                 </View>
               ))
             )}
+          </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -434,195 +450,132 @@ export default function DriverTankListeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  flex: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 16,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  comboRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  comboInput: {
-    flex: 1,
-  },
-  comboChevronButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  comboChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  pickerOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  pickerOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  pickerOptionHint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 2,
-  },
-  saveButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  loading: {
-    marginTop: 24,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-  },
-  emptyStateSub: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  entryCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  entryDate: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  entryPlate: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.tertiary,
-  },
-  entryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  entryLabel: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-  },
-  entryValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme, isDesktop } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    // Laptop/Desktop: Erfassen links, Liste rechts — die Spalte liegt dann am Wrapper
+    pair: isDesktop ? { ...u.column, ...u.pair } : {},
+    pairItem: u.pairItem,
+    container: u.screen,
+    flex: {
+      flex: 1,
+    },
+    loadingContainer: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    content: {
+      flex: 1,
+    },
+    section: isDesktop
+      ? { paddingBottom: Spacing.xs }
+      : { ...u.column, paddingBottom: Spacing.xs },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      marginBottom: Spacing.sm,
+    },
+    card: u.card,
+    // Feldbezeichnung über dem Eingabefeld
+    label: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: Spacing.xs - 2,
+      marginTop: Spacing.xxs,
+    },
+    // In Karten: grau gefüllte Felder ohne Rahmen, wie in iOS-Formularen
+    input: {
+      ...u.input,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    comboRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.xs,
+    },
+    comboInput: {
+      flex: 1,
+    },
+    comboChevronButton: {
+      ...u.field,
+      width: 48,
+      paddingHorizontal: 0,
+      justifyContent: 'center',
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    comboChevron: u.chevron,
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    pickerOption: u.option,
+    pickerOptionText: u.optionText,
+    pickerOptionHint: u.optionSubtext,
+    saveButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.sm,
+    },
+    saveButtonDisabled: u.disabled,
+    saveButtonText: u.primaryButtonText,
+    loading: {
+      marginTop: Spacing.lg,
+    },
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSub: u.emptyStateSubtext,
+    entryCard: {
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(1, scheme),
+    },
+    entryHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.sm,
+    },
+    entryDate: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    entryPlate: {
+      ...Typography.footnote,
+      fontWeight: '700',
+      color: c.tint,
+      backgroundColor: c.tintSoft,
+      paddingHorizontal: Spacing.xs,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+    },
+    entryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+      paddingVertical: Spacing.xxs,
+    },
+    entryLabel: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    entryValue: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      flexShrink: 1,
+      textAlign: 'right',
+      fontVariant: ['tabular-nums'],
+    },
+  });
+};
