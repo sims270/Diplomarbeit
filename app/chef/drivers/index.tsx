@@ -1,6 +1,8 @@
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { supabase } from '@/lib/supabase';
@@ -23,6 +25,8 @@ interface Driver {
 }
 
 export default function DriversListScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
@@ -97,7 +101,7 @@ export default function DriversListScreen() {
         {isOfflineMode ? (
           <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
         ) : isLoading ? (
-          <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+          <ActivityIndicator style={styles.loading} color={c.tint} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('driversList', 'loadFailed')}</Text>
         ) : drivers.length === 0 ? (
@@ -107,6 +111,10 @@ export default function DriversListScreen() {
           </View>
         ) : (
           <FlatList
+            // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+            key={`grid-${columns}`}
+            numColumns={columns}
+            columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
             data={drivers}
             keyExtractor={(item) => item.id}
             refreshControl={
@@ -147,118 +155,82 @@ export default function DriversListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-  },
-  addButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  loading: {
-    marginTop: 32,
-  },
-  errorText: {
-    textAlign: 'center',
-    marginTop: 32,
-    color: Colors.ui.primary,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-  },
-  driverCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  driverAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.ui.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  driverAvatarText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  driverInfo: {
-    flex: 1,
-  },
-  driverUsername: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  driverPlate: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.tertiary,
-    marginTop: 2,
-  },
-  editLabel: {
-    fontSize: 13,
-    color: Colors.ui.primary,
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      ...u.column,
+      flex: 1,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      flexShrink: 1,
+    },
+    addButton: u.smallButton,
+    addButtonText: u.smallButtonText,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    errorText: u.errorText,
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSubtext: u.emptyStateSubtext,
+    // Zeile im Stil einer iOS-Kontaktliste
+    gridRow: u.gridRow,
+    driverCard: {
+      ...u.gridItem,
+      ...u.card,
+      minHeight: 64,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.xs,
+      ...shadow(1, scheme),
+    },
+    driverAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.tintFill,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: Spacing.sm,
+    },
+    driverAvatarText: {
+      ...Typography.headline,
+      color: c.onTint,
+    },
+    driverInfo: {
+      flex: 1,
+    },
+    driverUsername: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    driverPlate: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    editLabel: {
+      ...Typography.subhead,
+      color: c.tint,
+      fontWeight: '600',
+      paddingLeft: Spacing.xs,
+    },
+  });
+};

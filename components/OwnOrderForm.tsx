@@ -10,7 +10,9 @@ import { DateField } from '@/components/DateField';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Colors } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { useEffect, useState } from 'react';
@@ -67,6 +69,8 @@ interface OwnOrderFormProps {
 // makes sense once a job leaves the company (recipient, freight terms,
 // vehicle, legal notes).
 export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderFormProps) {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
 
   const [form, setForm] = useState<OrderFields>({ ...emptyFields, ...initialValues });
@@ -175,48 +179,61 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
 
   return (
     <>
-      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'orderNrLabel')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefOwnOrder', 'orderNrPlaceholder')}
-        value={form.orderNr}
-        onChangeText={set('orderNr')}
-        keyboardType="numeric"
-      />
-
-      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'cargoTypeLabel')}</Text>
-      <FluidPressable style={styles.selectField} onPress={() => openPicker('cargoType')}>
-        <Text style={styles.selectValue}>
-          {t('chefOwnOrder', form.cargoType === 'beilader' ? 'cargoTypeBeilader' : 'cargoTypeKomplett')}
-        </Text>
-        <Text style={styles.selectChevron}>▾</Text>
-      </FluidPressable>
-      <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'cargoTypeHint')}</Text>
-
-      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'loadingSection')}</Text>
-      <DateField
-        value={form.loadingDate}
-        onChange={set('loadingDate')}
-        placeholder={t('chefOwnOrder', 'dateLabel')}
-      />
-      <View style={styles.timeRow}>
-        <View style={styles.timeInput}>
-          <TimeField
-            value={form.loadingTimeFrom}
-            onChange={set('loadingTimeFrom')}
-            placeholder={t('chefOwnOrder', 'timeFromLabel')}
+      {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'orderNrLabel')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefOwnOrder', 'orderNrPlaceholder')}
+            value={form.orderNr}
+            onChangeText={set('orderNr')}
+            keyboardType="numeric"
           />
         </View>
-        <View style={styles.timeInput}>
-          <TimeField
-            value={form.loadingTimeUntil}
-            onChange={set('loadingTimeUntil')}
-            placeholder={t('chefOwnOrder', 'timeUntilLabel')}
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'cargoTypeLabel')}</Text>
+          <FluidPressable style={styles.selectField} onPress={() => openPicker('cargoType')}>
+            <Text style={styles.selectValue}>
+              {t('chefOwnOrder', form.cargoType === 'beilader' ? 'cargoTypeBeilader' : 'cargoTypeKomplett')}
+            </Text>
+            <Text style={styles.selectChevron}>▾</Text>
+          </FluidPressable>
+          <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'cargoTypeHint')}</Text>
+        </View>
+      </View>
+
+      {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'loadingSection')}</Text>
+          <DateField
+            value={form.loadingDate}
+            onChange={set('loadingDate')}
+            placeholder={t('chefOwnOrder', 'dateLabel')}
           />
+          <View style={styles.timeRow}>
+            <View style={styles.timeInput}>
+              <TimeField
+                value={form.loadingTimeFrom}
+                onChange={set('loadingTimeFrom')}
+                placeholder={t('chefOwnOrder', 'timeFromLabel')}
+              />
+            </View>
+            <View style={styles.timeInput}>
+              <TimeField
+                value={form.loadingTimeUntil}
+                onChange={set('loadingTimeUntil')}
+                placeholder={t('chefOwnOrder', 'timeUntilLabel')}
+              />
         </View>
       </View>
       <View style={styles.comboRow}>
         <TextInput
+          placeholderTextColor={c.placeholder}
+          keyboardAppearance={scheme}
           style={[styles.input, styles.comboInput]}
           placeholder={t('chefOwnOrder', 'companyLabel')}
           value={form.loadingCompany}
@@ -230,18 +247,24 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
         </FluidPressable>
       </View>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefOwnOrder', 'addressLabel')}
         value={form.loadingAddress}
         onChangeText={set('loadingAddress')}
       />
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefOwnOrder', 'loadingMetersLabel')}
         value={form.loadingMeters}
         onChangeText={set('loadingMeters')}
       />
 
+        </View>
+        <View style={styles.pairItem}>
       <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'unloadingSection')}</Text>
       <DateField
         value={form.unloadingDate}
@@ -266,6 +289,8 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
       </View>
       <View style={styles.comboRow}>
         <TextInput
+          placeholderTextColor={c.placeholder}
+          keyboardAppearance={scheme}
           style={[styles.input, styles.comboInput]}
           placeholder={t('chefOwnOrder', 'companyLabel')}
           value={form.unloadingCompany}
@@ -279,12 +304,16 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
         </FluidPressable>
       </View>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefOwnOrder', 'addressLabel')}
         value={form.unloadingAddress}
         onChangeText={set('unloadingAddress')}
       />
 
+        </View>
+      </View>
       <FluidPressable
         style={[styles.createButton, isSaving && styles.buttonDisabled]}
         onPress={handleSubmit}
@@ -319,6 +348,8 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
             </View>
             {isLoadingPicker && (
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={styles.input}
                 placeholder={t('chefOwnOrder', 'companySearchPlaceholder')}
                 value={companySearch}
@@ -356,136 +387,55 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   );
 }
 
-const styles = StyleSheet.create({
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    textTransform: 'uppercase',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  timeInput: {
-    flex: 1,
-  },
-  comboRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  comboInput: {
-    flex: 1,
-  },
-  comboChevronButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  emptyPickerText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-    paddingVertical: 24,
-  },
-  selectChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  createButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  createButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  vehicleOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  vehicleOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  selectField: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: 'white',
-  },
-  selectValue: {
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  cargoTypeHint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginTop: 6,
-  },
-  vehicleOptionAddress: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 2,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    pair: u.pair,
+    pairItem: u.pairItem,
+    sectionTitle: u.sectionTitle,
+    input: u.input,
+    timeRow: {
+      flexDirection: 'row',
+      gap: Spacing.xs,
+    },
+    timeInput: {
+      flex: 1,
+    },
+    comboRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.xs,
+    },
+    comboInput: {
+      flex: 1,
+    },
+    comboChevronButton: {
+      ...u.field,
+      width: 48,
+      paddingHorizontal: 0,
+      justifyContent: 'center',
+    },
+    emptyPickerText: {
+      ...u.emptyStateSubtext,
+      paddingVertical: Spacing.lg,
+    },
+    selectChevron: u.chevron,
+    createButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.lg,
+    },
+    createButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    vehicleOption: u.option,
+    vehicleOptionText: u.optionText,
+    selectField: u.field,
+    selectValue: u.fieldValue,
+    cargoTypeHint: u.hint,
+    vehicleOptionAddress: u.optionSubtext,
+  });
+};

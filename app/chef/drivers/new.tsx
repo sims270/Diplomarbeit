@@ -6,7 +6,9 @@ import {
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +26,8 @@ import {
 } from 'react-native';
 
 export default function CreateDriverScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const [username, setUsername] = useState('');
@@ -94,6 +98,8 @@ export default function CreateDriverScreen() {
           <Text style={styles.sectionDescription}>{t('createDriver', 'description')}</Text>
 
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('createDriver', 'usernamePlaceholder')}
             value={username}
@@ -103,6 +109,8 @@ export default function CreateDriverScreen() {
           />
 
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('createDriver', 'passwordPlaceholder')}
             value={password}
@@ -206,147 +214,70 @@ export default function CreateDriverScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-    color: Colors.ui.charcoal,
-  },
-  sectionDescription: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  selectField: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    backgroundColor: 'white',
-  },
-  selectValue: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  selectPlaceholder: {
-    flex: 1,
-    fontSize: 14,
-    color: '#9a9a9a',
-  },
-  comboChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  emptyPickerText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    lineHeight: 19,
-    textAlign: 'center',
-    paddingVertical: 24,
-  },
-  pickerOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  pickerOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  pickerOptionMuted: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    fontStyle: 'italic',
-  },
-  createButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  createButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: u.narrowColumn,
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    card: u.card,
+    input: {
+      ...u.input,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+      marginBottom: Spacing.sm,
+    },
+    selectField: {
+      ...u.field,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+      marginBottom: Spacing.sm,
+    },
+    selectValue: {
+      ...u.fieldValue,
+      flex: 1,
+    },
+    selectPlaceholder: {
+      ...u.fieldPlaceholder,
+      flex: 1,
+    },
+    comboChevron: u.chevron,
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    emptyPickerText: {
+      ...u.emptyStateSubtext,
+      paddingVertical: Spacing.lg,
+    },
+    pickerOption: u.option,
+    pickerOptionText: u.optionText,
+    pickerOptionMuted: {
+      ...u.optionText,
+      color: c.textSecondary,
+      fontStyle: 'italic',
+    },
+    buttonDisabled: u.disabled,
+    sectionTitle: {
+      ...Typography.title3,
+      marginBottom: Spacing.xxs,
+      color: c.text,
+    },
+    sectionDescription: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.md,
+    },
+    createButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.xs,
+    },
+    createButtonText: u.primaryButtonText,
+  });
+};

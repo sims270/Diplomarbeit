@@ -3,7 +3,9 @@ import { completeOrder, getOrderById, type Order } from '@/app/services/orderSer
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman, timestampToGerman } from '@/lib/dateFormat';
@@ -22,6 +24,8 @@ import {
 const EMPTY = '—';
 
 export default function DriverOrderDetailScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
@@ -160,7 +164,7 @@ export default function DriverOrderDetailScreen() {
     return (
       <View style={styles.container}>
         {header}
-        <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+        <ActivityIndicator style={styles.loading} color={c.tint} />
       </View>
     );
   }
@@ -198,28 +202,36 @@ export default function DriverOrderDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'pickupSection')}</Text>
-          {renderRow(t('driverOrderDetail', 'companyLabel'), order.loadingCompany)}
-          {renderRow(t('driverOrderDetail', 'addressLabel'), order.loadingAddress)}
-          {renderRow(t('driverOrderDetail', 'dateLabel'), formatDate(order.loadingDate))}
-          {renderRow(
-            t('driverOrderDetail', 'timeLabel'),
-            formatTimeWindow(order.loadingTimeFrom, order.loadingTimeUntil)
-          )}
-        </View>
+        {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+        <View style={styles.pair}>
+          <View style={styles.pairItem}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'pickupSection')}</Text>
+              {renderRow(t('driverOrderDetail', 'companyLabel'), order.loadingCompany)}
+              {renderRow(t('driverOrderDetail', 'addressLabel'), order.loadingAddress)}
+              {renderRow(t('driverOrderDetail', 'dateLabel'), formatDate(order.loadingDate))}
+              {renderRow(
+                t('driverOrderDetail', 'timeLabel'),
+                formatTimeWindow(order.loadingTimeFrom, order.loadingTimeUntil)
+              )}
+            </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'deliverySection')}</Text>
-          {renderRow(t('driverOrderDetail', 'companyLabel'), order.unloadingCompany)}
-          {renderRow(t('driverOrderDetail', 'addressLabel'), order.unloadingAddress)}
-          {renderRow(t('driverOrderDetail', 'dateLabel'), formatDate(order.unloadingDate))}
-          {renderRow(
-            t('driverOrderDetail', 'timeLabel'),
-            formatTimeWindow(order.unloadingTimeFrom, order.unloadingTimeUntil)
-          )}
-        </View>
+          </View>
+          <View style={styles.pairItem}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'deliverySection')}</Text>
+              {renderRow(t('driverOrderDetail', 'companyLabel'), order.unloadingCompany)}
+              {renderRow(t('driverOrderDetail', 'addressLabel'), order.unloadingAddress)}
+              {renderRow(t('driverOrderDetail', 'dateLabel'), formatDate(order.unloadingDate))}
+              {renderRow(
+                t('driverOrderDetail', 'timeLabel'),
+                formatTimeWindow(order.unloadingTimeFrom, order.unloadingTimeUntil)
+              )}
+            </View>
 
+          </View>
+        </View>
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'cargoSection')}</Text>
           {renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)}
@@ -255,22 +267,24 @@ export default function DriverOrderDetailScreen() {
             <>
               <Text style={styles.kmLabel}>{t('driverOrderDetail', 'emptyKmLabel')}</Text>
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={styles.kmInput}
                 value={emptyKm}
                 onChangeText={setEmptyKm}
                 placeholder={t('driverOrderDetail', 'emptyKmPlaceholder')}
-                placeholderTextColor="#9a9a9a"
                 keyboardType="numeric"
                 editable={!isCompleting}
               />
 
               <Text style={styles.kmLabel}>{t('driverOrderDetail', 'freightKmLabel')}</Text>
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={styles.kmInput}
                 value={freightKm}
                 onChangeText={setFreightKm}
                 placeholder={t('driverOrderDetail', 'freightKmPlaceholder')}
-                placeholderTextColor="#9a9a9a"
                 keyboardType="numeric"
                 editable={!isCompleting}
               />
@@ -323,157 +337,120 @@ export default function DriverOrderDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  loading: {
-    marginTop: 32,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 12,
-  },
-  backLink: {
-    marginBottom: 12,
-  },
-  backLinkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  orderHeaderCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  orderNumberLabel: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  orderNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusBadgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  section: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    gap: 16,
-  },
-  label: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-  },
-  value: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  kmLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  kmInput: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  kmNote: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-  },
-  completeButton: {
-    backgroundColor: Colors.ui.green,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 54,
-  },
-  completeButtonDisabled: {
-    opacity: 0.6,
-  },
-  completeButtonText: {
-    color: 'white',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  completedNote: {
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.green,
-    paddingVertical: 8,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    pair: u.pair,
+    pairItem: u.pairItem,
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: u.formColumn,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    backLink: u.backButton,
+    backLinkText: u.backButtonText,
+    orderHeaderCard: {
+      ...u.card,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    orderNumberLabel: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: 2,
+    },
+    orderNumber: {
+      ...Typography.title2,
+      color: c.text,
+    },
+    statusBadge: {
+      ...u.badge,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xxs + 1,
+    },
+    statusBadgeText: u.badgeText,
+    section: {
+      ...u.card,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title3,
+      color: c.text,
+      marginBottom: Spacing.xs,
+    },
+    // iOS-Listenzeile: Bezeichnung links, Wert rechts, Haarlinie dazwischen
+    row: {
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+      gap: Spacing.md,
+    },
+    label: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    value: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: Spacing.lg,
+    },
+    emptyStateText: {
+      ...u.emptyStateText,
+      marginBottom: Spacing.sm,
+    },
+    kmLabel: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: Spacing.xs - 2,
+      marginTop: Spacing.xs,
+    },
+    kmInput: {
+      ...u.input,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    kmNote: {
+      ...u.hint,
+      marginTop: 0,
+    },
+    completeButton: {
+      ...u.primaryButton,
+      minHeight: 56,
+    },
+    completeButtonDisabled: u.disabled,
+    completeButtonText: u.primaryButtonText,
+    completedNote: {
+      ...Typography.callout,
+      textAlign: 'center',
+      fontWeight: '600',
+      color: c.success,
+      paddingVertical: Spacing.xs,
+    },
+  });
+};

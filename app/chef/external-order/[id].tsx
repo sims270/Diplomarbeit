@@ -7,7 +7,9 @@ import {
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +17,8 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function EditExternalOrderScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,7 +45,7 @@ export default function EditExternalOrderScreen() {
     return (
       <View style={styles.container}>
         <Header title="TRANSLOG PRO" subtitle={t('chefExternalOrder', 'editHeaderSubtitle')} code="CH" />
-        <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+        <ActivityIndicator style={styles.loading} color={c.tint} />
       </View>
     );
   }
@@ -79,33 +83,22 @@ export default function EditExternalOrderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  backButton: {
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  loading: {
-    marginTop: 32,
-  },
-  errorText: {
-    textAlign: 'center',
-    marginTop: 32,
-    color: Colors.ui.primary,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: {
+      ...u.formColumn,
+      paddingBottom: Spacing.xxl,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    errorText: u.errorText,
+  });
+};

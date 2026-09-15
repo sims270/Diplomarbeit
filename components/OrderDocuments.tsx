@@ -6,7 +6,9 @@ import {
   type OrderDocument,
 } from '@/app/services/orderDocumentService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Colors } from '@/constants/theme';
+import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { timestampToGerman } from '@/lib/dateFormat';
@@ -49,6 +51,8 @@ export function OrderDocuments({
   canDelete = false,
   note,
 }: OrderDocumentsProps) {
+  const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const { t } = useTranslation();
 
   const [documents, setDocuments] = useState<OrderDocument[]>([]);
@@ -142,7 +146,7 @@ export function OrderDocuments({
       <Text style={styles.sectionTitle}>{t('orderDocuments', 'title')}</Text>
 
       {isLoading ? (
-        <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+        <ActivityIndicator style={styles.loading} color={c.tint} />
       ) : loadError ? (
         <Text style={styles.errorText}>{t('orderDocuments', 'loadFailed')}</Text>
       ) : documents.length === 0 ? (
@@ -168,7 +172,7 @@ export function OrderDocuments({
                 </Text>
               </View>
               {busyPath === doc.path ? (
-                <ActivityIndicator color={Colors.ui.primary} />
+                <ActivityIndicator color={c.tint} />
               ) : (
                 <Text style={styles.downloadHint}>⬇</Text>
               )}
@@ -210,110 +214,93 @@ export function OrderDocuments({
   );
 }
 
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  loading: {
-    marginVertical: 12,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Colors.ui.orange,
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginBottom: 12,
-  },
-  documentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  documentMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  documentIcon: {
-    fontSize: 18,
-  },
-  documentTexts: {
-    flex: 1,
-  },
-  documentName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  documentMeta: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-  },
-  downloadHint: {
-    fontSize: 16,
-    color: Colors.ui.primary,
-    fontWeight: '700',
-  },
-  deleteButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  deleteButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.ui.orange,
-  },
-  hintText: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-    marginBottom: 12,
-  },
-  uploadButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  uploadButtonDisabled: {
-    opacity: 0.6,
-  },
-  uploadButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  noteText: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-    marginTop: 12,
-    lineHeight: 16,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    section: {
+      ...u.card,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      ...Typography.title3,
+      color: c.text,
+      marginBottom: Spacing.sm,
+    },
+    loading: {
+      marginVertical: Spacing.sm,
+    },
+    errorText: {
+      ...Typography.subhead,
+      color: c.danger,
+      marginBottom: Spacing.sm,
+    },
+    emptyText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.sm,
+    },
+    documentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    documentMain: {
+      flex: 1,
+      minHeight: 56,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: c.surfaceSecondary,
+    },
+    documentIcon: {
+      fontSize: 22,
+    },
+    documentTexts: {
+      flex: 1,
+    },
+    documentName: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+    },
+    documentMeta: {
+      ...Typography.caption1,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    downloadHint: {
+      ...Typography.headline,
+      color: c.tint,
+    },
+    deleteButton: {
+      minHeight: 56,
+      minWidth: Layout.minTouch,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: c.dangerSoft,
+    },
+    deleteButtonText: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.danger,
+    },
+    hintText: {
+      ...u.hint,
+      marginTop: 0,
+      marginBottom: Spacing.sm,
+    },
+    uploadButton: u.primaryButton,
+    uploadButtonDisabled: u.disabled,
+    uploadButtonText: u.primaryButtonText,
+    noteText: {
+      ...u.hint,
+      marginTop: Spacing.sm,
+    },
+  });
+};

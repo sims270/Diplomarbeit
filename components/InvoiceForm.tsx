@@ -14,7 +14,9 @@ import {
 import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Colors } from '@/constants/theme';
+import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
@@ -62,6 +64,8 @@ function sameCompany(a: string, b: string): boolean {
  * ein erneuter Download liefert dieselbe Belegnummer.
  */
 export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormProps) {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
 
   // undefined: lädt noch, null: noch keine Rechnung.
@@ -212,7 +216,7 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
   }
 
   if (form === undefined) {
-    return <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />;
+    return <ActivityIndicator style={styles.loading} color={c.tint} />;
   }
 
   // Aufträge in der Auswahl: der aktuelle ist bei "create" fest dabei und
@@ -276,7 +280,7 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
           <Text style={styles.hint}>{t('chefInvoice', 'pickerHint')}</Text>
 
           {billable === null ? (
-            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+            <ActivityIndicator style={styles.loading} color={c.tint} />
           ) : (
             <ScrollView style={styles.pickerList}>
               {pickerMode === 'create' ? (
@@ -370,51 +374,71 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
         </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>{t('chefInvoice', 'headSection')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'belegnummerLabel')}
-        value={header.belegnummer}
-        onChangeText={setHeader('belegnummer')}
-      />
-      <DateField
-        value={header.rechnungsdatum}
-        onChange={setHeader('rechnungsdatum')}
-        placeholder={t('chefInvoice', 'rechnungsdatumLabel')}
-      />
+      {/* Laptop/Desktop: zwei Spalten nebeneinander */}
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefInvoice', 'headSection')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'belegnummerLabel')}
+            value={header.belegnummer}
+            onChangeText={setHeader('belegnummer')}
+          />
+          <DateField
+            value={header.rechnungsdatum}
+            onChange={setHeader('rechnungsdatum')}
+            placeholder={t('chefInvoice', 'rechnungsdatumLabel')}
+          />
 
-      <Text style={styles.sectionTitle}>{t('chefInvoice', 'recipientSection')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'empfaengerNameLabel')}
-        value={header.empfaengerName}
-        onChangeText={setHeader('empfaengerName')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'empfaengerStrasseLabel')}
-        value={header.empfaengerStrasse}
-        onChangeText={setHeader('empfaengerStrasse')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'empfaengerOrtLabel')}
-        value={header.empfaengerOrt}
-        onChangeText={setHeader('empfaengerOrt')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'kundennummerLabel')}
-        value={header.kundennummer}
-        onChangeText={setHeader('kundennummer')}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('chefInvoice', 'uidNummerLabel')}
-        value={header.uidNummer}
-        onChangeText={setHeader('uidNummer')}
-      />
+        </View>
+        <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefInvoice', 'recipientSection')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'empfaengerNameLabel')}
+            value={header.empfaengerName}
+            onChangeText={setHeader('empfaengerName')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'empfaengerStrasseLabel')}
+            value={header.empfaengerStrasse}
+            onChangeText={setHeader('empfaengerStrasse')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'empfaengerOrtLabel')}
+            value={header.empfaengerOrt}
+            onChangeText={setHeader('empfaengerOrt')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'kundennummerLabel')}
+            value={header.kundennummer}
+            onChangeText={setHeader('kundennummer')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'uidNummerLabel')}
+            value={header.uidNummer}
+            onChangeText={setHeader('uidNummer')}
+          />
 
+        </View>
+      </View>
+      
       <Text style={styles.sectionTitle}>{t('chefInvoice', 'positionSection')}</Text>
       {items.map((item, index) => (
         <View key={item.id} style={styles.itemBlock}>
@@ -439,18 +463,24 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
             placeholder={t('chefInvoice', 'positionDatumLabel')}
           />
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('chefInvoice', 'bezeichnungLabel')}
             value={item.bezeichnung}
             onChangeText={setItem(index, 'bezeichnung')}
           />
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('chefInvoice', 'transportnrLabel')}
             value={item.transportnr}
             onChangeText={setItem(index, 'transportnr')}
           />
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('chefInvoice', 'ladestelleLabel')}
             value={item.ladestelle}
@@ -462,6 +492,8 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
             placeholder={t('chefInvoice', 'ladedatumLabel')}
           />
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('chefInvoice', 'entladestelleLabel')}
             value={item.entladestelle}
@@ -473,6 +505,8 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
             placeholder={t('chefInvoice', 'entladedatumLabel')}
           />
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             placeholder={t('chefInvoice', 'preisLabel')}
             value={item.preis}
@@ -488,7 +522,7 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
         disabled={isBusy}
       >
         {busy === 'adding' || busy === 'removing' ? (
-          <ActivityIndicator color={Colors.ui.primary} />
+          <ActivityIndicator color={c.tint} />
         ) : (
           <Text style={styles.addButtonText}>{t('chefInvoice', 'addItemsButton')}</Text>
         )}
@@ -496,6 +530,8 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
 
       <Text style={styles.sectionTitle}>{t('chefInvoice', 'amountSection')}</Text>
       <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
         style={styles.input}
         placeholder={t('chefInvoice', 'ustSatzLabel')}
         value={header.ustSatz}
@@ -519,7 +555,7 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
           disabled={isBusy}
         >
           {busy === 'saving' ? (
-            <ActivityIndicator color={Colors.ui.primary} />
+            <ActivityIndicator color={c.tint} />
           ) : (
             <Text style={styles.saveButtonText}>{t('chefInvoice', 'saveButton')}</Text>
           )}
@@ -584,241 +620,138 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
   );
 }
 
-const styles = StyleSheet.create({
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    textTransform: 'uppercase',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.ui.lightGray,
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  typeBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  itemBlock: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 10,
-    padding: 12,
-    paddingBottom: 2,
-    marginBottom: 12,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  itemTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    flexShrink: 1,
-  },
-  removeLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.orange,
-    marginLeft: 12,
-  },
-  addButton: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  addButtonText: {
-    color: Colors.ui.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectField: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  selectValue: {
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  selectPlaceholder: {
-    fontSize: 14,
-    color: '#9a9a9a',
-  },
-  selectChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  pickerList: {
-    marginTop: 12,
-    flexGrow: 0,
-  },
-  groupTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  candidate: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  candidateSelected: {
-    borderColor: Colors.ui.primary,
-  },
-  candidateFixed: {
-    opacity: 0.7,
-  },
-  checkbox: {
-    fontSize: 18,
-    color: Colors.ui.primary,
-    marginRight: 10,
-  },
-  candidateText: {
-    flexShrink: 1,
-  },
-  candidateTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  candidateSubtitle: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 2,
-  },
-  pickerConfirm: {
-    flex: 0,
-    marginTop: 16,
-  },
-  pickerOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  pickerOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 20,
-  },
-  saveButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    backgroundColor: 'white',
-  },
-  saveButtonText: {
-    color: Colors.ui.primary,
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  exportButton: {
-    flex: 1,
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  exportButtonText: {
-    color: 'white',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  loading: {
-    marginVertical: 24,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    lineHeight: 18,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    pair: u.pair,
+    pairItem: u.pairItem,
+    sectionTitle: u.sectionTitle,
+    typeBadge: {
+      ...u.badge,
+      backgroundColor: c.surfaceTertiary,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xxs,
+    },
+    typeBadgeText: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.text,
+    },
+    input: u.input,
+    itemBlock: {
+      borderRadius: Radius.lg,
+      padding: Spacing.md,
+      paddingBottom: Spacing.xs,
+      marginBottom: Spacing.sm,
+      backgroundColor: c.surfaceSecondary,
+    },
+    itemHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    itemTitle: {
+      ...Typography.headline,
+      color: c.text,
+      flexShrink: 1,
+    },
+    removeLink: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.danger,
+      minHeight: Layout.minTouch,
+      lineHeight: Layout.minTouch,
+      paddingHorizontal: Spacing.xs,
+    },
+    addButton: {
+      ...u.tintedButton,
+      minHeight: 48,
+      marginBottom: Spacing.xxs,
+    },
+    addButtonText: u.tintedButtonText,
+    selectField: u.field,
+    selectValue: u.fieldValue,
+    selectPlaceholder: u.fieldPlaceholder,
+    selectChevron: u.chevron,
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    pickerList: {
+      marginTop: Spacing.sm,
+      flexGrow: 0,
+    },
+    groupTitle: {
+      ...u.sectionTitle,
+      marginTop: Spacing.md,
+    },
+    candidate: {
+      ...u.option,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    candidateSelected: {
+      borderColor: c.tint,
+      backgroundColor: c.tintSoft,
+    },
+    candidateFixed: {
+      opacity: 0.6,
+    },
+    checkbox: {
+      fontSize: 20,
+      color: c.tint,
+      marginRight: Spacing.sm,
+    },
+    candidateText: {
+      flexShrink: 1,
+    },
+    candidateTitle: u.optionText,
+    candidateSubtitle: u.optionSubtext,
+    pickerConfirm: {
+      flex: 0,
+      marginTop: Spacing.md,
+    },
+    pickerOption: u.option,
+    pickerOptionText: u.optionText,
+    buttonRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+      marginTop: Spacing.lg,
+    },
+    saveButton: {
+      ...u.secondaryButton,
+      flexGrow: 1,
+      flexBasis: 160,
+      paddingHorizontal: Spacing.sm,
+    },
+    saveButtonText: u.secondaryButtonText,
+    exportButton: {
+      ...u.primaryButton,
+      flexGrow: 1,
+      flexBasis: 160,
+      paddingHorizontal: Spacing.sm,
+    },
+    exportButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+    hint: {
+      ...u.hint,
+      marginTop: Spacing.sm,
+      paddingHorizontal: Spacing.xxs,
+    },
+    loading: {
+      marginVertical: Spacing.lg,
+    },
+    errorText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+  });
+};

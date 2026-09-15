@@ -1,12 +1,14 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { PageMeta } from "@/components/page-meta";
-import { Gradients } from "@/constants/theme";
+import { Colors, Gradients, Layout, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function AboutScreen() {
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -72,55 +74,70 @@ export default function AboutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  backBtn: {
-    fontSize: 16,
-    color: "#fff",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 12,
-  },
-  text: {
-    fontSize: 14,
-    color: "#fff",
-    opacity: 0.8,
-    lineHeight: 22,
-  },
-  bulletPoint: {
-    fontSize: 14,
-    color: "#fff",
-    opacity: 0.8,
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-});
+// Business-Seiten gehören zur dunklen Markenoptik der Startseite und sehen
+// in beiden Modi gleich aus. Inhalte stehen auf breiten Bildschirmen in
+// einer lesbaren, mittigen Spalte.
+const readable = { width: '100%', maxWidth: 720 } as const;
+
+const createStyles = ({ isTablet, gutter }: AppTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.ui.charcoal,
+    },
+    header: {
+      paddingHorizontal: gutter,
+      paddingVertical: Spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.15)',
+    },
+    headerContent: {
+      width: '100%',
+      maxWidth: 720,
+      alignSelf: 'center',
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
+    backBtn: {
+      ...Typography.body,
+      color: '#FFFFFF',
+      minHeight: Layout.minTouch,
+      lineHeight: Layout.minTouch,
+      paddingRight: Spacing.xs,
+    },
+    headerTitle: {
+      ...Typography.headline,
+      color: '#FFFFFF',
+      flexShrink: 1,
+      textAlign: 'center',
+    },
+    content: {
+      alignItems: 'center',
+      paddingHorizontal: gutter,
+      paddingTop: isTablet ? Spacing.xl : Spacing.lg,
+      paddingBottom: Spacing.xl,
+    },
+    section: {
+      ...readable,
+      marginBottom: Spacing.xl,
+    },
+    title: {
+      ...readable,
+      ...(isTablet ? Typography.title1 : Typography.title2),
+      color: '#FFFFFF',
+      marginBottom: Spacing.sm,
+    },
+    text: {
+      ...Typography.callout,
+      lineHeight: 24,
+      color: 'rgba(255,255,255,0.85)',
+    },
+    bulletPoint: {
+      ...Typography.callout,
+      color: 'rgba(255,255,255,0.85)',
+      marginBottom: Spacing.xs,
+    },
+  });

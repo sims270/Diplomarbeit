@@ -2,7 +2,9 @@ import { StyleSheet, ScrollView, View, Text, ActivityIndicator } from 'react-nat
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { StatusCard } from '@/components/status-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
@@ -26,6 +28,8 @@ import {
 import { getServiceStatus, getVehicles } from '../services/licensePlateService';
 
 export default function ChefDashboardScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const { isLoading, isAuthenticated } = useAuth();
@@ -144,7 +148,7 @@ export default function ChefDashboardScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.ui.primary} />
+        <ActivityIndicator size="large" color={c.tint} />
       </View>
     );
   }
@@ -311,131 +315,120 @@ export default function ChefDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-  },
-  serviceBanner: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-    padding: 14,
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  serviceBannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.primary,
-  },
-  serviceBannerText: {
-    fontSize: 13,
-    color: Colors.ui.charcoal,
-    marginTop: 2,
-  },
-  serviceBannerPlates: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.tertiary,
-    marginTop: 4,
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  quickActionButton: {
-    flex: 1,
-    backgroundColor: Colors.ui.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  quickActionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  quickActionButtonDisabled: {
-    opacity: 0.6,
-  },
-  quickActionSecondary: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: Colors.ui.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  quickActionSecondaryText: {
-    color: Colors.ui.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  exportFileRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  exportFileText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-  },
-  exportFileLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.ui.primary,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-  },
-  sectionHeaderButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  addButton: {
-    backgroundColor: Colors.ui.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    loadingContainer: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    content: {
+      flex: 1,
+    },
+    statusContainer: {
+      ...u.inset,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.lg,
+    },
+    serviceBanner: {
+      ...u.inset,
+      ...u.card,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      marginTop: Spacing.md,
+      ...shadow(2, scheme),
+    },
+    serviceBannerTitle: {
+      ...Typography.headline,
+      color: c.tint,
+    },
+    serviceBannerText: {
+      ...Typography.subhead,
+      color: c.text,
+      marginTop: Spacing.xxs,
+    },
+    serviceBannerPlates: {
+      ...Typography.subhead,
+      fontWeight: '700',
+      color: c.textSecondary,
+      marginTop: Spacing.xs,
+    },
+    quickActionsRow: {
+      ...u.inset,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      paddingTop: Spacing.md,
+    },
+    quickActionButton: {
+      ...u.primaryButton,
+      flexGrow: 1,
+      flexBasis: 150,
+      minHeight: 48,
+      paddingHorizontal: Spacing.sm,
+    },
+    quickActionButtonText: u.primaryButtonText,
+    quickActionButtonDisabled: u.disabled,
+    quickActionSecondary: {
+      ...u.secondaryButton,
+      backgroundColor: c.surface,
+      flexGrow: 1,
+      flexBasis: 150,
+      minHeight: 48,
+      paddingHorizontal: Spacing.sm,
+      ...shadow(1, scheme),
+    },
+    quickActionSecondaryText: {
+      ...u.secondaryButtonText,
+      color: c.tint,
+    },
+    exportFileRow: {
+      ...u.inset,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingTop: Spacing.xs,
+    },
+    exportFileText: {
+      ...Typography.footnote,
+      flex: 1,
+      color: c.textSecondary,
+    },
+    exportFileLink: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.tint,
+      minHeight: Layout.minTouch,
+      lineHeight: Layout.minTouch,
+      paddingHorizontal: Spacing.xs,
+    },
+    section: {
+      ...u.inset,
+      paddingBottom: Spacing.xl,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+    },
+    sectionHeaderButtons: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+    },
+    addButton: u.smallButton,
+    addButtonText: u.smallButtonText,
+  });
+};

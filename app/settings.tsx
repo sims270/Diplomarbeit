@@ -1,7 +1,9 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors } from "@/constants/theme";
+import { Colors, Layout, Radius, shadow, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { uiStyles } from "@/constants/ui-styles";
 import { Language, ThemePreference, useSettings } from "@/contexts/settings-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
@@ -10,6 +12,7 @@ import React from "react";
 import { StyleSheet, Switch } from "react-native";
 
 export default function SettingsScreen() {
+  const styles = useThemedStyles(createStyles);
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { t } = useTranslation();
@@ -61,7 +64,7 @@ export default function SettingsScreen() {
                   {
                     borderColor: themeColors.tint,
                     backgroundColor: isActive
-                      ? themeColors.tint
+                      ? themeColors.tintFill
                       : "transparent",
                   },
                 ]}
@@ -94,7 +97,7 @@ export default function SettingsScreen() {
                   {
                     borderColor: themeColors.tint,
                     backgroundColor: isActive
-                      ? themeColors.tint
+                      ? themeColors.tintFill
                       : "transparent",
                   },
                 ]}
@@ -123,7 +126,10 @@ export default function SettingsScreen() {
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
-            trackColor={{ true: themeColors.tint }}
+            trackColor={{ true: themeColors.tintFill, false: themeColors.surfaceTertiary }}
+            thumbColor="#FFFFFF"
+            // react-native-web färbt den Knopf sonst türkis (#009688)
+            {...({ activeThumbColor: "#FFFFFF" } as object)}
           />
         </ThemedView>
 
@@ -140,57 +146,77 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  contentContainer: {
-    width: "100%",
-    maxWidth: 400,
-  },
-  title: {
-    fontSize: 28,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 24,
-    textAlign: "center",
-    opacity: 0.7,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  optionsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 28,
-  },
-  optionButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  switchRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  switchLabel: {
-    fontSize: 16,
-  },
-  backButton: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: theme.gutter,
+      paddingVertical: Spacing.xl,
+    },
+    // Zentrale Karte wie ein iOS-Sheet
+    contentContainer: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: c.surface,
+      borderRadius: Radius.xl,
+      padding: theme.isTablet ? Spacing.xl : Spacing.lg,
+      ...shadow(3, theme.scheme),
+    },
+    title: {
+      ...Typography.title1,
+      marginBottom: Spacing.xs,
+      textAlign: 'center',
+    },
+    subtitle: {
+      ...Typography.body,
+      color: c.textSecondary,
+      marginBottom: Spacing.md,
+      textAlign: 'center',
+    },
+    sectionTitle: {
+      ...u.sectionTitle,
+      marginTop: Spacing.md,
+    },
+    // Auswahl als iOS-Segmented-Control, aktive Option rot
+    optionsRow: {
+      flexDirection: 'row',
+      padding: 2,
+      gap: 2,
+      borderRadius: Radius.sm + 2,
+      backgroundColor: c.surfaceTertiary,
+      marginBottom: Spacing.xs,
+    },
+    optionButton: {
+      flex: 1,
+      minHeight: Layout.minTouch - 4,
+      borderWidth: 0,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Spacing.xxs,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    switchRow: {
+      minHeight: 52,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.md,
+      backgroundColor: c.surfaceSecondary,
+      marginBottom: Spacing.lg,
+    },
+    switchLabel: {
+      ...Typography.body,
+      flexShrink: 1,
+    },
+    backButton: {
+      ...u.tintedButton,
+      borderWidth: 0,
+    },
+  });
+};

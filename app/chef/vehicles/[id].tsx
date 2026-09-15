@@ -9,7 +9,9 @@ import {
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
@@ -39,6 +41,8 @@ const formatKm = (km: number) => `${km.toLocaleString('de-DE')} km`;
  * Der Kilometerstand fehlt aus demselben Grund: Er kommt aus der Tankliste.
  */
 export default function EditVehicleScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
@@ -220,21 +224,23 @@ export default function EditVehicleScreen() {
 
           <Text style={styles.label}>{t('vehicles', 'modelLabel')}</Text>
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             value={model}
             onChangeText={setModel}
             placeholder={t('vehicles', 'modelPlaceholder')}
-            placeholderTextColor="#9a9a9a"
             editable={!isSaving}
           />
 
           <Text style={styles.label}>{t('vehicles', 'yearLabel')}</Text>
           <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
             style={styles.input}
             value={yearBuilt}
             onChangeText={setYearBuilt}
             placeholder={t('vehicles', 'yearPlaceholder')}
-            placeholderTextColor="#9a9a9a"
             keyboardType="numeric"
             maxLength={4}
             editable={!isSaving}
@@ -319,7 +325,7 @@ export default function EditVehicleScreen() {
           disabled={busy}
         >
           {isRetiring ? (
-            <ActivityIndicator color={Colors.ui.primary} />
+            <ActivityIndicator color={c.tint} />
           ) : (
             <Text style={styles.retireButtonText}>
               {t('vehicles', isRetired ? 'reactivateButton' : 'retireButton')}
@@ -385,224 +391,135 @@ export default function EditVehicleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 16,
-    color: Colors.ui.charcoal,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 6,
-  },
-  readonlyField: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  readonlyValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-    backgroundColor: 'white',
-  },
-  saveButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  retireButton: {
-    borderWidth: 1,
-    borderColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'white',
-  },
-  retireButtonText: {
-    color: Colors.ui.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionSubTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    textTransform: 'uppercase',
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  selectField: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: 'white',
-  },
-  selectValue: {
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  selectPlaceholder: {
-    fontSize: 14,
-    color: '#9a9a9a',
-  },
-  selectChevron: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-  },
-  serviceBox: {
-    backgroundColor: Colors.ui.lightGray,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 10,
-  },
-  serviceText: {
-    fontSize: 13,
-    color: Colors.ui.charcoal,
-    fontWeight: '600',
-  },
-  serviceRemaining: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginTop: 2,
-  },
-  serviceOverdue: {
-    color: Colors.ui.primary,
-    fontWeight: '700',
-  },
-  serviceButton: {
-    backgroundColor: Colors.ui.tertiary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  serviceButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: Colors.ui.darkGray,
-  },
-  pickerOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 6,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  pickerOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.charcoal,
-  },
-  pickerOptionMuted: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    fontStyle: 'italic',
-  },
-  retiredBanner: {
-    backgroundColor: Colors.ui.lightGray,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  retiredBannerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.charcoal,
-    marginBottom: 4,
-  },
-  retiredBannerText: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: u.narrowColumn,
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    card: u.card,
+    sectionTitle: {
+      ...Typography.title3,
+      marginBottom: Spacing.md,
+      color: c.text,
+    },
+    label: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: Spacing.xs - 2,
+    },
+    readonlyField: {
+      ...u.field,
+      marginBottom: 0,
+      backgroundColor: c.surfaceTertiary,
+      borderColor: 'transparent',
+    },
+    readonlyValue: {
+      ...Typography.body,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    hint: {
+      ...u.hint,
+      marginTop: Spacing.xs - 2,
+      marginBottom: Spacing.md,
+    },
+    input: {
+      ...u.input,
+      marginBottom: Spacing.md,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    saveButton: {
+      ...u.primaryButton,
+      marginTop: Spacing.xs,
+    },
+    saveButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+    retireButton: {
+      ...u.tintedButton,
+      marginTop: Spacing.md,
+    },
+    retireButtonText: u.tintedButtonText,
+    sectionSubTitle: {
+      ...u.sectionTitle,
+      marginTop: Spacing.xs,
+      paddingHorizontal: 0,
+    },
+    selectField: {
+      ...u.field,
+      marginBottom: 0,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    selectValue: u.fieldValue,
+    selectPlaceholder: u.fieldPlaceholder,
+    selectChevron: u.chevron,
+    serviceBox: {
+      backgroundColor: c.surfaceSecondary,
+      borderRadius: Radius.md,
+      padding: Spacing.sm,
+      marginTop: Spacing.sm,
+    },
+    serviceText: {
+      ...Typography.subhead,
+      color: c.text,
+      fontWeight: '600',
+    },
+    serviceRemaining: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    serviceOverdue: {
+      color: c.danger,
+      fontWeight: '700',
+    },
+    // Dunkelrot im Light Mode, dunkles Grau im Dark Mode — weißer Text bleibt lesbar
+    serviceButton: {
+      ...u.primaryButton,
+      backgroundColor: scheme === 'dark' ? c.surfaceTertiary : Colors.ui.tertiary,
+      marginTop: Spacing.md,
+    },
+    serviceButtonText: {
+      ...u.primaryButtonText,
+      color: '#FFFFFF',
+    },
+    modalOverlay: u.modalOverlay,
+    modalContent: u.modalSheet,
+    modalHeader: u.modalHeader,
+    modalTitle: u.modalTitle,
+    closeButton: u.closeButton,
+    pickerOption: u.option,
+    pickerOptionText: u.optionText,
+    pickerOptionMuted: {
+      ...u.optionText,
+      color: c.textSecondary,
+      fontStyle: 'italic',
+    },
+    retiredBanner: {
+      backgroundColor: c.surfaceSecondary,
+      borderRadius: Radius.md,
+      padding: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    retiredBannerTitle: {
+      ...Typography.subhead,
+      fontWeight: '700',
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    retiredBannerText: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+    },
+  });
+};

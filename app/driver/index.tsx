@@ -1,7 +1,9 @@
 import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Colors, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { getOrdersByDriver, Order } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
@@ -11,6 +13,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
 export default function DriverDashboardScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, columns } = useAppTheme();
   const { user, isLoading, isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
@@ -75,7 +79,7 @@ export default function DriverDashboardScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.ui.primary} />
+        <ActivityIndicator size="large" color={c.tint} />
       </View>
     );
   }
@@ -97,7 +101,7 @@ export default function DriverDashboardScreen() {
           <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({assignedOrders.length})</Text>
 
           {isLoadingOrders ? (
-            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+            <ActivityIndicator style={styles.loading} color={c.tint} />
           ) : assignedOrders.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>{t('driverDashboard', 'emptyOrders')}</Text>
@@ -107,6 +111,10 @@ export default function DriverDashboardScreen() {
             </View>
           ) : (
             <FlatList
+              // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+              key={`grid-${columns}`}
+              numColumns={columns}
+              columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
               scrollEnabled={false}
               data={assignedOrders}
               keyExtractor={(item) => item.id}
@@ -166,103 +174,78 @@ export default function DriverDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-    marginBottom: 16,
-  },
-  loading: {
-    marginTop: 32,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: Colors.ui.darkGray,
-    textAlign: 'center',
-  },
-  orderCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  orderNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  locationItem: {
-    marginBottom: 8,
-  },
-  locationLabel: {
-    fontSize: 10,
-    color: Colors.ui.darkGray,
-    fontWeight: '600',
-  },
-  locationText: {
-    fontSize: 12,
-    color: Colors.light.text,
-    fontWeight: '500',
-  },
-  timeText: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-  },
-  metersText: {
-    fontSize: 11,
-    color: Colors.ui.darkGray,
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    loadingContainer: {
+      ...u.screen,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    content: {
+      flex: 1,
+    },
+    section: u.column,
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      marginBottom: Spacing.md,
+    },
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSubtext: u.emptyStateSubtext,
+    gridRow: u.gridRow,
+    orderCard: {
+      ...u.gridItem,
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(2, scheme),
+    },
+    orderHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.sm,
+    },
+    orderNumber: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    statusBadge: u.badge,
+    statusBadgeText: u.badgeText,
+    locationItem: {
+      marginBottom: Spacing.sm,
+    },
+    locationLabel: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: 2,
+    },
+    locationText: {
+      ...Typography.callout,
+      fontWeight: '500',
+      color: c.text,
+    },
+    timeText: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    metersText: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+  });
+};

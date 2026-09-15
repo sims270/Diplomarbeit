@@ -9,7 +9,9 @@ import {
 } from '@/app/services/licensePlateService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
@@ -39,6 +41,8 @@ import {
  * tankt. Deshalb gibt es hier kein km-Feld — nur die Anzeige.
  */
 export default function ChefVehiclesScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { c, scheme, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
@@ -158,30 +162,33 @@ export default function ChefVehiclesScreen() {
             <View style={styles.addCard}>
               <Text style={styles.addTitle}>{t('vehicles', 'addSectionTitle')}</Text>
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={styles.input}
                 value={newPlate}
                 onChangeText={setNewPlate}
                 placeholder={t('vehicles', 'addPlaceholder')}
-                placeholderTextColor="#9a9a9a"
                 autoCapitalize="characters"
                 autoCorrect={false}
                 editable={!isAdding}
               />
               <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
                 style={[styles.input, styles.inputSpaced]}
                 value={newModel}
                 onChangeText={setNewModel}
                 placeholder={t('vehicles', 'modelPlaceholder')}
-                placeholderTextColor="#9a9a9a"
                 editable={!isAdding}
               />
               <View style={styles.addRow}>
                 <TextInput
+                  placeholderTextColor={c.placeholder}
+                  keyboardAppearance={scheme}
                   style={[styles.input, styles.inputSpaced, styles.addInput]}
                   value={newYear}
                   onChangeText={setNewYear}
                   placeholder={t('vehicles', 'yearPlaceholder')}
-                  placeholderTextColor="#9a9a9a"
                   keyboardType="numeric"
                   maxLength={4}
                   editable={!isAdding}
@@ -210,7 +217,7 @@ export default function ChefVehiclesScreen() {
           {isOfflineMode ? (
             <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
           ) : isLoading ? (
-            <ActivityIndicator style={styles.loading} color={Colors.ui.primary} />
+            <ActivityIndicator style={styles.loading} color={c.tint} />
           ) : loadError !== null ? (
             <>
               <Text style={styles.errorText}>{t('vehicles', 'loadFailed')}</Text>
@@ -223,6 +230,10 @@ export default function ChefVehiclesScreen() {
             </View>
           ) : (
             <FlatList
+              // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+              key={`grid-${columns}`}
+              numColumns={columns}
+              columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
               data={vehicles}
               keyExtractor={(item) => item.plate}
               keyboardShouldPersistTaps="handled"
@@ -314,201 +325,151 @@ export default function ChefVehiclesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  addCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  addTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: 'white',
-    fontSize: 14,
-    color: Colors.ui.charcoal,
-  },
-  inputSpaced: {
-    marginTop: 8,
-  },
-  addInput: {
-    flex: 1,
-  },
-  addButton: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 8,
-    paddingVertical: 13,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  loading: {
-    marginTop: 24,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    lineHeight: 18,
-  },
-  errorDetail: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    lineHeight: 17,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-  },
-  emptyStateSub: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  vehicleCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.ui.primary,
-  },
-  vehicleCardRetired: {
-    borderLeftColor: Colors.ui.darkGray,
-  },
-  vehicleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  vehicleTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  serviceBadge: {
-    backgroundColor: Colors.ui.primary,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  serviceBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'white',
-    textTransform: 'uppercase',
-  },
-  retiredBadge: {
-    backgroundColor: Colors.ui.lightGray,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  retiredBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.ui.darkGray,
-    textTransform: 'uppercase',
-  },
-  vehiclePlate: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  editLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-  vehicleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  vehicleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  vehicleLabel: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-  },
-  vehicleValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.ui.tertiary,
-  },
-  vehicleMeta: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-    marginTop: 4,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const { c, scheme } = theme;
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    flex: {
+      flex: 1,
+    },
+    content: {
+      ...u.column,
+      flex: 1,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+    addCard: {
+      ...u.card,
+      marginBottom: Spacing.lg,
+    },
+    addTitle: {
+      ...u.sectionTitle,
+      marginTop: 0,
+      paddingHorizontal: 0,
+    },
+    addRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: Spacing.xs,
+    },
+    input: {
+      ...u.input,
+      marginBottom: 0,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+    },
+    inputSpaced: {
+      marginTop: Spacing.xs,
+    },
+    addInput: {
+      flex: 1,
+    },
+    addButton: {
+      ...u.primaryButton,
+      minHeight: 48,
+      paddingHorizontal: Spacing.md + 2,
+    },
+    addButtonText: u.primaryButtonText,
+    buttonDisabled: u.disabled,
+    hint: {
+      ...u.hint,
+      marginTop: Spacing.sm,
+    },
+    sectionTitle: {
+      ...Typography.title2,
+      color: c.text,
+      marginBottom: Spacing.sm,
+    },
+    loading: {
+      marginTop: Spacing.lg,
+    },
+    errorText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    errorDetail: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginTop: Spacing.xs - 2,
+      fontStyle: 'italic',
+    },
+    emptyState: u.emptyState,
+    emptyStateText: u.emptyStateText,
+    emptyStateSub: u.emptyStateSubtext,
+    gridRow: u.gridRow,
+    vehicleCard: {
+      ...u.gridItem,
+      ...u.card,
+      marginBottom: Spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      ...shadow(1, scheme),
+    },
+    vehicleCardRetired: {
+      borderLeftColor: c.textTertiary,
+    },
+    vehicleHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    vehicleTitle: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      flex: 1,
+    },
+    serviceBadge: {
+      ...u.badge,
+      backgroundColor: c.tintFill,
+    },
+    serviceBadgeText: u.badgeText,
+    retiredBadge: {
+      ...u.badge,
+      backgroundColor: c.surfaceTertiary,
+    },
+    retiredBadgeText: {
+      ...u.badgeText,
+      color: c.textSecondary,
+    },
+    vehiclePlate: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    editLabel: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.tint,
+    },
+    vehicleText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+    },
+    vehicleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: 2,
+    },
+    vehicleLabel: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
+    vehicleValue: {
+      ...Typography.headline,
+      color: c.text,
+      fontVariant: ['tabular-nums'],
+    },
+    vehicleMeta: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      marginTop: Spacing.xxs,
+    },
+  });
+};

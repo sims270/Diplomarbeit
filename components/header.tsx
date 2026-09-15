@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
+import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 
 export interface HeaderProps {
@@ -16,6 +18,8 @@ export function Header({ title, subtitle, code }: HeaderProps) {
   const router = useRouter();
   const { isAuthenticated, user, isOfflineMode } = useAuth();
   const { t } = useTranslation();
+  const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
 
   const handleCodePress = () => {
     try {
@@ -54,7 +58,7 @@ export function Header({ title, subtitle, code }: HeaderProps) {
   };
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
       <View style={styles.titleContainer}>
         <Text style={styles.title}>{title}</Text>
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -112,83 +116,99 @@ export function Header({ title, subtitle, code }: HeaderProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    backgroundColor: Colors.ui.primary,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: 'white',
-    letterSpacing: 1,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
-    textTransform: 'uppercase',
-  },
-  offlineBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-  },
-  offlineBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'white',
-    letterSpacing: 0.5,
-  },
-  rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  codeButton: {
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  code: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: 'white',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  settingsButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  settingsButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'white',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'white',
-  },
-});
+const createStyles = ({ c, isTablet, isDesktop, sideInset }: AppTheme) =>
+  StyleSheet.create({
+    // iOS-Navigationsleiste: Materialfläche, großer Titel, Haarlinie unten.
+    // Auf schmalen Geräten rutschen die Aktionen unter den Titel.
+    header: {
+      backgroundColor: c.barSolid,
+      // Gleicher Seitenabstand wie die Listen, damit Header und Inhalt fluchten
+      paddingHorizontal: sideInset(isDesktop ? Layout.wideMaxWidth : Layout.contentMaxWidth),
+      paddingBottom: Spacing.md,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      rowGap: Spacing.sm,
+      columnGap: Spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.separator,
+    },
+    titleContainer: {
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 200,
+    },
+    title: {
+      ...(isTablet ? Typography.largeTitle : Typography.title1),
+      color: c.text,
+    },
+    subtitle: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.textSecondary,
+      marginTop: Spacing.xxs,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+    },
+    offlineBadge: {
+      alignSelf: 'flex-start',
+      marginTop: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xxs,
+      borderRadius: Radius.pill,
+      backgroundColor: c.tintSoft,
+    },
+    offlineBadgeText: {
+      ...Typography.caption1,
+      fontWeight: '700',
+      color: c.tint,
+      letterSpacing: 0.4,
+    },
+    rightContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    codeButton: {
+      minWidth: Layout.minTouch,
+      height: Layout.minTouch,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.pill,
+      backgroundColor: c.tintFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    code: {
+      ...Typography.headline,
+      color: c.onTint,
+    },
+    settingsButton: {
+      width: Layout.minTouch,
+      height: Layout.minTouch,
+      borderRadius: Radius.pill,
+      backgroundColor: c.surfaceSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    settingsButtonText: {
+      fontSize: 18,
+      lineHeight: 22,
+      color: c.text,
+    },
+    logoutButton: {
+      minHeight: Layout.minTouch,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.pill,
+      backgroundColor: c.tintSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logoutButtonText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.tint,
+    },
+  });

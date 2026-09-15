@@ -7,6 +7,26 @@ const DESCRIPTION =
   "TRANSLOG PRO ist eine Plattform für Disposition und Auftragsverwaltung im Transportwesen: Aufträge zuweisen, Fahrer koordinieren und Transportdokumente erzeugen.";
 const OG_IMAGE = "/og-image.jpg";
 
+// Web-Grundstyles für ein natives Apple-Gefühl: Systemschrift, weiche
+// Kantenglättung, kein grauer Tap-Blitz auf Mobilgeräten, kein
+// automatisches Hochskalieren von Text beim Drehen.
+const webBaseStyles = `
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background-color: #F2F2F2;
+}
+@media (prefers-color-scheme: dark) {
+  html, body { background-color: #000000; }
+}
+* { -webkit-tap-highlight-color: transparent; }
+input, textarea, select, button { font-family: inherit; }
+:focus-visible { outline: 2px solid #9b2321; outline-offset: 2px; }
+`;
+
 /**
  * Umschließt jede statisch exportierte Seite (`web.output: "static"`).
  * Hier stehen nur die seitenweiten Standardwerte — Titel und Beschreibung
@@ -42,6 +62,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:image" content={OG_IMAGE} />
 
         <ScrollViewStyleReset />
+        <style dangerouslySetInnerHTML={{ __html: webBaseStyles }} />
       </head>
       <body>{children}</body>
     </html>

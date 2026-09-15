@@ -3,13 +3,16 @@ import { addExternalOrder, type ExternalOrderFields } from '@/app/services/exter
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function NewExternalOrderScreen() {
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -44,25 +47,18 @@ export default function NewExternalOrderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.ui.lightGray,
-  },
-  content: {
-    flex: 1,
-  },
-  contentInner: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  backButton: {
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.ui.primary,
-  },
-});
+const createStyles = (theme: AppTheme) => {
+  const u = uiStyles(theme);
+  return StyleSheet.create({
+    container: u.screen,
+    content: {
+      flex: 1,
+    },
+    contentInner: {
+      ...u.formColumn,
+      paddingBottom: Spacing.xxl,
+    },
+    backButton: u.backButton,
+    backButtonText: u.backButtonText,
+  });
+};

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, shadow, Spacing, Typography } from '@/constants/theme';
+import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 
 export interface OrderCardProps {
   id: string;
@@ -19,6 +20,7 @@ const statusColors = {
 };
 
 export function OrderCard({ id, company, address, time, packages, weight, status }: OrderCardProps) {
+  const styles = useThemedStyles(createStyles);
   const statusInfo = statusColors[status];
 
   return (
@@ -42,55 +44,56 @@ export function OrderCard({ id, company, address, time, packages, weight, status
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderLeftWidth: 5,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  id: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.ui.darkGray,
-  },
-  badge: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  company: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  address: {
-    fontSize: 13,
-    color: Colors.ui.darkGray,
-    marginBottom: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  detail: {
-    fontSize: 12,
-    color: Colors.ui.darkGray,
-  },
-});
+const createStyles = ({ c, scheme }: AppTheme) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: c.surface,
+      borderRadius: Radius.lg,
+      borderLeftWidth: 4,
+      padding: Spacing.md,
+      marginBottom: Spacing.sm,
+      overflow: 'hidden',
+      ...shadow(2, scheme),
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    id: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    badge: {
+      ...Typography.caption2,
+      color: 'white',
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      paddingHorizontal: Spacing.xs,
+      paddingVertical: Spacing.xxs,
+      borderRadius: Radius.pill,
+      overflow: 'hidden',
+    },
+    company: {
+      ...Typography.headline,
+      color: c.text,
+      marginBottom: Spacing.xxs,
+    },
+    address: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginBottom: Spacing.sm,
+    },
+    footer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+    },
+    detail: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+    },
+  });
