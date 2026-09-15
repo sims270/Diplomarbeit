@@ -6,11 +6,10 @@ export default function ChefLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false, ...stackOptions }}>
-      <Stack.Screen name="index" />
+      {/* Dashboard, Tankliste und Profil mit Tab-Leiste unten — app/chef/(tabs)/ */}
+      <Stack.Screen name="(tabs)" />
       <Stack.Screen name="drivers" />
       <Stack.Screen name="vehicles" />
-      <Stack.Screen name="tankliste" />
-      <Stack.Screen name="umsatzliste" />
       <Stack.Screen name="external-order" />
     </Stack>
   );

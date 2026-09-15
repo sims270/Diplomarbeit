@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 
@@ -7,15 +8,25 @@ export interface StatusCardProps {
   count: number;
   label: string;
   color: string;
+  /** Macht die Kachel antippbar — ohne bleibt sie reine Anzeige. */
+  onPress?: () => void;
 }
 
-export function StatusCard({ count, label, color }: StatusCardProps) {
+export function StatusCard({ count, label, color, onPress }: StatusCardProps) {
   const styles = useThemedStyles(createStyles);
-  return (
-    <View style={[styles.card, { borderTopColor: color }]}>
+  const content = (
+    <>
       <Text style={styles.count}>{count}</Text>
       <Text style={styles.label}>{label}</Text>
-    </View>
+    </>
+  );
+
+  return onPress ? (
+    <FluidPressable style={[styles.card, { borderTopColor: color }]} onPress={onPress}>
+      {content}
+    </FluidPressable>
+  ) : (
+    <View style={[styles.card, { borderTopColor: color }]}>{content}</View>
   );
 }
 

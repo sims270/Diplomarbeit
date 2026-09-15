@@ -107,7 +107,7 @@ export default function DriverTankListeScreen() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [isLoading, isAuthenticated, router]);
 
