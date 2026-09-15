@@ -6,33 +6,24 @@ import {
   type RevenueTrip,
 } from '@/app/services/revenueListService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { Header } from '@/components/header';
 import { Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
+import { plateKey } from '@/lib/plateKey';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 /**
  * Die Umsatzliste aus Sicht des Chefs: Hier trägt er zu jeder erledigten
  * Komplettladung die Richtung ein ("hin", "her", "FR - DE") — dasselbe
- * Prinzip wie die Preise in der Tankliste (app/chef/tankliste.tsx). Nur was
- * in der App steht, landet in jedem Export; in Excel Nachgetragenes ginge
- * beim nächsten Export verloren.
+ * Prinzip wie die Preise in der Tankliste (components/TankPricesSection.tsx).
+ * Nur was in der App steht, landet in jedem Export; in Excel Nachgetragenes
+ * ginge beim nächsten Export verloren. Steht im Tankliste-Tab unter den
+ * Preisen (app/chef/(tabs)/tank.tsx).
  *
  * Beilader haben in der Liste nur einen Betrag, also hier auch kein
  * Richtungsfeld. Fehlt einer Fahrt der Preis, führt ein Tippen zum Auftrag,
@@ -46,7 +37,21 @@ const isIncomplete = (trip: RevenueTrip) => needsDirection(trip) || trip.price =
 
 const formatKm = (km: number | null) => (km === null ? '–' : km.toLocaleString('de-DE'));
 
-export default function ChefUmsatzlisteScreen() {
+export function DirectionSection({
+  action,
+  refreshSignal,
+  month,
+  selectedPlate,
+}: {
+  /** Steht unter dem Hinweis — im Tab der Button "Umsatzliste exportieren". */
+  action?: ReactNode;
+  /** Hochzählen lädt neu (Pull-to-Refresh der ScrollView im Tab). */
+  refreshSignal: number;
+  /** 'YYYY-MM' — nur Fahrten aus diesem Monat. */
+  month: string;
+  /** Schlüssel aus lib/plateKey.ts, null = alle Kennzeichen. */
+  selectedPlate: string | null;
+}) {
   const styles = useThemedStyles(createStyles);
   const { c, columns } = useAppTheme();
   const router = useRouter();
@@ -55,7 +60,6 @@ export default function ChefUmsatzlisteScreen() {
 
   const [trips, setTrips] = useState<RevenueTrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [onlyMissing, setOnlyMissing] = useState(true);
   // Wie in der Tankliste: Der Filter richtet sich nach dem Stand beim Laden,
@@ -68,7 +72,6 @@ export default function ChefUmsatzlisteScreen() {
     if (isOfflineMode) {
       setTrips([]);
       setIsLoading(false);
-      setIsRefreshing(false);
       return;
     }
 
@@ -80,7 +83,6 @@ export default function ChefUmsatzlisteScreen() {
       setLoadError(error instanceof Error ? error.message : '');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, [isOfflineMode]);
 
@@ -91,12 +93,42 @@ export default function ChefUmsatzlisteScreen() {
     }, [load])
   );
 
-  const visible = useMemo(
-    () => (onlyMissing ? trips.filter((trip) => missingAtLoad.has(trip.orderId)) : trips),
-    [trips, missingAtLoad, onlyMissing]
+  useEffect(() => {
+    if (refreshSignal === 0) return;
+    setIsLoading(true);
+    load();
+    // Nur auf das Signal reagieren — das Laden beim Fokus übernimmt oben useFocusEffect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
+  // Monat und Kennzeichen aus der Leiste oben im Tab. Fahrten ohne Lade- und
+  // Entladedatum lassen sich keinem Monat zuordnen — sie stehen deshalb in
+  // jedem Monat, statt nirgends mehr aufzutauchen.
+  const inScope = useMemo(
+    () =>
+      trips.filter(
+        (trip) =>
+          (!trip.date || trip.date.startsWith(month)) &&
+          (selectedPlate === null ||
+            (trip.licensePlate !== null && plateKey(trip.licensePlate) === selectedPlate))
+      ),
+    [trips, month, selectedPlate]
   );
 
-  const missingCount = trips.filter(isIncomplete).length;
+  const visible = useMemo(
+    () =>
+      onlyMissing ? inScope.filter((trip) => missingAtLoad.has(trip.orderId)) : inScope,
+    [inScope, missingAtLoad, onlyMissing]
+  );
+
+  // Kartenraster wie in components/TankPricesSection.tsx
+  const rows = useMemo(() => {
+    const out: RevenueTrip[][] = [];
+    for (let i = 0; i < visible.length; i += columns) out.push(visible.slice(i, i + columns));
+    return out;
+  }, [visible, columns]);
+
+  const missingCount = inScope.filter(isIncomplete).length;
 
   const handleSaved = (orderId: string, direction: string) =>
     setTrips((prev) =>
@@ -104,88 +136,64 @@ export default function ChefUmsatzlisteScreen() {
     );
 
   return (
-    <View style={styles.container}>
-      <Header title="TRANSLOG PRO" subtitle={t('chefUmsatzliste', 'headerSubtitle')} code="CH" />
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t('chefUmsatzliste', 'title')}</Text>
+      <Text style={styles.hint}>{t('chefUmsatzliste', 'hint')}</Text>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.content}>
-          <FluidPressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
-          </FluidPressable>
+      {action}
 
-          <Text style={styles.sectionTitle}>{t('chefUmsatzliste', 'title')}</Text>
-          <Text style={styles.hint}>{t('chefUmsatzliste', 'hint')}</Text>
+      <View style={styles.filterRow}>
+        <FluidPressable
+          style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
+          onPress={() => setOnlyMissing(true)}
+        >
+          <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
+            {`${t('chefUmsatzliste', 'filterMissing')} (${missingCount})`}
+          </Text>
+        </FluidPressable>
+        <FluidPressable
+          style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
+          onPress={() => setOnlyMissing(false)}
+        >
+          <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
+            {`${t('chefUmsatzliste', 'filterAll')} (${inScope.length})`}
+          </Text>
+        </FluidPressable>
+      </View>
 
-          <View style={styles.filterRow}>
-            <FluidPressable
-              style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
-              onPress={() => setOnlyMissing(true)}
-            >
-              <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
-                {`${t('chefUmsatzliste', 'filterMissing')} (${missingCount})`}
-              </Text>
-            </FluidPressable>
-            <FluidPressable
-              style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
-              onPress={() => setOnlyMissing(false)}
-            >
-              <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
-                {`${t('chefUmsatzliste', 'filterAll')} (${trips.length})`}
-              </Text>
-            </FluidPressable>
-          </View>
-
-          {isOfflineMode ? (
-            <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
-          ) : isLoading ? (
-            <ActivityIndicator style={styles.loading} color={c.tint} />
-          ) : loadError !== null ? (
-            <>
-              <Text style={styles.errorText}>{t('chefUmsatzliste', 'loadFailed')}</Text>
-              {!!loadError && <Text style={styles.errorDetail}>{loadError}</Text>}
-            </>
-          ) : visible.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                {onlyMissing
-                  ? t('chefUmsatzliste', 'emptyMissing')
-                  : t('chefUmsatzliste', 'emptyAll')}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
-              key={`grid-${columns}`}
-              numColumns={columns}
-              columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
-              data={visible}
-              keyExtractor={(item) => item.orderId}
-              keyboardShouldPersistTaps="handled"
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={() => {
-                    setIsRefreshing(true);
-                    load();
-                  }}
-                />
-              }
-              renderItem={({ item }) => (
-                <TripRow
-                  trip={item}
-                  onSaved={handleSaved}
-                  onOpenOrder={() =>
-                    router.push({ pathname: '/chef/order/[id]', params: { id: item.orderId } })
-                  }
-                />
-              )}
-            />
-          )}
+      {isOfflineMode ? (
+        <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
+      ) : isLoading ? (
+        <ActivityIndicator style={styles.loading} color={c.tint} />
+      ) : loadError !== null ? (
+        <>
+          <Text style={styles.errorText}>{t('chefUmsatzliste', 'loadFailed')}</Text>
+          {!!loadError && <Text style={styles.errorDetail}>{loadError}</Text>}
+        </>
+      ) : visible.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+            {onlyMissing
+              ? t('chefUmsatzliste', 'emptyMissing')
+              : t('chefUmsatzliste', 'emptyAll')}
+          </Text>
         </View>
-      </KeyboardAvoidingView>
+      ) : (
+        rows.map((row) => (
+          <View key={row[0].orderId} style={columns > 1 ? styles.gridRow : undefined}>
+            {row.map((item) => (
+              <TripRow
+                key={item.orderId}
+                trip={item}
+                onSaved={handleSaved}
+                onOpenOrder={() =>
+                  router.push({ pathname: '/chef/order/[id]', params: { id: item.orderId } })
+                }
+              />
+            ))}
+          </View>
+        ))
+      )}
     </View>
   );
 }
@@ -325,16 +333,7 @@ const createStyles = (theme: AppTheme) => {
   const { c, scheme } = theme;
   const u = uiStyles(theme);
   return StyleSheet.create({
-    container: u.screen,
-    flex: {
-      flex: 1,
-    },
-    content: {
-      ...u.column,
-      flex: 1,
-    },
-    backButton: u.backButton,
-    backButtonText: u.backButtonText,
+    section: u.column,
     sectionTitle: {
       ...Typography.title2,
       color: c.text,
@@ -388,7 +387,10 @@ const createStyles = (theme: AppTheme) => {
       ...u.emptyStateSubtext,
       fontWeight: '600',
     },
-    gridRow: u.gridRow,
+    gridRow: {
+      ...u.gridRow,
+      flexDirection: 'row',
+    },
     card: {
       ...u.gridItem,
       ...u.card,

@@ -19,6 +19,7 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'fuelpump.fill': 'local-gas-station',
+  'person.fill': 'person',
 } as IconMapping;
 
 /**

@@ -1,7 +1,8 @@
 import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors, shadow, Spacing, Typography } from '@/constants/theme';
+import { StatusCard } from '@/components/status-card';
+import { Colors, Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
@@ -9,8 +10,10 @@ import { getOrdersByDriver, Order } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
 import { isoToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
+import { currentMonth, isInMonth } from '@/lib/month';
+import { MonthPicker } from '@/components/MonthPicker';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function DriverDashboardScreen() {
   const styles = useThemedStyles(createStyles);
@@ -20,6 +23,33 @@ export default function DriverDashboardScreen() {
   const router = useRouter();
   const [assignedOrders, setAssignedOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+
+  // Standardmäßig der laufende Monat; zurückblättern beliebig weit. Der Monat
+  // eines Auftrags ist sein Ladedatum, sonst das Entladedatum — wie in der
+  // Umsatzliste (app/services/revenueListService.ts).
+  const [month, setMonth] = useState(currentMonth);
+  const monthOrders = useMemo(
+    () =>
+      assignedOrders.filter((order) =>
+        isInMonth(order.loadingDate || order.unloadingDate, month)
+      ),
+    [assignedOrders, month]
+  );
+
+  // Kacheln wie beim Chef, nur für den gewählten Monat. "Offen" (noch
+  // niemandem zugewiesen) gibt es für den Fahrer nicht — ein Auftrag
+  // unterwegs zählt noch als zugewiesen. Tippen filtert die Liste darunter.
+  const [statusFilter, setStatusFilter] = useState<'assigned' | 'completed' | null>(null);
+  const isOpenOrder = (order: Order) =>
+    order.status === 'assigned' || order.status === 'in_progress';
+  const assignedCount = monthOrders.filter(isOpenOrder).length;
+  const completedCount = monthOrders.filter((order) => order.status === 'completed').length;
+  const visibleOrders =
+    statusFilter === 'assigned'
+      ? monthOrders.filter(isOpenOrder)
+      : statusFilter === 'completed'
+        ? monthOrders.filter((order) => order.status === 'completed')
+        : monthOrders;
 
   const loadDriverOrders = useCallback(async () => {
     if (!user?.id) return;
@@ -35,7 +65,7 @@ export default function DriverDashboardScreen() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [isLoading, isAuthenticated, router]);
 
@@ -98,11 +128,37 @@ export default function DriverDashboardScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({assignedOrders.length})</Text>
+          <MonthPicker month={month} onChange={setMonth} />
+
+          <View style={styles.statusContainer}>
+            <StatusCard
+              count={assignedCount}
+              label={t('driverDashboard', 'statusAssigned')}
+              color={Colors.ui.blue}
+              onPress={() => setStatusFilter('assigned')}
+            />
+            <StatusCard
+              count={completedCount}
+              label={t('driverDashboard', 'statusCompleted')}
+              color={Colors.ui.green}
+              onPress={() => setStatusFilter('completed')}
+            />
+          </View>
+
+          {/* Tippen hebt den Status-Filter auf — wieder alle Aufträge des Monats. */}
+          {statusFilter !== null && (
+            <FluidPressable style={styles.statusFilterChip} onPress={() => setStatusFilter(null)}>
+              <Text style={styles.statusFilterChipText}>
+                {`${getStatusText(statusFilter)} ✕`}
+              </Text>
+            </FluidPressable>
+          )}
+
+          <Text style={styles.sectionTitle}>{t('driverDashboard', 'myOrders')} ({visibleOrders.length})</Text>
 
           {isLoadingOrders ? (
             <ActivityIndicator style={styles.loading} color={c.tint} />
-          ) : assignedOrders.length === 0 ? (
+          ) : visibleOrders.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>{t('driverDashboard', 'emptyOrders')}</Text>
               <Text style={styles.emptyStateSubtext}>
@@ -116,7 +172,7 @@ export default function DriverDashboardScreen() {
               numColumns={columns}
               columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
               scrollEnabled={false}
-              data={assignedOrders}
+              data={visibleOrders}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <FluidPressable
@@ -188,6 +244,26 @@ const createStyles = (theme: AppTheme) => {
       flex: 1,
     },
     section: u.column,
+    statusContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    statusFilterChip: {
+      alignSelf: 'flex-start',
+      minHeight: Layout.minTouch,
+      justifyContent: 'center',
+      borderRadius: Radius.pill,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: c.tintFill,
+      marginBottom: Spacing.sm,
+    },
+    statusFilterChipText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.onTint,
+    },
     sectionTitle: {
       ...Typography.title2,
       color: c.text,

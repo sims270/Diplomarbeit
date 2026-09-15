@@ -4,14 +4,16 @@ import { assignOrderToDriver, getAllOrders, type Order } from '@/app/services/or
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Colors, Layout, shadow, Spacing, Typography } from '@/constants/theme';
+import { Colors, Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman, timestampToGermanDate } from '@/lib/dateFormat';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { currentMonth, isInMonth } from '@/lib/month';
+import { MonthPicker } from '@/components/MonthPicker';
 import {
   ActivityIndicator,
   FlatList,
@@ -37,6 +39,25 @@ export default function OrdersListScreen() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Nur Aufträge des gewählten Monats, standardmäßig des laufenden. Monat
+  // eines Auftrags: Ladedatum, sonst Entladedatum — wie auf den Dashboards.
+  // Von einer Kachel des Dashboards kommen Status und dort gewählter Monat
+  // mit (app/chef/(tabs)/index.tsx); ohne Parameter alle Status.
+  const params = useLocalSearchParams<{ status?: string; month?: string }>();
+  const [month, setMonth] = useState(() =>
+    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth()
+  );
+  const statusFilter = params.status ?? null;
+  const monthOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          isInMonth(o.loadingDate || o.unloadingDate, month) &&
+          (statusFilter === null || o.status === statusFilter)
+      ),
+    [orders, month, statusFilter]
+  );
 
   const loadOrders = useCallback(async () => {
     setLoadError(false);
@@ -103,6 +124,16 @@ export default function OrdersListScreen() {
     return statusMap[status] || status;
   };
 
+  // Im Chip dieselben Wörter wie auf den Kacheln ("OFFEN" statt "AUSSTEHEND").
+  const getStatusFilterLabel = (status: string) => {
+    const tileLabels: Record<string, string> = {
+      pending: t('chefDashboard', 'statusOpen'),
+      assigned: t('chefDashboard', 'statusAssigned'),
+      completed: t('chefDashboard', 'statusCompleted'),
+    };
+    return tileLabels[status] ?? getStatusText(status);
+  };
+
   const openAssignModal = (order: Order) => {
     setSelectedOrder(order);
     setSelectedDriver(null);
@@ -143,9 +174,25 @@ export default function OrdersListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
+        <MonthPicker month={month} onChange={setMonth} />
+
+        {/* Der Status kommt von einer Kachel — ✕ führt zurück zu den Kacheln.
+            canGoBack(): Im Web lässt sich die Liste direkt über ihre URL
+            öffnen, dann gibt es keinen Eintrag, zu dem back() springen könnte. */}
+        {statusFilter !== null && (
+          <FluidPressable
+            style={styles.statusFilterChip}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/chef'))}
+          >
+            <Text style={styles.statusFilterChipText}>
+              {`${getStatusFilterLabel(statusFilter)} ✕`}
+            </Text>
+          </FluidPressable>
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            {t('chefOrdersList', 'title')} ({orders.length})
+            {t('chefOrdersList', 'title')} ({monthOrders.length})
           </Text>
           <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/order/new')}>
             <Text style={styles.addButtonText}>{t('chefOrdersList', 'addButton')}</Text>
@@ -156,7 +203,7 @@ export default function OrdersListScreen() {
           <ActivityIndicator style={styles.loading} color={c.tint} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('chefOrdersList', 'loadFailed')}</Text>
-        ) : orders.length === 0 ? (
+        ) : monthOrders.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>{t('chefOrdersList', 'emptyState')}</Text>
             <Text style={styles.emptyStateSubtext}>{t('chefOrdersList', 'emptyStateSub')}</Text>
@@ -167,7 +214,7 @@ export default function OrdersListScreen() {
             key={`grid-${columns}`}
             numColumns={columns}
             columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
-            data={orders}
+            data={monthOrders}
             keyExtractor={(item) => item.id}
             refreshControl={
               <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
@@ -330,6 +377,20 @@ const createStyles = (theme: AppTheme) => {
       ...Typography.title2,
       color: c.text,
       flexShrink: 1,
+    },
+    statusFilterChip: {
+      alignSelf: 'flex-start',
+      minHeight: Layout.minTouch,
+      justifyContent: 'center',
+      borderRadius: Radius.pill,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: c.tintFill,
+      marginBottom: Spacing.sm,
+    },
+    statusFilterChipText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.onTint,
     },
     addButton: u.smallButton,
     addButtonText: u.smallButtonText,

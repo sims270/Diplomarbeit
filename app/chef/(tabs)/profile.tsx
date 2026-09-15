@@ -19,13 +19,13 @@ export default function ChefProfileScreen() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [isLoading, isAuthenticated, router]);
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/(auth)/login');
+    router.replace('/');
   };
 
   if (isLoading) {
@@ -44,19 +44,8 @@ export default function ChefProfileScreen() {
     <View style={styles.container}>
       <Header title="TRANSLOG PRO" subtitle={t('chefProfile', 'headerSubtitle')} code="CH" />
 
-      {/* Über den Tabs, damit der Weg zurück in beiden Reitern gleich
-          bleibt. canGoBack(): Im Web lässt sich das Profil direkt über
-          seine URL öffnen — dann gibt es keinen Eintrag, zu dem back()
-          zurückspringen könnte, und ohne diesen Zweig passierte nichts. */}
-      <View style={styles.backBar}>
-        <FluidPressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/chef'))}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
-        </FluidPressable>
-      </View>
-
+      {/* Kein Zurück-Button mehr: Das Profil ist ein Tab der Leiste unten
+          (app/chef/(tabs)/_layout.tsx). */}
       <View style={styles.tabsContainer}>
         <FluidPressable
           style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
@@ -165,18 +154,10 @@ const createStyles = (theme: AppTheme) => {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    backBar: {
-      ...u.formInset,
-      paddingTop: Spacing.xs,
-    },
-    backButton: {
-      ...u.backButton,
-      marginBottom: 0,
-    },
-    backButtonText: u.backButtonText,
     tabsContainer: {
       ...u.segmented,
       ...u.formInset,
+      marginTop: Spacing.md,
     },
     tab: u.segment,
     tabActive: u.segmentActive,

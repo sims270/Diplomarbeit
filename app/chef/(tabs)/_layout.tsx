@@ -4,10 +4,14 @@ import { StyleSheet } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { RevenueFuelIcon } from "@/components/ui/revenue-fuel-icon";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-export default function TabLayout() {
+// Eigene Gruppe statt Tabs direkt in app/chef/_layout.tsx: Fahrer, LKW und
+// Aufträge öffnen sich im Stack darüber und sollen die Tab-Leiste nicht
+// unter jeder Detailseite mitschleppen.
+export default function ChefTabLayout() {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? "light"];
 
@@ -16,7 +20,7 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: palette.tint,
         tabBarInactiveTintColor: palette.tabIconDefault,
-        // iOS-Tab-Bar: Materialfarbe mit Haarlinie statt Schatten
+        // Gleiche Optik wie die Tab-Leiste des Fahrers (app/driver/_layout.tsx)
         tabBarStyle: {
           backgroundColor: palette.barSolid,
           borderTopColor: palette.separator,
@@ -45,15 +49,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tankliste"
+        name="tank"
         options={{
-          title: "Tankliste",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="fuelpump.fill" color={color} />
-          ),
+          title: "Umsatz-Tankliste",
+          tabBarIcon: ({ color }) => <RevenueFuelIcon size={28} color={color} />,
         }}
       />
-      {/* Ohne eigenen Eintrag legt expo-router den Tab mit Standard-Icon an. */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -63,15 +64,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Auftragsdetails open from the dashboard, not from the tab bar. */}
-      <Tabs.Screen name="order" options={{ href: null }} />
-
-      {/* Der Kartenscreen ist der Tankliste gewichen. expo-router legt für
-          jede Datei unter app/driver/ automatisch einen Tab an, deshalb
-          reicht es nicht, den Eintrag hier wegzulassen — map.tsx würde
-          sonst mit Standardtitel wieder in der Tab-Leiste auftauchen. */}
-      <Tabs.Screen name="map" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -181,6 +181,30 @@ export async function setTankEntryPrices(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Ändert die Angaben des Fahrers zu einer Tankung (Datum, Kennzeichen,
+ * km-Stand, Liter, Tankstelle) — nur für den Chef, etwa bei einem
+ * Tippfehler.
+ *
+ * Wie bei den Preisen über eine Funktion statt einer UPDATE-Policy
+ * (siehe 20260915100000_boss_can_edit_tank_entries.sql): Der Fahrer kann
+ * seine Einträge weiterhin nicht ändern, und die Preise bleiben Sache von
+ * set_tank_entry_prices.
+ */
+export async function updateTankEntry(entryId: string, input: NewTankEntry): Promise<void> {
+  const { error } = await supabase.rpc('update_tank_entry', {
+    entry_id: entryId,
+    entry_date: input.entryDate,
+    license_plate: input.licensePlate.trim(),
+    km_stand: input.kmStand,
+    liters_diesel: input.litersDiesel,
+    liters_adblue: input.litersAdBlue,
+    fuel_station: input.fuelStation.trim(),
+  });
+
+  if (error) throw new Error(error.message);
+}
+
 export async function createTankEntry(input: NewTankEntry): Promise<TankEntry> {
   const { data: userData } = await supabase.auth.getUser();
   const driverId = userData.user?.id;
