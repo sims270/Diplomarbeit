@@ -32,13 +32,15 @@ jobs:
             exit 1
           fi
 
-          # PostgREST-Wurzel: eine echte, authentifizierte API-Anfrage gegen
-          # das Projekt — das zählt als Aktivität. Ein reiner DNS-Ping oder
-          # ein Health-Endpunkt ohne Key würde das nicht zuverlässig tun.
+          # Eine echte Tabellenabfrage: das fasst tatsächlich Postgres an und
+          # zählt damit als Aktivität. Die PostgREST-Wurzel "/rest/v1/" geht
+          # dafür nicht mehr — sie verlangt inzwischen einen secret API-Key
+          # und antwortet mit dem anon-Key nur noch 401. Ein reiner DNS-Ping
+          # oder ein Health-Endpunkt würde die Datenbank gar nicht berühren.
           status=$(curl -sS -o /dev/null -w "%{http_code}" \
             --max-time 30 \
             -H "apikey: $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/rest/v1/")
+            "$SUPABASE_URL/rest/v1/orders?select=id&limit=1")
 
           echo "Antwort: HTTP $status"
 
