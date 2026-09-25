@@ -1,20 +1,33 @@
-# Security- & Code-Review – TRANSLOG PRO
+# Security- & Code-Review – TRANSLOG PRO (2. Durchlauf)
 
-**Stand:** 25.09.2026 · **Branch:** `claude/sweet-darwin-v6mlu1`
-**Geprüft:** `app/`, `components/`, `lib/`, `supabase/migrations/`, `supabase/functions/`, `supabase/dashboard-deploy/`, `.github/workflows/`, Config-Dateien, `package-lock.json` (per `npm audit`).
-**Nicht möglich:** `expo lint` lief nicht, weil `node_modules` fehlt und installieren in dieser Phase nicht erlaubt war. Die Supabase-Projekteinstellungen (z. B. ob sich jeder selbst registrieren kann) liegen nicht im Repo. Befunde, die davon abhängen, sind mit **[unsicher]** markiert.
-
-**Stack:** Expo / React Native (Web-Export als statische Seite, laut Kommentaren auf Vercel) + Supabase (Postgres mit Row Level Security, Auth, Storage, Deno Edge Functions). Einen eigenen Backend-Server gibt es nicht. Die gesamte Sicherheit hängt also an den **RLS-Policies** und den **Edge Functions**.
+**Stand:** 25.09.2026 · **Geprüfter Commit:** `336d121` auf `main` (inkl. Merge von `fremdfahrer-zugang`)
+**Geprüft:** `app/`, `components/`, `lib/`, `supabase/migrations/` (alle 27), `supabase/functions/` (9 Functions + `_shared`), `supabase/dashboard-deploy/`, Config-Dateien.
+**Nicht möglich:** `expo lint` (kein `node_modules`, Installieren war nicht erlaubt). Supabase-Projekteinstellungen liegen nicht im Repo. Was davon abhängt, ist mit **[unsicher]** markiert.
 
 ---
 
 ## 1. Zusammenfassung
 
-Das Projekt ist sorgfältig gebaut: RLS ist überall aktiv, heikle Schreibvorgänge laufen über eng begrenzte `security definer`-Funktionen, und der service_role-Key bleibt auf dem Server. Es gibt aber **einen kritischen Konstruktionsfehler, der fast alle Schutzmaßnahmen aushebelt**: Die Rolle „boss“ steht in `user_metadata`, und dieses Feld darf **jeder angemeldete Benutzer selbst ändern**.
-Die drei dringendsten Probleme:
-1. **(#1)** Jeder Fahrer kann sich mit einer Zeile JavaScript selbst zum Chef machen und dann alles lesen und ändern, auch Fahrerkonten anlegen und löschen.
-2. **(#2)** Ist in Supabase die Selbstregistrierung aktiv (Standard), kann sich jeder Fremde ein Konto anlegen, und zusammen mit #1 sofort Chef werden.
-3. **(#3)** Exporte, Umsatzliste und die Auswahl „noch nicht verrechnet“ hören still bei 1000 Zeilen auf. Sobald so viele Daten da sind, entstehen falsche Excel-Dateien und falsche Rechnungslisten.
+Es ist deutlich besser geworden: Die kritische Lücke aus dem ersten Review ist geschlossen. Rollen stehen jetzt in `public.profiles`, das kein Client schreiben darf, und **alle** Policies, Datenbankfunktionen und Edge Functions prüfen dort. Der neue Zugang für fremde Fahrer ist sauber abgeschottet (keine Preise, Ablaufdatum wird in jeder Funktion geprüft). Es gibt keinen kritischen oder hohen Befund mehr.
+Die drei dringendsten verbleibenden Probleme:
+1. **(#1)** Passwörter der fremden Fahrer stehen im Klartext in der Datenbank.
+2. **(#2)** Das Kennzeichen steht noch in `user_metadata`. Ein Fahrer kann damit seine Fahrten in der Umsatzliste einem anderen LKW zuschreiben.
+3. **(#3)** Abfragen ohne Paging brechen bei 1000 Zeilen ohne Fehlermeldung ab. Das betrifft Tankliste, Umsatzliste und die Liste „noch nicht verrechnet“.
+
+### Vergleich zum ersten Review
+
+| Alt | Thema | Status jetzt |
+|-----|-------|--------------|
+| #1 Kritisch | Rolle in `user_metadata` | ✅ **Behoben** (`profiles` + `app_role()`). Rest: Kennzeichen, siehe neuer #2 |
+| #2 Hoch | Selbstregistrierung | ⬇️ **Entschärft** auf Niedrig: Ein Konto ohne `profiles`-Zeile sieht nichts mehr (neuer #13) |
+| #3 Mittel | 1000-Zeilen-Grenze | ❌ Offen (neuer #3) |
+| #4 Mittel | Tankliste: beliebige Kennzeichen/km | ⬇️ Teilweise: Nur noch Rolle `driver` darf eintragen. Plausibilitätsprüfung fehlt weiter (neuer #4) |
+| #5 Mittel | Fahrer nicht löschbar | ❌ Offen, zusätzlich scheitert es jetzt auch an hochgeladenen Belegen (neuer #5) |
+| #6 Niedrig | `complete_order` mehrfach | ❌ Offen (neuer #7). Bei fremden Fahrern ist es richtig gelöst |
+| #7 Niedrig | Rechnung nicht atomar | ❌ Offen (neuer #8) |
+| #8 Niedrig | Doppelte Belegnummern | ❌ Offen (neuer #9) |
+| #9 Niedrig | Routen-Guards | ⬇️ Teilweise: Falsche Rolle wird umgeleitet, nicht Angemeldete nicht (neuer #10) |
+| #10–#15 Niedrig | Fehlermeldungen, Validierung, Header, Offline-Passwort, Dependencies, toter Code | ❌ Offen (neue #11, #12, #14, #15, #16, #17) |
 
 ---
 
@@ -22,120 +35,119 @@ Die drei dringendsten Probleme:
 
 | Nr | Schweregrad | Kategorie | Datei:Zeile | Kurzbeschreibung |
 |----|-------------|-----------|-------------|------------------|
-| 1 | **Kritisch** | Autorisierung | `supabase/functions/_shared/verify-boss.ts:39`, alle Migrationen (z. B. `20260907150000_create_orders.sql:46`) | Rolle steht in `user_metadata`, das der Benutzer selbst ändern kann → jeder Fahrer wird Chef |
-| 2 | **Hoch** [unsicher] | Authentifizierung | `lib/username.ts:1-4`, `.env.example:9` (keine Auth-Config im Repo) | Selbstregistrierung ist vermutlich nicht abgeschaltet → Fremde bekommen ein Konto |
-| 3 | **Mittel** | Logik / Datenverlust | `supabase/functions/export-tank-entries/index.ts:193`, `export-revenue-list/index.ts:203-215`, `app/services/invoiceService.ts:227-234`, `revenueListService.ts:37-46`, `tankEntryService.ts:146` | Abfragen ohne Paging werden bei 1000 Zeilen still abgeschnitten |
-| 4 | **Mittel** | Logik / Datenintegrität | `supabase/migrations/20260909100000_create_tank_entries.sql:91-94`, `20260911110000_add_fleet_to_license_plates.sql:44-72` | Fahrer kann beliebige Kennzeichen und km-Stände eintragen. Das verfälscht Fahrzeugstamm und Service-Anzeige dauerhaft |
-| 5 | **Mittel** | Logik / Fehlerbehandlung | `supabase/migrations/20260909100000_create_tank_entries.sql:25`, `20260907150000_create_orders.sql:20-22`, `supabase/functions/delete-driver/index.ts:47` | Fahrer mit Tankeinträgen oder Aufträgen lässt sich nicht löschen (Fremdschlüssel ohne `on delete`) |
-| 6 | **Niedrig** | Logik | `supabase/migrations/20260914100000_add_cargo_type_and_km.sql:75-101` | `complete_order` erlaubt erneutes Abschließen, Kilometer und `completed_at` werden nach der Verrechnung überschrieben |
-| 7 | **Niedrig** | Konsistenz | `app/services/invoiceService.ts:258-297` | Rechnung wird in vielen Einzel-Updates gespeichert, nicht atomar |
-| 8 | **Niedrig** | Buchhaltungslogik | `supabase/migrations/20260910140000_add_invoice_content.sql:20`, `invoiceService.ts:266` | Belegnummer frei änderbar, kein `unique`, doppelte Rechnungsnummern möglich |
-| 9 | **Niedrig** | Autorisierung (Client) | `app/chef/_layout.tsx:4`, `app/driver/_layout.tsx`, `app/context/AuthContext.tsx:227-229` | Keine Routen-Guards. Die Chef-Oberfläche ist für jeden aufrufbar, die Offline-Sitzung lässt sich im localStorage fälschen |
-| 10 | **Niedrig** | Informationspreisgabe | z. B. `supabase/functions/export-invoice/index.ts:846`, `list-drivers/index.ts:32`, `create-driver/index.ts:71-74` | Rohe Datenbank-/Auth-Fehlermeldungen gehen an den Client |
-| 11 | **Niedrig** | Input-Validierung | `supabase/functions/update-driver/index.ts:132-133`, `create-driver/index.ts:47,56` | Keine Typprüfung (Absturz bei Nicht-String), Passwort-Mindestlänge nur 6 |
-| 12 | **Niedrig** | Security-Header / Sessions | kein `vercel.json`, `lib/supabase.ts:36-42` | Keine CSP und keine Frame-Schutz-Header. Das Login-Token liegt im localStorage |
-| 13 | **Niedrig** | Offline-Fallback | `lib/offlineFallback.ts:77`, `.env.example:21` | Fallback-Passwort steht im ausgelieferten JS-Bundle |
-| 14 | **Niedrig** | Dependencies | `package-lock.json` | `npm audit`: 29 Meldungen (1 kritisch, 9 hoch), fast alle in Build-Tools |
-| 15 | **Niedrig** | Toter Code / Schema-Drift | `app/services/notificationService.ts:77-85`, `app/examples/`, `supabase/functions/export-invoice/index.ts:286`, `20260911150000_backfill_unloading_companies.sql:22` | Unbenutztes WebSocket-System (`ws://`, ohne Auth), fehlende Migrationen für benutzte Spalten |
+| 1 | **Mittel** | Passwort-Speicherung | `supabase/migrations/20260915130000_external_driver_access.sql:49`, `supabase/functions/create-external-driver/index.ts:150-153` | **Neu:** Passwörter fremder Fahrer werden im Klartext gespeichert |
+| 2 | **Mittel** | Autorisierung / Datenintegrität | `supabase/functions/create-driver/index.ts:67`, `supabase/migrations/20260914120000_add_revenue_list.sql:45` | **Neu (Rest von alt #1):** Kennzeichen in `user_metadata`, Fahrer kann es selbst ändern und die Umsatzliste verfälschen |
+| 3 | **Mittel** | Logik / Datenverlust | `supabase/functions/export-tank-entries/index.ts:193`, `export-revenue-list/index.ts:203-215`, `app/services/invoiceService.ts:227-234`, `revenueListService.ts:37-46`, `tankEntryService.ts:146` | Abfragen ohne Paging brechen bei 1000 Zeilen ohne Meldung ab |
+| 4 | **Mittel** | Datenintegrität | `supabase/migrations/20260911110000_add_fleet_to_license_plates.sql:44-72` | Fahrer kann beliebige Kennzeichen und unplausible km-Stände eintragen, die Fahrzeugliste wird dauerhaft verfälscht |
+| 5 | **Mittel** | Logik / Fehlerbehandlung | `supabase/functions/delete-driver/index.ts:47`, `20260909100000_create_tank_entries.sql:25`, `20260907150000_create_orders.sql:20-22` | Eigene Fahrer mit Tankungen, Aufträgen oder Belegen lassen sich nicht löschen, ihr Zugang bleibt aktiv |
+| 6 | **Niedrig** | Datenkonsistenz | `supabase/migrations/20260915120000_add_cmr_to_orders.sql:140-160` | **Neu:** `remove_order_document` trägt Belege aus `cmr` aus, ohne dass die Datei gelöscht wurde |
+| 7 | **Niedrig** | Logik | `supabase/migrations/20260914100000_add_cargo_type_and_km.sql:75-101` | `complete_order` erlaubt erneutes Abschließen und überschreibt Kilometer nach der Verrechnung |
+| 8 | **Niedrig** | Konsistenz | `app/services/invoiceService.ts:258-297` | Rechnung wird in vielen Einzel-Updates gespeichert, nicht in einem Schritt |
+| 9 | **Niedrig** | Buchhaltungslogik | `supabase/migrations/20260910140000_add_invoice_content.sql:20` | Belegnummer frei änderbar ohne Eindeutigkeitsprüfung |
+| 10 | **Niedrig** | Autorisierung (Client) | `app/chef/_layout.tsx:11`, `app/external/_layout.tsx:11`, `app/context/AuthContext.tsx:185-187` | Nicht angemeldete Besucher sehen die Chef-Oberfläche, Offline-Sitzung im localStorage fälschbar |
+| 11 | **Niedrig** | Informationspreisgabe | `supabase/functions/_shared/verify-boss.ts:60`, `export-invoice/index.ts:846`, `create-external-driver/index.ts:137,161` | Rohe Datenbank- und Auth-Fehlermeldungen gehen an den Client |
+| 12 | **Niedrig** | Input-Validierung | `create-external-driver/index.ts:115-116`, `update-driver/index.ts`, `create-driver/index.ts:47`, `delete-driver/index.ts:43` | Keine Typprüfung (Absturz bei Nicht-String), Passwort-Mindestlänge 6, unbehandelter Fehler in `getRole` |
+| 13 | **Niedrig** [unsicher] | Authentifizierung | keine Auth-Config im Repo | Selbstregistrierung vermutlich an. Harmlos geworden, aber unnötig offen |
+| 14 | **Niedrig** | Migration | `supabase/migrations/20260915110000_create_profiles.sql:38-42` | **Neu:** Übernahme der Rollen vertraut dem alten, manipulierbaren `user_metadata` |
+| 15 | **Niedrig** | Security-Header | kein `vercel.json`, `lib/supabase.ts:36-42` | Keine CSP und kein Clickjacking-Schutz, Login-Token liegt im localStorage |
+| 16 | **Niedrig** | Offline-Fallback / Dependencies | `lib/offlineFallback.ts:77`, `package-lock.json` | Fallback-Passwort im JS-Bundle, `npm audit`: 29 Meldungen (fast alle in Build-Tools) |
+| 17 | **Niedrig** | Toter Code / Schema-Drift | `app/services/notificationService.ts:77-85`, `app/examples/`, `export-invoice/index.ts:286` | Unbenutztes WebSocket-System (`ws://`, ohne Login), Spalten fehlen in den Migrationen |
 
 ---
 
 ## 3. Befunde im Detail
 
-### #1 – Kritisch: Jeder Benutzer kann sich selbst zum Chef machen
+### #1 – Mittel (neu): Klartext-Passwörter der fremden Fahrer
 
-**Problem:** Supabase kennt zwei Metadaten-Felder pro Benutzer:
-- `user_metadata`: darf **der Benutzer selbst** jederzeit ändern (`supabase.auth.updateUser({ data: … })`). Das ist dokumentiertes Verhalten.
-- `app_metadata`: darf **nur der Server** (service_role) ändern.
+**Problem:** Damit der Chef das Passwort erneut anzeigen kann, speichert `create-external-driver` es **unverschlüsselt** in `external_driver_accounts.password`. Normalerweise speichert man nur einen Hash, wie Supabase Auth es selbst macht.
 
-Dieses Projekt speichert die Rolle in `user_metadata` und prüft sie überall: in **jeder** RLS-Policy, in den `security definer`-Funktionen und in `verifyBoss()` der Edge Functions.
+**Warum gefährlich:** Jeder, der Zugriff auf die Tabelle bekommt, kennt sofort alle Passwörter aller aktiven Fremd-Zugänge. Das kann ein Chef-Konto mit schwachem Passwort sein, ein Datenbank-Backup, ein SQL-Export oder ein Screenshot im Supabase-Dashboard. Viele Menschen tippen das zugewiesene Passwort später auch woanders ein.
 
-**Angriffsszenario:** Ein Fahrer meldet sich normal an, öffnet im Browser die Entwicklertools (F12) und führt aus:
-```js
-await supabase.auth.updateUser({ data: { role: "boss" } });
-await supabase.auth.refreshSession();
+**Betroffener Code:**
+```sql
+-- 20260915130000_external_driver_access.sql:46-49
+create table if not exists public.external_driver_accounts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique,
+  password text not null,
 ```
-Ab jetzt steht `"role": "boss"` in seinem JWT. Er kann alle Aufträge, Fremdaufträge, Rechnungen, Tanklisten und CMR-Dokumente lesen und ändern. Über die Edge Functions kann er auch **Fahrerkonten anlegen, Passwörter anderer Fahrer ändern und Fahrer löschen**. Genauso kann er sein `license_plate` ändern. Der Trigger `snapshot_order_license_plate` übernimmt es dann in die Umsatzliste.
+```ts
+// create-external-driver/index.ts:150-153
+await adminClient.from("external_driver_accounts").insert({
+  user_id: created.userId, username: created.username,
+  password, …
+```
+
+**Fix:** Das Passwort nicht speichern, sondern bei Bedarf **neu setzen**. Das Passwort wird zufällig erzeugt (gut gemacht), also kann der Chef statt „anzeigen“ einfach „neues Passwort erzeugen“ drücken:
+```ts
+// neue Edge Function reset-external-driver-password
+const { adminClient, error, status } = await verifyBoss(req);
+if (error || !adminClient) return json({ error }, status ?? 401);
+if ((await getRole(adminClient, userId)) !== "external_driver") {
+  return json({ error: "Not an external driver" }, 403);
+}
+const password = randomPassword();
+const { error: updErr } = await adminClient.auth.admin.updateUserById(userId, { password });
+if (updErr) return json({ error: "Passwort konnte nicht gesetzt werden" }, 500);
+return json({ password }); // nur einmal anzeigen, nirgends speichern
+```
+```sql
+alter table public.external_driver_accounts drop column if exists password;
+```
+`getAccessPassword` in `app/services/externalDriverAccessService.ts:114` und der Button in `components/ExternalAccessPanel.tsx:134` rufen dann diese Function auf.
+
+---
+
+### #2 – Mittel (neu, Rest von alt #1): Kennzeichen in `user_metadata`
+
+**Problem:** Die Rolle ist jetzt sicher, aber das zugeteilte **Kennzeichen** steht weiterhin in `user_metadata`. Das kann jeder Benutzer selbst ändern. Der Trigger `snapshot_order_license_plate` liest genau dieses Feld, wenn ein Auftrag abgeschlossen wird, und schreibt es fest in `orders.license_plate`. Die Umsatzliste gruppiert danach.
+
+**Angriffsszenario:** Ein Fahrer führt in den Browser-Entwicklertools `supabase.auth.updateUser({ data: { license_plate: "GR400FX" } })` aus und schließt dann seinen Auftrag ab. Die Fahrt und ihr Umsatz landen in der Umsatzliste beim LKW eines Kollegen. Die Nachkalkulation pro Fahrzeug stimmt nicht mehr, und niemand bemerkt es.
 
 **Betroffener Code:**
 ```ts
-// supabase/functions/_shared/verify-boss.ts:39
-if (caller.user_metadata?.role !== "boss") {
+// supabase/functions/create-driver/index.ts:63-68
+await adminClient.auth.admin.createUser({
+  email: usernameToEmail(username), password, email_confirm: true,
+  user_metadata: { license_plate: plate },
+});
 ```
 ```sql
--- z. B. supabase/migrations/20260907150000_create_orders.sql:43-46 (dasselbe Muster in allen Migrationen)
-create policy "Boss can read all orders"
-  on public.orders for select to authenticated
-  using ((auth.jwt() -> 'user_metadata' ->> 'role') = 'boss');
+-- 20260914120000_add_revenue_list.sql:45-48
+select nullif(upper(btrim(u.raw_user_meta_data ->> 'license_plate')), '')
+  into new.license_plate
+  from auth.users u where u.id = new.assigned_to;
 ```
 
-**Fix:** Die Rolle (und das zugeteilte Kennzeichen) nach `app_metadata` verschieben und nur noch dort prüfen.
-
-1. Neue Migration: bestehende Rollen kopieren, eine Hilfsfunktion anlegen und alle Policies darauf umstellen:
+**Fix:** Das Kennzeichen in `profiles` speichern, wo nur der Server schreiben darf:
 ```sql
--- Rollen und Kennzeichen einmalig in app_metadata übernehmen
-update auth.users
-   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
-       || jsonb_build_object(
-            'role', raw_user_meta_data ->> 'role',
-            'license_plate', raw_user_meta_data ->> 'license_plate');
+alter table public.profiles add column if not exists license_plate text;
 
--- Eine zentrale Stelle für die Prüfung
-create or replace function public.is_boss() returns boolean
-language sql stable as $$
-  select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'boss'
-$$;
+update public.profiles p
+   set license_plate = nullif(upper(btrim(u.raw_user_meta_data ->> 'license_plate')), '')
+  from auth.users u
+ where u.id = p.id and p.role = 'driver' and p.license_plate is null;
 
--- Jede Policy neu anlegen, z. B.:
-drop policy if exists "Boss can read all orders" on public.orders;
-create policy "Boss can read all orders"
-  on public.orders for select to authenticated
-  using (public.is_boss());
--- … dasselbe für alle anderen Tabellen, die Storage-Policy "Boss reads documents…"
--- und in set_tank_entry_prices / update_tank_entry: if not public.is_boss() then raise …
+create or replace function public.snapshot_order_license_plate() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'completed' and old.status is distinct from 'completed'
+     and new.license_plate is null and new.assigned_to is not null then
+    select p.license_plate into new.license_plate
+      from public.profiles p where p.id = new.assigned_to;
+  end if;
+  return new;
+end $$;
 ```
-2. `verify-boss.ts`:
-```ts
-if (caller.app_metadata?.role !== "boss") {
-  return { error: "Only a boss account can do this", status: 403 };
-}
-```
-3. `create-driver` / `update-driver` / `delete-driver` / `list-drivers`: `app_metadata: { role: "driver", license_plate: plate }` setzen bzw. lesen, nicht `user_metadata`.
-4. `snapshot_order_license_plate` und der Nachtrag in `20260914120000_add_revenue_list.sql`: `raw_app_meta_data ->> 'license_plate'` lesen.
-5. `AuthContext.tsx:192`: `session.user.app_metadata?.role` lesen (dort nur für die Anzeige).
-6. Danach alle Benutzer einmal ab- und wieder anmelden lassen, damit ihr JWT die neue Rolle enthält.
+In `create-driver`, `update-driver` und `list-drivers` dann `profiles.license_plate` schreiben bzw. lesen statt `user_metadata`. In `AuthContext.tsx:117` das Kennzeichen aus `profiles` mitladen (`select('role, license_plate')`).
 
 ---
 
-### #2 – Hoch [unsicher]: Öffentliche Registrierung ist vermutlich nicht abgeschaltet
+### #3 – Mittel: Stilles Abschneiden bei 1000 Zeilen (unverändert)
 
-**Problem:** Laut `lib/username.ts:1-4` legt nur der Chef Konten an („never self-registered“). Im Repo gibt es aber keine `supabase/config.toml` und keinen Hinweis, dass im Dashboard „Allow new users to sign up“ ausgeschaltet wurde. In Supabase ist das standardmäßig **an**. URL und anon-Key stehen absichtlich im JS-Bundle (`.env.example:9-10`), also kann jeder `signUp` aufrufen.
+**Problem:** Supabase liefert pro Abfrage standardmäßig höchstens 1000 Zeilen („Max rows“). Mehrere Stellen lesen „alles“ ohne Paging, und ab Zeile 1001 fehlen Daten **ohne Fehlermeldung**.
 
-**Angriffsszenario:** Ein Fremder ruft `supabase.auth.signUp({ email: "<eigene echte Adresse>", password: "…", options: { data: { role: "boss" } } })` auf, bestätigt die Mail und ist Chef (wegen #1). Auch nach dem Fix von #1 hätte er noch ein gültiges Konto. Damit darf er über `"Driver can create own tank entries"` Tankeinträge anlegen, und der Trigger legt dabei neue Fahrzeuge an (siehe #4).
-
-**Betroffener Code:** Konfiguration fehlt. Kein Code zum Zeigen, darum [unsicher].
-
-**Fix:** Im Supabase-Dashboard unter *Authentication → Sign In / Providers* **„Allow new users to sign up“ ausschalten**. Konten entstehen dann nur noch über `auth.admin.createUser` in `create-driver`. Zusätzlich die Einstellung im Repo dokumentieren, z. B. in `supabase/config.toml`:
-```toml
-[auth]
-enable_signup = false
-```
-Als zweite Sicherung kann die Tankeintrag-Policy die Rolle verlangen:
-```sql
-with check (driver_id = auth.uid()
-            and (auth.jwt() -> 'app_metadata' ->> 'role') = 'driver')
-```
-
----
-
-### #3 – Mittel: Stilles Abschneiden bei 1000 Zeilen
-
-**Problem:** Supabase (PostgREST) liefert pro Abfrage standardmäßig höchstens 1000 Zeilen (Einstellung „Max rows“). Mehrere Abfragen lesen „alles“ ohne Paging. Ab Zeile 1001 fehlen Daten, **ohne Fehlermeldung**.
-
-**Fehlerszenario:**
-- Tankliste: Bei ~3 Tankungen pro Tag und 5 LKW ist die Grenze nach gut 2 Monaten erreicht. Danach fehlen im Excel-Export einfach Tankungen.
-- `getBillableOrders()` lädt `invoice_items` ohne Limit. Ab 1000 Rechnungspositionen fehlen welche im Set `billed`. Bereits verrechnete Aufträge erscheinen dann wieder als „offen“. Der Server verhindert zwar die doppelte Rechnung (unique), aber der Chef bekommt eine falsche Liste und Fehlermeldungen.
-- Umsatzliste (Client und Edge Function): Ab 1000 Einträgen fehlen Preise und Fahrten.
+**Fehlerszenario:** Bei ~3 Tankungen pro Tag und 5 LKW ist die Grenze nach gut 2 Monaten erreicht. Danach fehlen im Excel-Export Tankungen. Ab 1000 Rechnungspositionen zeigt `getBillableOrders()` bereits verrechnete Aufträge wieder als „offen“ an. Die Umsatzliste verliert Preise.
 
 **Betroffener Code:**
 ```ts
@@ -143,16 +155,18 @@ with check (driver_id = auth.uid()
 const { data, error: queryError } = await adminClient
   .from("tank_entries").select("…")
   .order("license_plate_key", { ascending: true })
-  .order("entry_date", { ascending: true });   // kein Paging
+  .order("entry_date", { ascending: true });   // kein .range() → max. 1000
 ```
 ```ts
 // app/services/invoiceService.ts:233
 supabase.from('invoice_items').select('order_id'),
 ```
 
-**Fix:** Eine kleine Hilfsfunktion, die in 1000er-Schritten lädt, und überall dort verwenden:
+**Fix:** In 1000er-Schritten laden:
 ```ts
-async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>): Promise<T[]> {
+async function fetchAll<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>
+): Promise<T[]> {
   const PAGE = 1000;
   const all: T[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -163,29 +177,22 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
   }
 }
 
-// Verwendung
 const rows = await fetchAll((from, to) =>
   adminClient.from("tank_entries").select("…")
     .order("license_plate_key").order("entry_date").order("id")
     .range(from, to));
 ```
-Für `getBillableOrders` ist es besser, die Filterung in der Datenbank zu machen, z. B. per View oder `not.in`-Unterabfrage in einer RPC-Funktion. Dann muss nicht die ganze Tabelle `invoice_items` in den Browser.
+Für `getBillableOrders` ist es besser, in der Datenbank zu filtern (RPC mit `where not exists (select 1 from invoice_items …)`). Dann muss nicht die ganze Tabelle in den Browser.
 
 ---
 
-### #4 – Mittel: Fahrer kann Fahrzeugstamm und km-Stände verfälschen
+### #4 – Mittel: Fahrer kann Fahrzeugliste und km-Stände verfälschen (teilweise verbessert)
 
-**Problem:** Beim Tankeintrag darf der Fahrer **jedes beliebige Kennzeichen** und **jeden km-Stand ≥ 0** eintragen (`int4`, also bis ~2,1 Mrd.). Der Trigger `sync_license_plate_km` übernimmt den Wert mit `greatest()` ins Fahrzeug, oder legt ein neues Fahrzeug an. Der Fahrer selbst kann das nicht rückgängig machen (keine UPDATE-Policy). Der Chef muss den Eintrag in der App korrigieren.
+**Problem:** Seit `create_profiles` dürfen nur noch Konten mit Rolle `driver` tanken, das ist gut. Ein Fahrer darf aber weiterhin **jedes beliebige Kennzeichen** und **jeden km-Stand** (bis ~2,1 Mrd.) eintragen. Der Trigger übernimmt den Wert mit `greatest()` dauerhaft ins Fahrzeug oder legt ein neues Fahrzeug an.
 
-**Fehlerszenario:** Ein Tippfehler („3438900“ statt „343890“) oder Absicht auf ein fremdes Kennzeichen: Beim LKW steht dann ein km-Stand, der nie erreicht wird. `getServiceStatus` (`app/services/licensePlateService.ts:73-84`) meldet den Service sofort als fällig oder rechnet falsch. Mit Kennzeichen wie „X1“, „X2“ … lassen sich beliebig viele Fantasie-Fahrzeuge in der Chef-Übersicht erzeugen.
+**Fehlerszenario:** Ein Tippfehler („3438900“ statt „343890“) setzt den km-Stand des LKW für immer zu hoch. `getServiceStatus` (`app/services/licensePlateService.ts:73-84`) meldet dann den Service sofort als fällig oder rechnet falsch. Mit ausgedachten Kennzeichen entstehen Fantasie-LKW in der Chef-Übersicht.
 
 **Betroffener Code:**
-```sql
--- 20260909100000_create_tank_entries.sql:91-94
-create policy "Driver can create own tank entries"
-  on public.tank_entries for insert to authenticated
-  with check (driver_id = auth.uid());
-```
 ```sql
 -- 20260911110000_add_fleet_to_license_plates.sql:56,64-67
 km_stand = greatest(coalesce(km_stand, 0), new.km_stand),
@@ -194,77 +201,99 @@ if not found then
   insert into public.license_plates (name, km_stand, …) values (upper(btrim(new.license_plate)), …)
 ```
 
-**Fix:** Im Trigger nur **bekannte, aktive** Fahrzeuge zulassen und unplausible Sprünge ablehnen:
+**Fix:** Den Trigger auf `before insert` umstellen und nur bekannte, aktive LKW mit plausiblem Sprung zulassen:
 ```sql
 create or replace function public.sync_license_plate_km() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_km integer;
 begin
   select km_stand into v_km from public.license_plates
-   where plate_key = new.license_plate_key and retired_at is null
-   for update;
-
+   where plate_key = new.license_plate_key and retired_at is null for update;
   if not found then
-    raise exception 'Unbekanntes Kennzeichen – bitte beim Chef melden'
-      using errcode = 'foreign_key_violation';
+    raise exception 'Unbekanntes Kennzeichen – bitte beim Chef melden' using errcode = 'foreign_key_violation';
   end if;
-
-  -- Mehr als 5.000 km seit der letzten Tankung ist ein Tippfehler
   if v_km is not null and new.km_stand > v_km + 5000 then
-    raise exception 'km-Stand unplausibel (letzter Stand: %)', v_km
-      using errcode = 'check_violation';
+    raise exception 'km-Stand unplausibel (letzter Stand: %)', v_km using errcode = 'check_violation';
   end if;
-
   update public.license_plates
-     set km_stand = greatest(coalesce(km_stand, 0), new.km_stand),
-         km_entry_date = case when new.km_stand >= coalesce(km_stand, 0) then new.entry_date else km_entry_date end,
+     set km_entry_date = case when new.km_stand >= coalesce(km_stand, 0) then new.entry_date else km_entry_date end,
+         km_stand = greatest(coalesce(km_stand, 0), new.km_stand),
          km_updated_at = now()
    where plate_key = new.license_plate_key;
   return new;
 end $$;
+
+drop trigger if exists tank_entries_sync_license_plate_km on public.tank_entries;
+create trigger tank_entries_sync_license_plate_km
+  before insert on public.tank_entries
+  for each row execute function public.sync_license_plate_km();
 ```
-Den Trigger dafür auf `before insert` umstellen, damit die Exception den Insert verhindert. Zusätzlich ein Check-Constraint `entry_date <= current_date + 1`, damit keine Tankungen in der Zukunft möglich sind.
 
 ---
 
-### #5 – Mittel: Fahrer mit Daten lassen sich nicht löschen
+### #5 – Mittel: Eigene Fahrer lassen sich nicht löschen (verschärft)
 
-**Problem:** `tank_entries.driver_id`, `orders.assigned_to` und `created_by` verweisen auf `auth.users(id)` **ohne `on delete`-Regel**. Standard ist dann `NO ACTION`: Postgres verweigert das Löschen eines Benutzers, auf den noch Zeilen zeigen.
+**Problem:** `tank_entries.driver_id`, `orders.assigned_to` und `created_by` verweisen ohne `on delete`-Regel auf `auth.users`. Postgres verweigert dann das Löschen. **Neu dazugekommen:** Für fremde Fahrer wird vor dem Löschen `release_storage_ownership` aufgerufen, für eigene Fahrer in `delete-driver` nicht. Supabase lehnt aber das Löschen eines Kontos ab, dem noch Dateien im Storage gehören. Dasselbe Problem ist also bei den fremden Fahrern gelöst und bei den eigenen nicht.
 
-**Fehlerszenario:** Der Chef löscht einen Fahrer, der schon getankt oder einen Auftrag hatte. `auth.admin.deleteUser` schlägt mit „Database error deleting user“ fehl. Der Chef sieht diese technische Meldung und kann ausgeschiedene Fahrer **nie** entfernen. Ihre Zugangsdaten bleiben gültig. Genau das ist bei ausgeschiedenen Mitarbeitern ein Sicherheitsrisiko.
+**Fehlerszenario:** Ein Fahrer kündigt. Der Chef drückt „Löschen“ und bekommt „Database error deleting user“. Das Konto mit gültigem Passwort bleibt bestehen, der ehemalige Mitarbeiter kann sich weiter anmelden und seine alten Aufträge und CMR-Belege sehen.
 
 **Betroffener Code:**
-```sql
--- 20260909100000_create_tank_entries.sql:25
-driver_id uuid not null references auth.users(id) default auth.uid(),
--- 20260907150000_create_orders.sql:20-22
-created_by uuid references auth.users(id) default auth.uid(),
-assigned_to uuid references auth.users(id),
+```ts
+// supabase/functions/delete-driver/index.ts:43-47
+if ((await getRole(adminClient, userId)) !== "driver") { … }
+const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 ```
 
-**Fix:** Die Tankliste ist ein Fahrtenbuch, also dürfen die Daten nicht mitgelöscht werden. Deshalb Fahrer **sperren statt löschen**:
+**Fix:** Die Tankliste ist ein Fahrtenbuch, deshalb eigene Fahrer **sperren statt löschen**, und zusätzlich die Rolle entziehen:
 ```ts
-// delete-driver/index.ts: statt deleteUser
+// delete-driver/index.ts
 const { error: banError } = await adminClient.auth.admin.updateUserById(userId, {
   ban_duration: "876000h", // ~100 Jahre = dauerhaft gesperrt
 });
+if (banError) return json({ error: "Fahrer konnte nicht gesperrt werden" }, 500);
+await adminClient.from("profiles").delete().eq("id", userId); // sofort kein Zugriff mehr
 ```
-Alternativ die Fremdschlüssel auf `on delete set null` umstellen (dafür `driver_id` nullable machen). Dann geht aber die Zuordnung „wer hat getankt“ verloren.
+In `list-drivers` gesperrte Konten (`u.banned_until`) als „ausgeschieden“ kennzeichnen.
 
 ---
 
-### #6 – Niedrig: Auftrag kann mehrfach „abgeschlossen“ werden
+### #6 – Niedrig (neu): `cmr` kann von den echten Dateien abweichen
 
-**Problem:** `complete_order` prüft nicht, ob der Auftrag schon `completed` ist. Die App blendet den Button zwar aus, aber die Funktion ist direkt aufrufbar.
+**Problem:** `remove_order_document` trägt einen Pfad aus `orders.cmr` bzw. `external_orders.cmr` aus, prüft aber nicht, ob die Datei wirklich aus dem Bucket gelöscht wurde. Ein Fahrer oder fremder Fahrer kann die Funktion direkt aufrufen, solange der Auftrag offen ist.
 
-**Fehlerszenario:** Ein Fahrer ruft `supabase.rpc('complete_order', { order_id, empty_km: 0, freight_km: 9999 })` für einen längst verrechneten Auftrag auf. Kilometer und `completed_at` in der Umsatzliste ändern sich nachträglich.
+**Fehlerszenario:** Ein fremder Fahrer ruft `supabase.rpc('remove_order_document', { order_id, path })` auf. Die Datei bleibt im Bucket, fehlt aber in `cmr`. Laut Kommentar in `orderDocumentService.ts:84-86` fällt genau so ein Beleg „bei der Abrechnung durchs Raster“.
+
+**Betroffener Code:**
+```sql
+-- 20260915120000_add_cmr_to_orders.sql:147-154
+if not public.can_write_order_documents(remove_order_document.order_id, true) then …
+update public.orders o
+   set cmr = array_remove(o.cmr, remove_order_document.path)
+ where o.id = remove_order_document.order_id;
+```
+
+**Fix:** Nur austragen, wenn die Datei nicht mehr existiert:
+```sql
+if exists (select 1 from storage.objects so
+            where so.bucket_id = 'order-documents' and so.name = remove_order_document.path) then
+  raise exception 'Datei ist noch vorhanden – zuerst löschen' using errcode = 'check_violation';
+end if;
+```
+Noch sauberer ist ein Trigger `after delete on storage.objects`, der `cmr` selbst nachführt. Dann kann der Client die Spalte gar nicht mehr falsch setzen.
+
+---
+
+### #7 – Niedrig: Eigener Auftrag kann mehrfach „abgeschlossen“ werden (unverändert)
+
+**Problem:** `complete_order` prüft nicht, ob der Auftrag schon `completed` ist. Bei `complete_external_order` ist das korrekt gelöst (`and e.status <> 'completed'`).
+
+**Fehlerszenario:** Ein Fahrer ruft `supabase.rpc('complete_order', { order_id, empty_km: 0, freight_km: 9999 })` für einen längst verrechneten Auftrag auf. Kilometer und Datum in der Umsatzliste ändern sich nachträglich.
 
 **Betroffener Code:**
 ```sql
 -- 20260914100000_add_cargo_type_and_km.sql:75-78
 select o.* into vorhandene from public.orders o
- where o.id = complete_order.order_id
-   and o.assigned_to = auth.uid();
+ where o.id = complete_order.order_id and o.assigned_to = auth.uid();
 ```
 
 **Fix:**
@@ -273,15 +302,13 @@ if vorhandene.status = 'completed' then
   raise exception 'Auftrag ist bereits abgeschlossen' using errcode = 'check_violation';
 end if;
 ```
-Zusätzlich eine sinnvolle Obergrenze, z. B. `check (empty_km <= 20000 and freight_km <= 20000)`.
+Dazu eine sinnvolle Obergrenze, z. B. `check (empty_km <= 20000 and freight_km <= 20000)`.
 
 ---
 
-### #7 – Niedrig: Rechnung wird nicht atomar gespeichert
+### #8 – Niedrig: Rechnung wird nicht atomar gespeichert (unverändert)
 
-**Problem:** `saveInvoice` schickt Kopf und jede Position als **eigenes** Update parallel ab. Schlägt eines fehl (z. B. ungültiges Datum oder Netzabbruch), sind die anderen schon gespeichert.
-
-**Fehlerszenario:** Bei einer Sammelrechnung mit 4 Positionen werden 3 gespeichert, eine nicht. Der Chef sieht eine Fehlermeldung und druckt danach eine halb geänderte Rechnung.
+**Problem und Szenario:** `saveInvoice` schickt Kopf und jede Position als eigenes Update ab. Scheitert eines, sind die anderen schon gespeichert, und der Chef druckt eine halb geänderte Sammelrechnung.
 
 **Betroffener Code:**
 ```ts
@@ -292,27 +319,25 @@ const results = await Promise.all([
 ]);
 ```
 
-**Fix:** Eine RPC-Funktion, die alles in einer Transaktion schreibt:
+**Fix:** Eine RPC-Funktion mit `security invoker`. Dann greifen die RLS-Policies weiter, und bei einem Fehler wird alles zurückgerollt:
 ```sql
 create or replace function public.save_invoice(p_header jsonb, p_items jsonb)
 returns void language plpgsql security invoker as $$
 begin
-  update public.invoices set belegnummer = p_header->>'belegnummer', … where id = (p_header->>'id')::uuid;
+  update public.invoices set belegnummer = p_header->>'belegnummer', …
+   where id = (p_header->>'id')::uuid;
   update public.invoice_items i
      set preis = (x->>'preis')::numeric, bezeichnung = x->>'bezeichnung', …
     from jsonb_array_elements(p_items) x
    where i.id = (x->>'id')::uuid;
 end $$;
 ```
-`security invoker` heißt: Die bestehenden RLS-Policies greifen weiter, und bei einem Fehler wird alles zurückgerollt.
 
 ---
 
-### #8 – Niedrig: Doppelte Belegnummern möglich
+### #9 – Niedrig: Doppelte Belegnummern möglich (unverändert)
 
-**Problem:** Die Nummer wird korrekt fortlaufend vergeben (`create_invoice` mit Advisory-Lock, das ist gut gemacht). Danach kann der Chef `belegnummer` aber frei überschreiben (`invoiceService.ts:266`), und auf der Spalte gibt es keinen `unique`-Constraint. Rechnungsnummern müssen in Österreich eindeutig sein (§ 11 UStG).
-
-**Fehlerszenario:** Der Chef korrigiert Rechnung 05/2026 versehentlich auf „04/2026“. Es gibt zwei Rechnungen mit derselben Nummer, und niemand bemerkt es.
+**Problem und Szenario:** `create_invoice` vergibt die Nummer korrekt fortlaufend. Der Chef kann `belegnummer` danach aber frei überschreiben, und es gibt keinen `unique`-Constraint. Schreibt er versehentlich eine schon vergebene Nummer hinein, existieren zwei Rechnungen „04/2026“. Rechnungsnummern müssen aber eindeutig sein (§ 11 UStG).
 
 **Fix:**
 ```sql
@@ -323,105 +348,130 @@ Im Client den Fehlercode `23505` wie in `orderService.ts:141` in eine verständl
 
 ---
 
-### #9 – Niedrig: Keine Routen-Guards im Frontend
+### #10 – Niedrig: Routen-Guards unvollständig (teilweise verbessert)
 
-**Problem:** `app/chef/_layout.tsx` und `app/driver/_layout.tsx` prüfen weder Anmeldung noch Rolle. Jeder kann `/chef` direkt aufrufen. Dazu kommt: `AuthContext` übernimmt einen Offline-Benutzer aus dem localStorage **ohne zu prüfen**, ob der Offline-Fallback überhaupt eingeschaltet ist.
+**Problem:** Die Layouts leiten jetzt eine **falsche Rolle** um, das ist neu und gut. Ist aber gar niemand angemeldet (`user === null`), wird die Oberfläche trotzdem angezeigt. Außerdem übernimmt `AuthContext` einen Offline-Benutzer aus dem localStorage, ohne zu prüfen, ob der Offline-Fallback überhaupt eingeschaltet ist.
 
-**Warum nur Niedrig:** Die echten Daten schützt der Server (RLS). Ohne gültiges Chef-JWT bleiben die Listen leer. Nach dem Fix von #1 sieht ein Fremder also nur eine leere Oberfläche. Trotzdem wirkt es unprofessionell und verrät die Struktur der Chef-Funktionen.
+**Warum nur Niedrig:** Die Daten schützt RLS, der Besucher sieht nur leere Listen. Trotzdem verrät die Oberfläche, welche Chef-Funktionen es gibt.
 
 **Betroffener Code:**
 ```tsx
-// app/chef/_layout.tsx:4
-export default function ChefLayout() {
-  const stackOptions = useStackScreenOptions();
-  return (<Stack …>…</Stack>);
+// app/chef/_layout.tsx:11
+if (!isLoading && user && user.role !== 'boss') {
+  return <Redirect href={homeRouteFor(user.role)} />;
 }
 ```
 ```ts
-// app/context/AuthContext.tsx:227-229
+// app/context/AuthContext.tsx:185-187
 if (!restoredSession && storedOfflineUser) {
   setOfflineUser(JSON.parse(storedOfflineUser) as AppUser);
 ```
 
 **Fix:**
 ```tsx
-// app/chef/_layout.tsx
-import { Redirect, Stack } from 'expo-router';
-import { useAuth } from '@/app/context/AuthContext';
-
-export default function ChefLayout() {
-  const { isLoading, isAuthenticated, user } = useAuth();
-  const stackOptions = useStackScreenOptions();
-  if (isLoading) return null;
-  if (!isAuthenticated) return <Redirect href="/login" />;
-  if (user?.role !== 'boss') return <Redirect href="/driver" />;
-  return <Stack screenOptions={{ headerShown: false, ...stackOptions }}>…</Stack>;
-}
+if (isLoading) return null;
+if (!user) return <Redirect href="/login" />;
+if (user.role !== 'boss') return <Redirect href={homeRouteFor(user.role)} />;
 ```
-(Analog für `driver/_layout.tsx`.) Und in `AuthContext.tsx`:
-```ts
-if (!restoredSession && storedOfflineUser && isOfflineFallbackConfigured()) {
-```
+(Analog in `app/driver/_layout.tsx` und `app/external/_layout.tsx`.) In `AuthContext.tsx:185` zusätzlich `&& isOfflineFallbackConfigured()` prüfen.
 
 ---
 
-### #10 – Niedrig: Interne Fehlermeldungen gehen an den Client
+### #11 – Niedrig: Interne Fehlermeldungen gehen an den Client
 
-**Problem:** Die Edge Functions geben `error.message` von Postgres und Supabase-Auth ungefiltert zurück. Die App zeigt sie dann an (`toFriendlyError` in `orderService.ts:144` macht das ebenso für alles außer 23505).
-
-**Szenario:** Meldungen wie `duplicate key value violates unique constraint "invoice_items_order_id_key"` oder `Database error deleting user` verraten Tabellen- und Constraint-Namen. Für einen Angreifer ist das eine Landkarte der Datenbank.
+**Problem und Szenario:** Die Edge Functions geben `error.message` von Postgres und Supabase Auth ungefiltert zurück. `verifyBoss` liefert bei einem DB-Fehler sogar die rohe Meldung mit Status 500 (`verify-boss.ts:60`). Meldungen wie `duplicate key value violates unique constraint "…"` verraten Tabellen- und Constraint-Namen, also eine Landkarte der Datenbank.
 
 **Betroffener Code:**
 ```ts
-// supabase/functions/export-invoice/index.ts:844-847
-} catch (e) {
-  if (e instanceof HttpError) return json({ error: e.message }, e.status);
-  return json({ error: e instanceof Error ? e.message : "…" }, 400);
+// supabase/functions/_shared/verify-boss.ts:59-61
+} catch (roleError) {
+  return { error: (roleError as Error).message, status: 500 };
+}
+```
+```ts
+// supabase/functions/create-external-driver/index.ts:159-162
+if (profileError || accountError) {
+  await adminClient.auth.admin.deleteUser(created.userId);
+  return json({ error: (profileError ?? accountError)!.message }, 500);
 }
 ```
 
-**Fix:** Details nur ins Log schreiben, dem Client eine allgemeine Meldung geben:
+**Fix:** Details ins Log, eine allgemeine Meldung an den Client:
 ```ts
-} catch (e) {
-  if (e instanceof HttpError && e.status < 500) return json({ error: e.message }, e.status);
-  console.error("[export-invoice]", e);
-  return json({ error: "Interner Fehler – bitte später erneut versuchen." }, 500);
+} catch (roleError) {
+  console.error("[verifyBoss]", roleError);
+  return { error: "Interner Fehler – bitte später erneut versuchen.", status: 500 };
 }
 ```
-Dazu in `loadCompletedOrders`/`prefillInvoice` bei DB-Fehlern `new HttpError("Datenbankfehler", 500)` werfen statt `error.message` weiterzugeben.
 
 ---
 
-### #11 – Niedrig: Fehlende Typprüfung und schwache Passwortregel
+### #12 – Niedrig: Fehlende Typprüfung, schwache Passwortregel, unbehandelte Fehler
 
 **Problem:**
-- `update-driver` ruft `licensePlate.trim()` auf, ohne zu prüfen, ob es ein String ist. Schickt jemand `{"licensePlate": 5}`, stürzt die Funktion mit einem unbehandelten Fehler ab (HTTP 500).
-- `username`/`password` werden ebenfalls nicht auf `typeof === "string"` geprüft.
-- 6 Zeichen Mindestlänge ist für ein produktives Firmensystem zu wenig. Supabase bremst zwar Login-Versuche, aber schwache Passwörter bleiben das größte Einfallstor.
-
-**Betroffener Code:**
-```ts
-// supabase/functions/update-driver/index.ts:132-133
-if (licensePlate !== undefined) {
-  const plate = licensePlate.trim().toUpperCase();
-```
+- `create-external-driver/index.ts:115-116` ruft `body.label?.trim()` auf. Ist `label` eine Zahl, stürzt die Function mit einer unbehandelten Exception ab. Dasselbe gilt für `licensePlate` in `update-driver`.
+- `delete-driver/index.ts:43` ruft `getRole()` ohne `try/catch` auf. `getRole` wirft bei DB-Fehlern (`verify-boss.ts:23`), das Ergebnis ist dann ein unbehandelter 500er. `delete-external-driver` macht es richtig (`index.ts:220-224`).
+- Eigene Fahrer: Mindestlänge 6 Zeichen (`create-driver/index.ts:47`). Die Passwörter der fremden Fahrer werden dagegen sicher erzeugt (12 Zeichen, `crypto.getRandomValues`, ohne Modulo-Verzerrung).
+- `expiresOn` hat keine Obergrenze. „Zeitlich begrenzt“ lässt sich mit `2099-12-31` aushebeln.
 
 **Fix:**
 ```ts
-if (licensePlate !== undefined && typeof licensePlate !== "string") {
-  return json({ error: "licensePlate must be a string" }, 400);
+if (typeof body.label !== "string" || typeof body.expiresOn !== "string") {
+  return json({ error: "Ungültige Eingabe" }, 400);
 }
-if (password !== undefined && (typeof password !== "string" || password.length < 10)) {
-  return json({ error: "Password must be at least 10 characters" }, 400);
-}
+const maxDate = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+if (expiresOn > maxDate) return json({ error: "Höchstens 90 Tage" }, 400);
 ```
-Zusätzlich im Supabase-Dashboard unter *Authentication → Policies* eine Mindestlänge und „Leaked password protection“ einschalten.
+```ts
+// delete-driver/index.ts
+let role: string | null;
+try { role = await getRole(adminClient, userId); }
+catch { return json({ error: "Interner Fehler" }, 500); }
+```
+Mindestlänge in `create-driver`/`update-driver` auf 10 anheben, zusätzlich im Supabase-Dashboard unter *Authentication → Policies* „Leaked password protection“ einschalten.
 
 ---
 
-### #12 – Niedrig: Keine Security-Header, Token im localStorage
+### #13 – Niedrig [unsicher]: Selbstregistrierung vermutlich an (entschärft)
 
-**Problem:** Es gibt kein `vercel.json` mit Headern. Es fehlen Content-Security-Policy, `X-Frame-Options`/`frame-ancestors` (Schutz gegen Clickjacking) und `Referrer-Policy`. Das Supabase-Session-Token liegt im Web in `localStorage` (`lib/supabase.ts:36-42`, über AsyncStorage). Bei jeder XSS-Lücke könnte es direkt gestohlen werden. Eine konkrete XSS-Lücke habe ich **nicht** gefunden (siehe Abschnitt 4). Die Header sind also eine zweite Verteidigungslinie.
+**Problem:** Im Repo gibt es keine `supabase/config.toml`, und in Supabase ist „Allow new users to sign up“ standardmäßig an. **Neu:** Ein selbst registriertes Konto hat keine `profiles`-Zeile, und dann greift keine einzige Policy mehr (alle verlangen eine Rolle). `AuthContext.tsx:148` meldet so ein Konto sogar sofort wieder ab. Übrig bleibt: Fremde können beliebig viele Leer-Konten anlegen (Spam) und würden jede zukünftige Policy ausnutzen, die nur `auth.uid()` prüft.
+
+**Fix:** Im Supabase-Dashboard unter *Authentication → Sign In / Providers* „Allow new users to sign up“ ausschalten und im Repo dokumentieren:
+```toml
+# supabase/config.toml
+[auth]
+enable_signup = false
+```
+
+---
+
+### #14 – Niedrig (neu): Rollen-Übernahme vertraut dem alten `user_metadata`
+
+**Problem:** Die Migration kopiert die Rollen aus `raw_user_meta_data`. Genau dieses Feld konnte bis zu dieser Migration jeder Benutzer selbst setzen (alt #1). Hat ein Fahrer das vorher ausgenutzt, wird er dabei **dauerhaft als `boss`** in `profiles` übernommen.
+
+**Betroffener Code:**
+```sql
+-- 20260915110000_create_profiles.sql:38-42
+insert into public.profiles (id, role)
+select id, raw_user_meta_data ->> 'role'
+  from auth.users
+ where raw_user_meta_data ->> 'role' in ('boss', 'driver')
+on conflict (id) do nothing;
+```
+
+**Fix:** Nach dem Einspielen einmal im SQL Editor prüfen. Es darf nur das echte Chef-Konto herauskommen:
+```sql
+select u.email, p.role, p.created_at
+  from public.profiles p join auth.users u on u.id = p.id
+ where p.role = 'boss';
+```
+Taucht ein unbekanntes Konto auf: `update public.profiles set role = 'driver' where id = '<id>';` und das Passwort dieses Kontos zurücksetzen.
+
+---
+
+### #15 – Niedrig: Keine Security-Header, Token im localStorage (unverändert)
+
+**Problem:** Es gibt kein `vercel.json`, also keine Content-Security-Policy und keinen Schutz gegen Einbetten in fremde Seiten (Clickjacking). Das Login-Token liegt im Web im localStorage. Eine konkrete XSS-Lücke habe ich **nicht** gefunden. Die Header sind eine zweite Verteidigungslinie für den Fall, dass eine entsteht.
 
 **Fix:** `vercel.json` im Projekt-Root:
 ```json
@@ -431,50 +481,35 @@ Zusätzlich im Supabase-Dashboard unter *Authentication → Policies* eine Minde
     "headers": [
       { "key": "Content-Security-Policy", "value": "default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'" },
       { "key": "X-Content-Type-Options", "value": "nosniff" },
-      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-      { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
     ]
   }]
 }
 ```
-Die CSP vor dem Livegang testen: Expo-Web kann Inline-Skripte brauchen. Dann gezielt Hashes ergänzen, nicht einfach `'unsafe-inline'` für Skripte freigeben.
+Vor dem Livegang testen. Braucht Expo-Web Inline-Skripte, gezielt Hashes ergänzen statt `'unsafe-inline'` für Skripte.
 
 ---
 
-### #13 – Niedrig: Offline-Fallback-Passwort ist öffentlich
+### #16 – Niedrig: Offline-Passwort im Bundle, Dependencies (unverändert)
 
-**Problem:** `EXPO_PUBLIC_OFFLINE_FALLBACK_PASSWORD` landet im JS-Bundle. Die Kommentare sagen das ehrlich, und der Fallback greift nur bei Netzfehlern. Er gibt aber (mit Standard-Rolle `boss`) die Chef-Oberfläche frei. Wer das Bundle liest, kennt das Passwort.
-
-**Fix:** Für die Produktivversion die Variable **nicht setzen**. Dann ist der Fallback aus. Der Fallback ist für Vorführungen gedacht und sollte nur in einem eigenen Demo-Deployment aktiv sein.
-
----
-
-### #14 – Niedrig: Bekannte Schwachstellen in Dependencies
-
-`npm audit --package-lock-only --omit=dev` meldet 29 Probleme (1 kritisch: `shell-quote`; hoch u. a.: `ws`, `postcss`, `tar`, `@xmldom/xmldom`, `js-yaml`, `nanoid`, `image-size`, `browserslist`, `brace-expansion`). Alle stecken **transitiv** in der Expo-/Metro-Build- und Dev-Server-Kette (z. B. `@expo/config-plugins`, `react-native/node_modules/ws`). In der ausgelieferten statischen Web-Seite laufen sie nicht, das Risiko betrifft vor allem den Entwickler-Rechner und den Build. Die direkten Laufzeit-Pakete (`@supabase/supabase-js` 2.112.1, `react` 19.1.0) sind nicht betroffen.
-
-**Fix:** Vor dem Livegang `npx expo install --check` und danach `npm audit fix` (ohne `--force`) ausführen und anschließend neu testen. Die Edge Functions pinnen `npm:exceljs@4.4.0`. Die Version regelmäßig prüfen.
+- `EXPO_PUBLIC_OFFLINE_FALLBACK_PASSWORD` (`lib/offlineFallback.ts:77`) landet im ausgelieferten JavaScript und gibt bei Netzfehlern die Chef-Oberfläche frei. **Fix:** Im Produktiv-Deployment die Variable nicht setzen, nur in einem eigenen Demo-Deployment.
+- `npm audit --omit=dev`: 29 Meldungen (1 kritisch `shell-quote`, 9 hoch u. a. `ws`, `postcss`, `tar`). Alle stecken transitiv in der Expo-/Metro-Build-Kette, nicht in der ausgelieferten statischen Seite. `package.json` und `package-lock.json` haben sich seit dem ersten Review nicht geändert. **Fix:** `npx expo install --check`, danach `npm audit fix` (ohne `--force`) und neu testen.
 
 ---
 
-### #15 – Niedrig: Toter Code und Schema-Drift
+### #17 – Niedrig: Toter Code und Schema-Drift (unverändert)
 
-- **Notification-System** (`app/services/notificationService.ts`, `app/context/NotificationContext.tsx`, `app/components/Notification*.tsx`, `app/examples/`): Es wird nirgends eingebunden außer im Beispiel. Es verbindet sich unverschlüsselt (`ws://localhost:8080`) und ohne Authentifizierung, nur mit der User-ID in der URL. Außerdem wird bei Expo Router **jede Datei unter `app/` zu einer Route**: `app/services/…`, `app/context/…` und `app/examples/…` sind damit als URLs erreichbar bzw. erzeugen Warnungen.
-  **Fix:** Das Notification-System löschen oder vor einer echten Nutzung über Supabase Realtime (mit JWT) neu bauen. `services/`, `context/`, `components/`, `hooks/` aus `app/` in den Projekt-Root verschieben (es gibt dort schon `components/` und `hooks/`).
-- **Fehlende Migrationen:** `export-invoice` liest `site_companies.bmd_kto_nr` und `uid_nummer` (`index.ts:286`), und `20260911150000_…sql:22` verweist auf `20260911140000_dedupe_company_names.sql`. Beides gibt es im Repo nicht, es wurde wohl nur im Dashboard angelegt. Wer die Datenbank aus den Migrationen neu aufsetzt (Backup-Wiederherstellung, Testumgebung), bekommt ein anderes Schema, und Kundennummer/UID bleiben leer.
-  **Fix:** Das aktuelle Schema mit `supabase db diff` abgleichen und die fehlenden Migrationen nachziehen.
-- `supabase/dashboard-deploy/` enthält Kopien der Functions. Das ist eine Fehlerquelle, weil ein Fix (z. B. #1) an zwei Stellen gemacht werden muss. Sobald die CLI eingerichtet ist, den Ordner löschen.
+- Das **Notification-System** (`app/services/notificationService.ts`, `app/context/NotificationContext.tsx`, `app/components/Notification*.tsx`, `app/examples/`) wird nirgends eingebunden. Es verbindet sich unverschlüsselt (`ws://localhost:8080`) und ohne Login, nur mit der User-ID in der URL. Bei Expo Router wird außerdem jede Datei unter `app/` zu einer Route. **Fix:** löschen, und `services/`, `context/`, `components/`, `hooks/` aus `app/` in den Projekt-Root verschieben.
+- `export-invoice` liest `site_companies.bmd_kto_nr` und `uid_nummer`, und `20260911150000_…sql:22` verweist auf `20260911140000_dedupe_company_names.sql`. Beides fehlt im Repo, eine neu aufgesetzte Datenbank hätte ein anderes Schema. **Fix:** `supabase db diff` ausführen und die fehlenden Migrationen nachziehen.
+- `supabase/dashboard-deploy/` enthält Kopien aller Functions, inzwischen auch mit angepasster Rollenprüfung. Jeder Fix muss an zwei Stellen gemacht werden. **Fix:** Supabase CLI einrichten und den Ordner löschen.
 
 ---
 
 ## 4. Was bereits gut gelöst ist
 
-- **RLS überall aktiv**, und neue Tabellen haben bewusst keine zu weiten Policies. Tankliste und `orders` sind für Fahrer nicht direkt änderbar. Stattdessen gibt es eng begrenzte `security definer`-Funktionen (`complete_order`, `set_tank_entry_prices`, `update_tank_entry`) mit `set search_path = public` und sauberem `revoke … from public/anon`. Das ist Lehrbuch-Niveau.
-- **service_role-Key** wird nur in Edge Functions verwendet. Im Frontend steht nur der anon-Key, und `.env` ist korrekt in `.gitignore`. Im Repo sind keine Secrets.
-- **Rechnungsnummern:** `create_invoice` vergibt sie in einer Transaktion mit `pg_advisory_xact_lock`. Keine Race Condition, keine Lücken. Der `unique`-Constraint auf `invoice_items.order_id` verhindert Doppelverrechnung serverseitig.
-- **Storage:** privater Bucket, Größenlimit, Whitelist für MIME-Typen (kein HTML/SVG), Rechte über den Ordnernamen. Dateinamen werden bereinigt (`toStorageName`), Downloads laufen über kurzlebige signierte URLs.
-- **XSS:** Alle Benutzereingaben in den PDF-/Druck-HTMLs laufen durch `escapeHtml` (`lib/transportauftragPdf.ts`, `lib/ownOrderPdf.ts`). `dangerouslySetInnerHTML` wird nur für statisches CSS verwendet.
-- **Keine SQL-Injection:** Alle Zugriffe gehen über den Supabase-Query-Builder oder parametrisierte PL/pgSQL-Funktionen. `ilike`-Platzhalter werden in `loadCustomer` sogar maskiert.
-- **Geld und Datum:** `numeric` statt `float`, Zeitzone `Europe/Vienna` für Rechnungsdatum, Excel-Datumswerte zu Mittag verankert. Das sind typische Fehlerquellen, und hier sind sie richtig gelöst.
-- **Doppeltes Absenden** ist in allen Formularen über `isSaving`/`busy` + `disabled` verhindert.
-- `delete-driver`/`update-driver` prüfen serverseitig, dass das Ziel wirklich ein Fahrer ist, nicht ein Chef-Konto.
+- **Rollen in `public.profiles`** mit `app_role()` als `security definer` und ohne Schreib-Policy für Clients. Alle alten Policies wurden mit gleichem Namen neu angelegt, und die Migration warnt selbst, falls irgendwo noch `user_metadata` gelesen wird. Das ist vorbildlich.
+- **Fremde Fahrer sind sauber abgeschottet:** keine Select-Policy auf `external_orders`, sondern `get_my_external_orders()` mit ausgewählten Spalten ohne Preise. Das Ablaufdatum wird in **jeder** Funktion und Storage-Policy geprüft (Wiener Zeit), `complete_external_order` verhindert doppeltes Abschließen. Spaltenrechte (`grant update (expires_on, label)`) verhindern, dass Benutzername oder Passwort über die API geändert werden.
+- **Zufallspasswörter** mit `crypto.getRandomValues`, verwechslungsfreiem Alphabet und korrekt vermiedener Modulo-Verzerrung.
+- **`add_order_document`** prüft, dass der Pfad genau im Ordner des Auftrags liegt und die Datei wirklich existiert. Damit lässt sich keinem Auftrag eine fremde Datei unterschieben.
+- **Aufräumen bei Fehlern:** Scheitert das Anlegen von Profil oder Zugang, wird das Auth-Konto wieder gelöscht. Scheitert das Vermerken eines Belegs, wird die hochgeladene Datei wieder entfernt.
+- Weiterhin gut: RLS überall aktiv, service_role nur serverseitig, keine Secrets im Repo, konsequentes `escapeHtml` in den PDF-Vorlagen, keine SQL-Injection (nur Query-Builder und parametrisierte Funktionen), Rechnungsnummern mit Advisory-Lock, `numeric` für Geld, Wiener Zeitzone für Datumswerte, Schutz vor doppeltem Absenden in allen Formularen.
