@@ -41,8 +41,36 @@ interface AuthResult {
 }
 
 // App-level role. Supabase's own `User.role` is a JWT claim ("authenticated")
-// and unrelated to this — our role lives in user_metadata instead.
-export type UserRole = "boss" | "driver";
+// and unrelated to this — our role lives in public.profiles instead
+// (supabase/migrations/20260915110000_create_profiles.sql). Nicht im
+// user_metadata: das kann jeder Nutzer selbst ändern.
+export type UserRole = "boss" | "driver" | "external_driver";
+
+// Die Startseite je Rolle — Login und die Rollen-Guards in den Layouts
+// leiten hierher.
+export function homeRouteFor(role: UserRole): "/chef" | "/driver" | "/external" {
+  switch (role) {
+    case "boss":
+      return "/chef";
+    case "external_driver":
+      return "/external";
+    default:
+      return "/driver";
+  }
+}
+
+const NO_ROLE_MESSAGE = "Für dieses Konto ist kein Zugang eingerichtet.";
+
+async function fetchRole(userId: string): Promise<UserRole | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.role as UserRole | undefined) ?? null;
+}
 
 export interface AppUser {
   id: string;
@@ -74,13 +102,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // ourselves (see lib/username.ts) — so the email's local part IS the
 // username, always. That's the single source of truth; we don't keep a
 // separate copy in user_metadata that could drift out of sync.
-function toAppUser(session: Session | null): AppUser | null {
-  if (!session?.user) return null;
+//
+// Ohne Rolle gibt es keinen Nutzer — bewusst kein stiller Rückfall auf
+// "driver": ein Konto, das nirgends eingetragen ist, soll nirgends hinein.
+function toAppUser(session: Session | null, role: UserRole | null): AppUser | null {
+  if (!session?.user || !role) return null;
   const { id, email, user_metadata } = session.user;
   const username = email ? emailToUsername(email) : id;
   return {
     id,
-    role: (user_metadata?.role as UserRole | undefined) ?? "driver",
+    role,
     name: (user_metadata?.name as string | undefined) ?? username,
     username,
     licensePlate: (user_metadata?.license_plate as string | undefined) ?? '',
@@ -93,6 +124,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [session, setSession] = useState<Session | null>(null);
   const [offlineUser, setOfflineUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Die Rolle gehört zu genau einem Konto. Solange sie für das aktuelle
+  // Konto noch nicht geladen ist, gilt die App als "lädt".
+  const [loadedRole, setLoadedRole] = useState<{
+    userId: string;
+    role: UserRole | null;
+  } | null>(null);
+
+  const sessionUserId = session?.user?.id ?? null;
+
+  // Eigener Effekt statt im onAuthStateChange-Callback: supabase-js warnt
+  // davor, dort weitere Supabase-Aufrufe abzuwarten.
+  useEffect(() => {
+    if (!sessionUserId) return;
+    let isActive = true;
+
+    fetchRole(sessionUserId)
+      .then((role) => {
+        if (!isActive) return;
+        setLoadedRole({ userId: sessionUserId, role });
+        // Angemeldet, aber ohne Rolle: abmelden, sonst hinge das Konto in
+        // einem Zustand fest, in dem es weder hinein noch zum Login kommt.
+        if (!role) supabase.auth.signOut();
+      })
+      .catch(() => {
+        // Rolle nicht lesbar (etwa kein Netz): kein Zugang, aber auch kein
+        // Abmelden — beim nächsten Start wird es erneut versucht.
+        if (isActive) setLoadedRole({ userId: sessionUserId, role: null });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [sessionUserId]);
+
+  const isRoleLoading = !!sessionUserId && loadedRole?.userId !== sessionUserId;
+  const role = sessionUserId && loadedRole?.userId === sessionUserId ? loadedRole.role : null;
 
   useEffect(() => {
     let isActive = true;
@@ -149,7 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   ): Promise<AuthResult> => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: usernameToEmail(username),
         password,
       });
@@ -184,6 +251,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       await authStorage.removeItem(OFFLINE_USER_KEY);
       setOfflineUser(null);
 
+      // Richtiges Passwort, aber keine Rolle: sagen, woran es liegt, statt
+      // kommentarlos auf dem Login stehen zu bleiben.
+      if (signInData.user) {
+        try {
+          if (!(await fetchRole(signInData.user.id))) {
+            await supabase.auth.signOut();
+            return { success: false, error: NO_ROLE_MESSAGE };
+          }
+        } catch {
+          // Netzfehler beim Lesen der Rolle: der Effekt oben versucht es
+          // ohnehin noch einmal.
+        }
+      }
+
       return { success: true };
     } finally {
       setIsLoading(false);
@@ -201,15 +282,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const sessionUser = toAppUser(session);
+  const sessionUser = toAppUser(session, role);
 
   return (
     <AuthContext.Provider
       value={{
         session,
         user: sessionUser ?? offlineUser,
-        isAuthenticated: !!session || !!offlineUser,
-        isLoading,
+        isAuthenticated: !!sessionUser || !!offlineUser,
+        isLoading: isLoading || isRoleLoading,
         isOfflineMode: !session && !!offlineUser,
         login,
         logout,

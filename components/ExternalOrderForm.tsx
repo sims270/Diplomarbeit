@@ -21,7 +21,7 @@ import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -71,12 +71,23 @@ interface ExternalOrderFormProps {
   initialValues?: Partial<ExternalOrderFields>;
   submitLabel: string;
   onSubmit: (fields: ExternalOrderFields) => Promise<void>;
+  /**
+   * Zusätzlicher Abschnitt direkt über dem Speichern-Button, der die
+   * aktuellen Eingaben kennt — beim Anlegen der Fahrer-Zugang, dessen Name
+   * aus "An Firma" vorbelegt wird.
+   */
+  renderBeforeSubmit?: (fields: ExternalOrderFields) => ReactNode;
 }
 
 // Shared by app/chef/external-order/new.tsx (create) and [id].tsx (edit) —
 // all the field UI and validation lives here; each screen only supplies
 // starting values and what "submit" actually does (create vs. update).
-export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: ExternalOrderFormProps) {
+export function ExternalOrderForm({
+  initialValues,
+  submitLabel,
+  onSubmit,
+  renderBeforeSubmit,
+}: ExternalOrderFormProps) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
@@ -449,6 +460,7 @@ export function ExternalOrderForm({ initialValues, submitLabel, onSubmit }: Exte
 
         </View>
       </View>
+      {renderBeforeSubmit?.(form)}
       <FluidPressable
         style={[styles.createButton, isSaving && styles.buttonDisabled]}
         onPress={handleSubmit}

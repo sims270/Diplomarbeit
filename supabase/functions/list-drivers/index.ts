@@ -32,8 +32,21 @@ Deno.serve(async (req) => {
     return json({ error: listError.message }, 400);
   }
 
+  // Wer Fahrer ist, steht in public.profiles — fremde Fahrer und der Chef
+  // gehören nicht in diese Liste.
+  const { data: profiles, error: profilesError } = await adminClient
+    .from("profiles")
+    .select("id")
+    .eq("role", "driver");
+
+  if (profilesError) {
+    return json({ error: profilesError.message }, 400);
+  }
+
+  const driverIds = new Set(profiles.map((p) => p.id as string));
+
   const drivers = data.users
-    .filter((u) => u.user_metadata?.role === "driver")
+    .filter((u) => driverIds.has(u.id))
     .map((u) => ({
       id: u.id,
       username: u.email ? emailToUsername(u.email) : u.id,

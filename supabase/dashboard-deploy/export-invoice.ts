@@ -111,11 +111,23 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     return { error: "Invalid or expired session", status: 401 };
   }
 
-  if (caller.user_metadata?.role !== "boss") {
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Die Rolle aus public.profiles, nicht aus dem user_metadata — das kann
+  // jeder Nutzer selbst ändern.
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { error: profileError.message, status: 500 };
+  }
+  if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
   }
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey);
   return { caller, adminClient };
 }
 

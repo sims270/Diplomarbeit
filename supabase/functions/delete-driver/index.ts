@@ -6,7 +6,7 @@
 // Deploy: supabase functions deploy delete-driver
 
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { verifyBoss } from "../_shared/verify-boss.ts";
+import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
   if (fetchError || !existing.user) {
     return json({ error: "Driver not found" }, 404);
   }
-  if (existing.user.user_metadata?.role !== "driver") {
+  if ((await getRole(adminClient, userId)) !== "driver") {
     return json({ error: "That account is not a driver" }, 403);
   }
 

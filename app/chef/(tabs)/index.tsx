@@ -13,6 +13,15 @@ import { getAllOrders, type Order } from '../../services/orderService';
 import { currentMonth, isInMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
 import { getServiceStatus, getVehicles } from '../../services/licensePlateService';
+import {
+  deleteAccess,
+  extendAccess,
+  type ExternalAccess,
+  getExpiredAccesses,
+} from '../../services/externalDriverAccessService';
+import { EXTEND_DAY_OPTIONS } from '@/components/ExternalAccessPanel';
+import { showAlert, showConfirm } from '@/lib/alert';
+import { isoToGerman } from '@/lib/dateFormat';
 
 export default function ChefDashboardScreen() {
   const styles = useThemedStyles(createStyles);
@@ -40,6 +49,11 @@ export default function ChefDashboardScreen() {
   // nicht mehr.
   const [serviceDue, setServiceDue] = useState<string[]>([]);
 
+  // Abgelaufene Zugänge fremder Fahrer. Sie sind schon gesperrt; hier
+  // entscheidet der Chef, ob gelöscht oder verlängert wird.
+  const [expiredAccesses, setExpiredAccesses] = useState<ExternalAccess[]>([]);
+  const [busyAccessId, setBusyAccessId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace('/');
@@ -53,9 +67,55 @@ export default function ChefDashboardScreen() {
       if (isAuthenticated) {
         loadStats();
         loadServiceDue();
+        loadExpiredAccesses();
       }
     }, [isAuthenticated])
   );
+
+  const loadExpiredAccesses = async () => {
+    try {
+      setExpiredAccesses(await getExpiredAccesses());
+    } catch {
+      // Wie der Service-Hinweis: eine Erinnerung, kein Grund, das
+      // Dashboard daran scheitern zu lassen.
+      setExpiredAccesses([]);
+    }
+  };
+
+  const runAccessAction = async (userId: string, action: () => Promise<void>) => {
+    setBusyAccessId(userId);
+    try {
+      await action();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : t('externalAccess', 'actionFailed');
+      showAlert(t('common', 'error'), message);
+    } finally {
+      setBusyAccessId(null);
+      await loadExpiredAccesses();
+    }
+  };
+
+  const handleExtendAccess = (access: ExternalAccess, days: number) =>
+    runAccessAction(access.userId, async () => {
+      await extendAccess(access, days);
+    });
+
+  const handleDeleteAccess = (access: ExternalAccess) => {
+    showConfirm(
+      t('externalAccess', 'deleteConfirmTitle'),
+      t('externalAccess', 'deleteConfirmMessage')
+        .replace('{label}', access.label)
+        .replace('{username}', access.username)
+        .replace('{count}', String(access.orderCount)),
+      () => runAccessAction(access.userId, () => deleteAccess(access.userId)),
+      {
+        confirmText: t('externalAccess', 'deleteConfirmButton'),
+        cancelText: t('common', 'cancel'),
+        destructive: true,
+      }
+    );
+  };
 
   // Bei jedem Öffnen neu: Der Kilometerstand wächst durch die Tankungen der
   // Fahrer, also auch dann, wenn der Chef die App gar nicht offen hat.
@@ -126,6 +186,54 @@ export default function ChefDashboardScreen() {
             </Text>
             <Text style={styles.serviceBannerPlates}>{serviceDue.join(' · ')}</Text>
           </FluidPressable>
+        )}
+
+        {expiredAccesses.length > 0 && (
+          <View style={styles.accessCard}>
+            <Text style={styles.serviceBannerTitle}>
+              🔑 {t('externalAccess', 'expiredCardTitle')}
+            </Text>
+            <Text style={styles.serviceBannerText}>{t('externalAccess', 'expiredCardHint')}</Text>
+
+            {expiredAccesses.map((access) => (
+              <View key={access.userId} style={styles.accessRow}>
+                <Text style={styles.accessName}>
+                  {access.label} ({access.username})
+                </Text>
+                <Text style={styles.accessMeta}>
+                  {`${t('externalAccess', 'expiredOn')} ${isoToGerman(access.expiresOn)} · ${
+                    access.orderCount === 1
+                      ? t('externalAccess', 'orderCountOne')
+                      : `${access.orderCount} ${t('externalAccess', 'orderCountMany')}`
+                  }`}
+                </Text>
+                <View style={styles.accessButtons}>
+                  {EXTEND_DAY_OPTIONS.map((days) => (
+                    <FluidPressable
+                      key={days}
+                      style={styles.addButton}
+                      onPress={() => handleExtendAccess(access, days)}
+                      disabled={busyAccessId === access.userId}
+                    >
+                      <Text style={styles.addButtonText}>
+                        {t('externalAccess', 'extendDays').replace('{days}', String(days))}
+                      </Text>
+                    </FluidPressable>
+                  ))}
+                  <FluidPressable
+                    style={styles.deleteAccessButton}
+                    onPress={() => handleDeleteAccess(access)}
+                    disabled={busyAccessId === access.userId}
+                  >
+                    <Text style={styles.deleteAccessButtonText}>
+                      {t('externalAccess', 'deleteConfirmButton')}
+                    </Text>
+                  </FluidPressable>
+                  {busyAccessId === access.userId && <ActivityIndicator color={c.tint} />}
+                </View>
+              </View>
+            ))}
+          </View>
         )}
 
         <View style={styles.monthBar}>
@@ -217,6 +325,45 @@ const createStyles = (theme: AppTheme) => {
       fontWeight: '700',
       color: c.textSecondary,
       marginTop: Spacing.xs,
+    },
+    // Wie der Service-Hinweis, nur mit Aktionen je Zugang.
+    accessCard: {
+      ...u.inset,
+      ...u.card,
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+      marginTop: Spacing.md,
+      ...shadow(2, scheme),
+    },
+    accessRow: {
+      marginTop: Spacing.md,
+      paddingTop: Spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.separator,
+    },
+    accessName: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    accessMeta: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+      marginTop: Spacing.xxs,
+    },
+    accessButtons: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginTop: Spacing.sm,
+    },
+    deleteAccessButton: {
+      ...u.smallButton,
+      backgroundColor: c.dangerSoft,
+    },
+    deleteAccessButtonText: {
+      ...u.smallButtonText,
+      color: c.danger,
     },
     section: {
       ...u.inset,

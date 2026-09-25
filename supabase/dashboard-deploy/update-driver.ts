@@ -84,11 +84,23 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     return { error: "Invalid or expired session", status: 401 };
   }
 
-  if (caller.user_metadata?.role !== "boss") {
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Die Rolle aus public.profiles, nicht aus dem user_metadata — das kann
+  // jeder Nutzer selbst ändern.
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { error: profileError.message, status: 500 };
+  }
+  if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
   }
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey);
   return { caller, adminClient };
 }
 
@@ -140,7 +152,15 @@ Deno.serve(async (req) => {
   if (fetchError || !existing.user) {
     return json({ error: "Driver not found" }, 404);
   }
-  if (existing.user.user_metadata?.role !== "driver") {
+  const { data: target, error: targetError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (targetError) {
+    return json({ error: targetError.message }, 500);
+  }
+  if (target?.role !== "driver") {
     return json({ error: "That account is not a driver" }, 403);
   }
 
@@ -172,9 +192,9 @@ Deno.serve(async (req) => {
     if (plate.length > 15) {
       return json({ error: "License plate must be at most 15 characters" }, 400);
     }
-    // Die bestehenden Metadaten mitschicken: Sonst fiele beim Speichern
-    // die Rolle "driver" weg — und der Fahrer käme nicht mehr in seine
-    // Ansichten (und in list-drivers gar nicht mehr vor).
+    // Die bestehenden Metadaten mitschicken: updateUserById ersetzt das
+    // user_metadata als Ganzes, sonst fiele etwa der Name weg. Die Rolle
+    // steht nicht mehr darin, sondern in public.profiles.
     updates.user_metadata = {
       ...existing.user.user_metadata,
       license_plate: plate,

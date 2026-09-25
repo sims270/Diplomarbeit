@@ -7,7 +7,7 @@
 
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { isValidUsername, usernameToEmail } from "../_shared/email.ts";
-import { verifyBoss } from "../_shared/verify-boss.ts";
+import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   if (fetchError || !existing.user) {
     return json({ error: "Driver not found" }, 404);
   }
-  if (existing.user.user_metadata?.role !== "driver") {
+  if ((await getRole(adminClient, userId)) !== "driver") {
     return json({ error: "That account is not a driver" }, 403);
   }
 
@@ -88,9 +88,9 @@ Deno.serve(async (req) => {
     if (plate.length > 15) {
       return json({ error: "License plate must be at most 15 characters" }, 400);
     }
-    // Die bestehenden Metadaten mitschicken: Sonst fiele beim Speichern
-    // die Rolle "driver" weg — und der Fahrer käme nicht mehr in seine
-    // Ansichten (und in list-drivers gar nicht mehr vor).
+    // Die bestehenden Metadaten mitschicken: updateUserById ersetzt das
+    // user_metadata als Ganzes, sonst fiele etwa der Name weg. Die Rolle
+    // steht nicht mehr darin, sondern in public.profiles.
     updates.user_metadata = {
       ...existing.user.user_metadata,
       license_plate: plate,
