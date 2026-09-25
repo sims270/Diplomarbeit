@@ -7,8 +7,11 @@ export default function ChefLayout() {
   const { user, isLoading } = useAuth();
 
   // Im Web ist /chef direkt aufrufbar. Die Daten schützt RLS ohnehin, aber
-  // ein Fahrer soll gar nicht erst in der Chef-Oberfläche landen.
-  if (!isLoading && user && user.role !== 'boss') {
+  // weder ein Fahrer noch ein nicht angemeldeter Besucher soll die
+  // Chef-Oberfläche zu sehen bekommen.
+  if (isLoading) return null;
+  if (!user) return <Redirect href="/(auth)/login" />;
+  if (user.role !== 'boss') {
     return <Redirect href={homeRouteFor(user.role)} />;
   }
 

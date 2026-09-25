@@ -14,8 +14,11 @@ export default function TabLayout() {
   const { user, isLoading } = useAuth();
 
   // Nur eigene Fahrer — ein fremder Fahrer hätte hier Tankliste und
-  // Profil vor sich, die für ihn nicht gedacht sind.
-  if (!isLoading && user && user.role !== "driver") {
+  // Profil vor sich, die für ihn nicht gedacht sind. Nicht Angemeldete
+  // gehören auf den Login.
+  if (isLoading) return null;
+  if (!user) return <Redirect href="/(auth)/login" />;
+  if (user.role !== "driver") {
     return <Redirect href={homeRouteFor(user.role)} />;
   }
 

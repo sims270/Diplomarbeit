@@ -44,12 +44,12 @@ Die drei dringendsten verbleibenden Probleme:
 | 7 | **Niedrig** | Logik | `supabase/migrations/20260914100000_add_cargo_type_and_km.sql:75-101` | `complete_order` erlaubt erneutes Abschließen und überschreibt Kilometer nach der Verrechnung |
 | 8 | **Niedrig** | Konsistenz | `app/services/invoiceService.ts:258-297` | Rechnung wird in vielen Einzel-Updates gespeichert, nicht in einem Schritt |
 | 9 | **Niedrig** | Buchhaltungslogik | `supabase/migrations/20260910140000_add_invoice_content.sql:20` | Belegnummer frei änderbar ohne Eindeutigkeitsprüfung |
-| 10 | **Niedrig** | Autorisierung (Client) | `app/chef/_layout.tsx:11`, `app/external/_layout.tsx:11`, `app/context/AuthContext.tsx:185-187` | Nicht angemeldete Besucher sehen die Chef-Oberfläche, Offline-Sitzung im localStorage fälschbar |
+| 10 | **Niedrig** | Autorisierung (Client) | `app/chef/_layout.tsx:11`, `app/external/_layout.tsx:11`, `app/context/AuthContext.tsx:185-187` | ✅ **Behoben:** Nicht Angemeldete werden zum Login umgeleitet, gefälschte Offline-Sitzung wird verworfen |
 | 11 | **Niedrig** | Informationspreisgabe | `supabase/functions/_shared/verify-boss.ts:60`, `export-invoice/index.ts:846`, `create-external-driver/index.ts:137,161` | Rohe Datenbank- und Auth-Fehlermeldungen gehen an den Client |
 | 12 | **Niedrig** | Input-Validierung | `create-external-driver/index.ts:115-116`, `update-driver/index.ts`, `create-driver/index.ts:47`, `delete-driver/index.ts:43` | Keine Typprüfung (Absturz bei Nicht-String), Passwort-Mindestlänge 6, unbehandelter Fehler in `getRole` |
 | 13 | **Niedrig** [unsicher] | Authentifizierung | keine Auth-Config im Repo | Selbstregistrierung vermutlich an. Harmlos geworden, aber unnötig offen |
 | 14 | **Niedrig** | Migration | `supabase/migrations/20260915110000_create_profiles.sql:38-42` | **Neu:** Übernahme der Rollen vertraut dem alten, manipulierbaren `user_metadata` |
-| 15 | **Niedrig** | Security-Header | kein `vercel.json`, `lib/supabase.ts:36-42` | Keine CSP und kein Clickjacking-Schutz, Login-Token liegt im localStorage |
+| 15 | **Niedrig** | Security-Header | kein `vercel.json`, `lib/supabase.ts:36-42` | ✅ **Behoben:** `vercel.json` mit CSP, `X-Frame-Options` u. a. (Token bleibt im localStorage, durch CSP abgesichert) |
 | 16 | **Niedrig** | Offline-Fallback / Dependencies | `lib/offlineFallback.ts:77`, `package-lock.json` | Fallback-Passwort im JS-Bundle, `npm audit`: 29 Meldungen (fast alle in Build-Tools) |
 | 17 | **Niedrig** | Toter Code / Schema-Drift | `app/services/notificationService.ts:77-85`, `app/examples/`, `export-invoice/index.ts:286` | Unbenutztes WebSocket-System (`ws://`, ohne Login), Spalten fehlen in den Migrationen |
 

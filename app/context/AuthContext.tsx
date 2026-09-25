@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import {
   buildOfflineUser,
+  isOfflineFallbackConfigured,
   matchesOfflineFallback,
 } from "../../lib/offlineFallback";
 import { authStorage, supabase } from "../../lib/supabase";
@@ -181,8 +182,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setSession(restoredSession);
 
       // Eine echte Sitzung hat immer Vorrang: existiert sie, ist eine alte
-      // Offline-Sitzung hinfällig.
-      if (!restoredSession && storedOfflineUser) {
+      // Offline-Sitzung hinfällig. Ist der Fallback in diesem Build gar
+      // nicht eingeschaltet, kann der Eintrag nur von Hand in den
+      // localStorage geschrieben worden sein — dann zählt er nicht.
+      if (!restoredSession && storedOfflineUser && !isOfflineFallbackConfigured()) {
+        authStorage.removeItem(OFFLINE_USER_KEY);
+      } else if (!restoredSession && storedOfflineUser) {
         try {
           setOfflineUser(JSON.parse(storedOfflineUser) as AppUser);
         } catch {

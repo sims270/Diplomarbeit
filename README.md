@@ -48,3 +48,22 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Security-Header (vercel.json)
+
+`vercel.json` setzt eine Content-Security-Policy. Expo Router schreibt beim
+Web-Export ein kleines Inline-Skript in jede Seite
+(`globalThis.__EXPO_ROUTER_HYDRATE__=true;`), das die CSP über seinen
+SHA-256-Hash erlaubt. Ändert ein Expo-Update dieses Skript, blockiert der
+Browser es und Seiten wie `/business` bleiben leer.
+
+Nach jedem Expo-Update deshalb prüfen:
+
+```bash
+npx expo export -p web
+grep -o '<script type="module">[^<]*' dist/index.html
+printf '%s' 'globalThis.__EXPO_ROUTER_HYDRATE__=true;' | openssl dgst -sha256 -binary | base64
+```
+
+Weicht der Skript-Inhalt ab, den neuen Inhalt hashen und den Wert
+`'sha256-…'` in `vercel.json` ersetzen.
