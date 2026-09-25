@@ -1,7 +1,8 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import React from "react";
 import { StyleSheet } from "react-native";
 
+import { homeRouteFor, useAuth } from "@/app/context/AuthContext";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
@@ -10,6 +11,13 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? "light"];
+  const { user, isLoading } = useAuth();
+
+  // Nur eigene Fahrer — ein fremder Fahrer hätte hier Tankliste und
+  // Profil vor sich, die für ihn nicht gedacht sind.
+  if (!isLoading && user && user.role !== "driver") {
+    return <Redirect href={homeRouteFor(user.role)} />;
+  }
 
   return (
     <Tabs

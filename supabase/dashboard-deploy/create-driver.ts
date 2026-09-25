@@ -84,11 +84,23 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     return { error: "Invalid or expired session", status: 401 };
   }
 
-  if (caller.user_metadata?.role !== "boss") {
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Die Rolle aus public.profiles, nicht aus dem user_metadata — das kann
+  // jeder Nutzer selbst ändern.
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { error: profileError.message, status: 500 };
+  }
+  if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
   }
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey);
   return { caller, adminClient };
 }
 
@@ -137,21 +149,34 @@ Deno.serve(async (req) => {
     return json({ error: "License plate must be at most 15 characters" }, 400);
   }
 
+  // Die Rolle steht in public.profiles, nicht im user_metadata — das könnte
+  // der Fahrer selbst ändern.
   const { data, error: createError } = await adminClient.auth.admin.createUser({
     email: usernameToEmail(username),
     password,
     email_confirm: true,
-    user_metadata: { role: "driver", license_plate: plate },
+    user_metadata: { license_plate: plate },
   });
 
-  if (createError) {
+  if (createError || !data.user) {
     // Supabase reports a duplicate email as "already registered" — but
     // from the boss's point of view, that's a taken username.
-    const message = createError.message.toLowerCase().includes("already")
+    const message = createError?.message.toLowerCase().includes("already")
       ? "That username is already taken"
-      : createError.message;
+      : createError?.message ?? "Could not create user";
     return json({ error: message }, 400);
   }
 
-  return json({ success: true, userId: data.user?.id });
+  // Ohne Profilzeile kommt das Konto nirgends hinein. Scheitert sie, das
+  // Konto wieder entfernen, statt einen halb angelegten Fahrer zu hinterlassen.
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .insert({ id: data.user.id, role: "driver" });
+
+  if (profileError) {
+    await adminClient.auth.admin.deleteUser(data.user.id);
+    return json({ error: profileError.message }, 500);
+  }
+
+  return json({ success: true, userId: data.user.id });
 });

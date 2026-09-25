@@ -10,6 +10,11 @@ import { supabase } from '@/lib/supabase';
  * Ordnernamens — der Chef zum Beispiel erst, wenn der Auftrag den Status
  * 'completed' hat. Die Oberfläche blendet dieselbe Regel nur zusätzlich
  * ein; verlassen muss sie sich darauf nicht.
+ *
+ * Dieselben Funktionen gelten für Fremdaufträge: deren Ordner heißt nach
+ * external_orders.id, und die Policies aus
+ * supabase/migrations/20260915130000_external_driver_access.sql lassen den
+ * zugewiesenen fremden Fahrer hochladen.
  */
 const BUCKET = 'order-documents';
 
@@ -74,6 +79,20 @@ export async function uploadOrderDocument(orderId: string, file: PickedFile): Pr
   });
 
   if (error) throw new Error(error.message);
+
+  // Am Auftrag vermerken (Spalte cmr, siehe
+  // supabase/migrations/20260915120000_add_cmr_to_orders.sql). Scheitert
+  // das, die Datei wieder entfernen: Ein Beleg, der im Bucket liegt, aber
+  // am Auftrag fehlt, fiele bei der Abrechnung durchs Raster.
+  const { error: rpcError } = await supabase.rpc('add_order_document', {
+    order_id: orderId,
+    path,
+  });
+
+  if (rpcError) {
+    await supabase.storage.from(BUCKET).remove([path]);
+    throw new Error(rpcError.message);
+  }
 }
 
 /**
@@ -102,4 +121,12 @@ export async function deleteOrderDocument(path: string): Promise<void> {
   if (!data || data.length === 0) {
     throw new Error('Datei konnte nicht gelöscht werden.');
   }
+
+  // Und am Auftrag austragen. Die Auftrags-ID ist der Ordnername.
+  const { error: rpcError } = await supabase.rpc('remove_order_document', {
+    order_id: path.split('/')[0],
+    path,
+  });
+
+  if (rpcError) throw new Error(rpcError.message);
 }

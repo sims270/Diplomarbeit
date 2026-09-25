@@ -9,7 +9,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, TextInput } from "react-native";
-import { useAuth } from "../context/AuthContext";
+import { homeRouteFor, useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const styles = useThemedStyles(createStyles);
@@ -57,12 +57,8 @@ export default function LoginScreen() {
   const themeColors = Colors[colorScheme ?? "light"];
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      if (user?.role === "boss") {
-        router.replace("/chef");
-      } else {
-        router.replace("/driver");
-      }
+    if (!isLoading && isAuthenticated && user) {
+      router.replace(homeRouteFor(user.role));
     }
   }, [isLoading, isAuthenticated, user, router]);
 

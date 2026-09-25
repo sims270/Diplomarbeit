@@ -4,7 +4,9 @@ import {
   getExternalOrderById,
   updateExternalOrder,
 } from '@/app/services/externalOrderService';
+import { ExternalAccessPanel } from '@/components/ExternalAccessPanel';
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
+import { OrderDocuments } from '@/components/OrderDocuments';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Spacing } from '@/constants/theme';
@@ -78,6 +80,16 @@ export default function EditExternalOrderScreen() {
           submitLabel={t('chefExternalOrder', 'saveButton')}
           onSubmit={handleUpdate}
         />
+
+        {/* Unabhängig vom Formular: Zuweisen, Verlängern und Löschen wirken
+            sofort, nicht erst mit "Änderungen speichern". */}
+        <ExternalAccessPanel
+          orderId={order.id}
+          recipientCompany={order.recipientCompany}
+          unloadingDate={order.unloadingDate}
+        />
+
+        <OrderDocuments orderId={order.id} note={t('externalAccess', 'documentsNote')} />
       </ScrollView>
     </View>
   );

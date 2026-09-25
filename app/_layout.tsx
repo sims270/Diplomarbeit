@@ -68,6 +68,7 @@ function RootContent() {
           }}
         />
         <Stack.Screen name="driver" options={{ headerShown: false }} />
+        <Stack.Screen name="external" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
