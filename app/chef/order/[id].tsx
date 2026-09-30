@@ -181,6 +181,20 @@ export default function ChefOrderDetailScreen() {
 
             {order.cargoType === 'komplett' ? (
               <>
+                {(
+                  [
+                    ['startOdometerLabel', order.startOdometer],
+                    ['loadingOdometerLabel', order.loadingOdometer],
+                    ['unloadingOdometerLabel', order.unloadingOdometer],
+                  ] as const
+                ).map(([labelKey, reading]) => (
+                  <View key={labelKey} style={styles.row}>
+                    <Text style={styles.label}>{t('chefOrderDetail', labelKey)}</Text>
+                    <Text style={styles.value}>
+                      {reading === null ? '—' : `${reading.toLocaleString('de-DE')} km`}
+                    </Text>
+                  </View>
+                ))}
                 <View style={styles.row}>
                   <Text style={styles.label}>{t('chefOrderDetail', 'emptyKmLabel')}</Text>
                   <Text style={styles.value}>

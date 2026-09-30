@@ -1,5 +1,11 @@
 import { useAuth } from '@/app/context/AuthContext';
-import { completeOrder, getOrderById, type Order } from '@/app/services/orderService';
+import {
+  completeOrder,
+  getOrderById,
+  getSuggestedStartOdometer,
+  type OdometerReadings,
+  type Order,
+} from '@/app/services/orderService';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
@@ -23,6 +29,16 @@ import {
 
 const EMPTY = '—';
 
+// Ganze Zahl ≥ 0 aus einem Eingabefeld — sonst null.
+function parseOdometer(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const number = Number(trimmed);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+
+const formatKm = (km: number | null) => (km === null ? '' : `${km.toLocaleString('de-DE')} km`);
+
 export default function DriverOrderDetailScreen() {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
@@ -34,8 +50,9 @@ export default function DriverOrderDetailScreen() {
   // undefined = still loading, null = not found (or not this driver's order)
   const [order, setOrder] = useState<Order | undefined | null>(undefined);
   const [isCompleting, setIsCompleting] = useState(false);
-  const [emptyKm, setEmptyKm] = useState('');
-  const [freightKm, setFreightKm] = useState('');
+  const [startOdometer, setStartOdometer] = useState('');
+  const [loadingOdometer, setLoadingOdometer] = useState('');
+  const [unloadingOdometer, setUnloadingOdometer] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -56,6 +73,41 @@ export default function DriverOrderDetailScreen() {
       cancelled = true;
     };
   }, [id, user?.id]);
+
+  // Start-Kilometerstand vorschlagen: der Abladestand des letzten Auftrags
+  // mit diesem LKW. Nur solange der Fahrer noch nichts eingetragen hat —
+  // ändern kann er ihn trotzdem.
+  const needsOdometer = order?.cargoType === 'komplett' && order.status !== 'completed';
+  useEffect(() => {
+    if (!needsOdometer) return;
+    let cancelled = false;
+
+    getSuggestedStartOdometer()
+      .then((suggested) => {
+        if (cancelled || suggested === null) return;
+        setStartOdometer((current) => current || String(suggested));
+      })
+      .catch(() => {
+        // Ohne Vorschlag trägt der Fahrer den Stand eben selbst ein.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsOdometer]);
+
+  // Live-Vorschau der errechneten Kilometer, sobald die Stände passen.
+  const startValue = parseOdometer(startOdometer);
+  const loadingValue = parseOdometer(loadingOdometer);
+  const unloadingValue = parseOdometer(unloadingOdometer);
+  const previewEmptyKm =
+    startValue !== null && loadingValue !== null && loadingValue >= startValue
+      ? loadingValue - startValue
+      : null;
+  const previewFreightKm =
+    loadingValue !== null && unloadingValue !== null && unloadingValue >= loadingValue
+      ? unloadingValue - loadingValue
+      : null;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -90,34 +142,37 @@ export default function DriverOrderDetailScreen() {
 
     // Beim Beilader lassen sich der einzelnen Ladung keine Kilometer
     // zuordnen — dort wird gar nicht erst danach gefragt, und es geht
-    // nichts zu prüfen. Bei einer Komplettladung sind beide Pflicht; die
-    // Datenbank besteht darauf ebenfalls (complete_order), das hier ist
-    // die freundliche Fassung derselben Regel.
-    let km: { emptyKm: number | null; freightKm: number | null } = {
-      emptyKm: null,
-      freightKm: null,
+    // nichts zu prüfen. Bei einer Komplettladung sind alle drei
+    // Kilometerstände Pflicht; die Datenbank besteht darauf ebenfalls
+    // (complete_order) und errechnet daraus Leer- und Frachtkilometer. Das
+    // hier ist die freundliche Fassung derselben Regel.
+    let odometer: OdometerReadings = {
+      startOdometer: null,
+      loadingOdometer: null,
+      unloadingOdometer: null,
     };
 
     if (order.cargoType === 'komplett') {
-      const leer = emptyKm.trim();
-      const fracht = freightKm.trim();
-
-      if (!leer || !fracht) {
+      if (!startOdometer.trim() || !loadingOdometer.trim() || !unloadingOdometer.trim()) {
         showAlert(t('common', 'error'), t('driverOrderDetail', 'alertKmRequired'));
         return;
       }
 
-      const leerZahl = Number(leer);
-      const frachtZahl = Number(fracht);
-      if (
-        !Number.isInteger(leerZahl) || leerZahl < 0 ||
-        !Number.isInteger(frachtZahl) || frachtZahl < 0
-      ) {
+      if (startValue === null || loadingValue === null || unloadingValue === null) {
         showAlert(t('common', 'error'), t('driverOrderDetail', 'alertKmInvalid'));
         return;
       }
 
-      km = { emptyKm: leerZahl, freightKm: frachtZahl };
+      if (startValue > loadingValue || loadingValue > unloadingValue) {
+        showAlert(t('common', 'error'), t('driverOrderDetail', 'alertKmOrder'));
+        return;
+      }
+
+      odometer = {
+        startOdometer: startValue,
+        loadingOdometer: loadingValue,
+        unloadingOdometer: unloadingValue,
+      };
     }
 
     showConfirm(
@@ -126,7 +181,7 @@ export default function DriverOrderDetailScreen() {
       async () => {
         setIsCompleting(true);
         try {
-          setOrder(await completeOrder(order.id, km));
+          setOrder(await completeOrder(order.id, odometer));
           showAlert(t('common', 'success'), t('driverOrderDetail', 'alertCompleted'));
         } catch (error) {
           const message =
@@ -254,40 +309,61 @@ export default function DriverOrderDetailScreen() {
             <Text style={styles.kmNote}>{t('driverOrderDetail', 'kmBeilader')}</Text>
           ) : order.status === 'completed' ? (
             <>
+              {renderRow(t('driverOrderDetail', 'startOdometerLabel'), formatKm(order.startOdometer))}
               {renderRow(
-                t('driverOrderDetail', 'emptyKmLabel'),
-                order.emptyKm === null ? '' : `${order.emptyKm.toLocaleString('de-DE')} km`
+                t('driverOrderDetail', 'loadingOdometerLabel'),
+                formatKm(order.loadingOdometer)
               )}
               {renderRow(
-                t('driverOrderDetail', 'freightKmLabel'),
-                order.freightKm === null ? '' : `${order.freightKm.toLocaleString('de-DE')} km`
+                t('driverOrderDetail', 'unloadingOdometerLabel'),
+                formatKm(order.unloadingOdometer)
               )}
+              {renderRow(t('driverOrderDetail', 'emptyKmLabel'), formatKm(order.emptyKm))}
+              {renderRow(t('driverOrderDetail', 'freightKmLabel'), formatKm(order.freightKm))}
             </>
           ) : (
             <>
-              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'emptyKmLabel')}</Text>
+              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'startOdometerLabel')}</Text>
               <TextInput
                 placeholderTextColor={c.placeholder}
                 keyboardAppearance={scheme}
                 style={styles.kmInput}
-                value={emptyKm}
-                onChangeText={setEmptyKm}
-                placeholder={t('driverOrderDetail', 'emptyKmPlaceholder')}
+                value={startOdometer}
+                onChangeText={setStartOdometer}
+                placeholder={t('driverOrderDetail', 'startOdometerPlaceholder')}
                 keyboardType="numeric"
                 editable={!isCompleting}
               />
 
-              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'freightKmLabel')}</Text>
+              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'loadingOdometerLabel')}</Text>
               <TextInput
                 placeholderTextColor={c.placeholder}
                 keyboardAppearance={scheme}
                 style={styles.kmInput}
-                value={freightKm}
-                onChangeText={setFreightKm}
-                placeholder={t('driverOrderDetail', 'freightKmPlaceholder')}
+                value={loadingOdometer}
+                onChangeText={setLoadingOdometer}
+                placeholder={t('driverOrderDetail', 'loadingOdometerPlaceholder')}
                 keyboardType="numeric"
                 editable={!isCompleting}
               />
+
+              <Text style={styles.kmLabel}>{t('driverOrderDetail', 'unloadingOdometerLabel')}</Text>
+              <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
+                style={styles.kmInput}
+                value={unloadingOdometer}
+                onChangeText={setUnloadingOdometer}
+                placeholder={t('driverOrderDetail', 'unloadingOdometerPlaceholder')}
+                keyboardType="numeric"
+                editable={!isCompleting}
+              />
+
+              {previewEmptyKm !== null || previewFreightKm !== null ? (
+                <Text style={styles.kmPreview}>
+                  {`${t('driverOrderDetail', 'emptyKmLabel')}: ${formatKm(previewEmptyKm) || EMPTY} · ${t('driverOrderDetail', 'freightKmLabel')}: ${formatKm(previewFreightKm) || EMPTY}`}
+                </Text>
+              ) : null}
 
               <Text style={styles.kmNote}>{t('driverOrderDetail', 'kmHint')}</Text>
             </>
@@ -438,6 +514,12 @@ const createStyles = (theme: AppTheme) => {
     kmNote: {
       ...u.hint,
       marginTop: 0,
+    },
+    kmPreview: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      marginBottom: Spacing.xs,
     },
     completeButton: {
       ...u.primaryButton,

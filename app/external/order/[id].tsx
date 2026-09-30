@@ -2,6 +2,7 @@ import {
   completeMyOrder,
   type ExternalDriverOrder,
   getMyOrder,
+  setMyOrderDriver,
 } from '@/app/services/externalDriverOrderService';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -15,18 +16,19 @@ import { isoToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const EMPTY = '—';
 
 /**
  * Ein Fremdauftrag aus Sicht des fremden Fahrers: Lade- und Entladedaten,
  * Ladung, Hinweise — keine Preise (die liefert get_my_external_orders gar
- * nicht erst). Dazu CMR/Fotos hochladen und den Auftrag abschließen.
+ * nicht erst). Dazu CMR/Fotos hochladen, Kennzeichen und Fahrername
+ * eintragen und den Auftrag abschließen.
  */
 export default function ExternalOrderDetailScreen() {
   const styles = useThemedStyles(createStyles);
-  const { c } = useAppTheme();
+  const { c, scheme } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
@@ -35,6 +37,11 @@ export default function ExternalOrderDetailScreen() {
   // Zugang abgelaufen — die Datenbank unterscheidet das bewusst nicht)
   const [order, setOrder] = useState<ExternalDriverOrder | undefined | null>(undefined);
   const [isCompleting, setIsCompleting] = useState(false);
+  // Kennzeichen und Fahrername trägt der fremde Fahrer selbst ein — beim
+  // Anlegen sind sie für den Chef optional.
+  const [licensePlate, setLicensePlate] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [isSavingDriver, setIsSavingDriver] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -42,7 +49,10 @@ export default function ExternalOrderDetailScreen() {
 
     getMyOrder(id)
       .then((found) => {
-        if (!cancelled) setOrder(found ?? null);
+        if (cancelled) return;
+        setOrder(found ?? null);
+        setLicensePlate(found?.licensePlate ?? '');
+        setDriverName(found?.driverName ?? '');
       })
       .catch(() => {
         if (!cancelled) setOrder(null);
@@ -80,6 +90,26 @@ export default function ExternalOrderDetailScreen() {
         cancelText: t('driverOrderDetail', 'completeConfirmCancel'),
       }
     );
+  };
+
+  const handleSaveDriver = async () => {
+    if (!order) return;
+
+    setIsSavingDriver(true);
+    try {
+      await setMyOrderDriver(order.id, licensePlate, driverName);
+      const updated = await getMyOrder(order.id);
+      setOrder(updated ?? null);
+      setLicensePlate(updated?.licensePlate ?? '');
+      setDriverName(updated?.driverName ?? '');
+      showAlert(t('common', 'success'), t('externalDriver', 'alertDriverSaved'));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : t('externalDriver', 'alertDriverSaveFailed');
+      showAlert(t('common', 'error'), message);
+    } finally {
+      setIsSavingDriver(false);
+    }
   };
 
   const renderRow = (label: string, value: string) => (
@@ -180,8 +210,50 @@ export default function ExternalOrderDetailScreen() {
           {renderRow(t('externalDriver', 'cargoDescriptionLabel'), order.cargoDescription)}
           {renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)}
           {renderRow(t('externalDriver', 'vehicleTypeLabel'), order.vehicleType)}
-          {renderRow(t('externalDriver', 'licensePlateLabel'), order.licensePlate)}
-          {renderRow(t('externalDriver', 'driverNameLabel'), order.driverName)}
+          {isCompleted ? (
+            <>
+              {renderRow(t('externalDriver', 'licensePlateLabel'), order.licensePlate)}
+              {renderRow(t('externalDriver', 'driverNameLabel'), order.driverName)}
+            </>
+          ) : (
+            <View style={styles.driverFields}>
+              <Text style={styles.inputLabel}>{t('externalDriver', 'licensePlateLabel')}</Text>
+              <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
+                style={styles.input}
+                value={licensePlate}
+                onChangeText={setLicensePlate}
+                editable={!isSavingDriver}
+                autoCapitalize="characters"
+              />
+
+              <Text style={styles.inputLabel}>{t('externalDriver', 'driverNameLabel')}</Text>
+              <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
+                style={styles.input}
+                value={driverName}
+                onChangeText={setDriverName}
+                editable={!isSavingDriver}
+                autoCapitalize="words"
+              />
+
+              <FluidPressable
+                style={[styles.saveDriverButton, isSavingDriver && styles.completeButtonDisabled]}
+                onPress={handleSaveDriver}
+                disabled={isSavingDriver}
+              >
+                {isSavingDriver ? (
+                  <ActivityIndicator color={c.tint} />
+                ) : (
+                  <Text style={styles.saveDriverButtonText}>
+                    {t('externalDriver', 'saveDriverButton')}
+                  </Text>
+                )}
+              </FluidPressable>
+            </View>
+          )}
         </View>
 
         {order.notes ? (
@@ -294,6 +366,25 @@ const createStyles = (theme: AppTheme) => {
       flexShrink: 1,
       textAlign: 'right',
     },
+    driverFields: {
+      paddingTop: Spacing.sm,
+    },
+    inputLabel: {
+      ...Typography.caption1,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+      marginBottom: Spacing.xxs,
+    },
+    input: {
+      ...u.input,
+      backgroundColor: c.surfaceSecondary,
+      borderColor: 'transparent',
+      marginBottom: Spacing.sm,
+    },
+    saveDriverButton: u.tintedButton,
+    saveDriverButtonText: u.tintedButtonText,
     notes: {
       ...Typography.body,
       color: c.text,
