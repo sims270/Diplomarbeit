@@ -104,3 +104,17 @@ export async function completeMyOrder(id: string): Promise<void> {
   const { error } = await supabase.rpc('complete_external_order', { order_id: id });
   if (error) throw new Error(error.message);
 }
+
+/** Kennzeichen und Name des fremden Fahrers am offenen Auftrag eintragen. */
+export async function setMyOrderDriver(
+  id: string,
+  licensePlate: string,
+  driverName: string
+): Promise<void> {
+  const { error } = await supabase.rpc('set_external_order_driver', {
+    order_id: id,
+    p_license_plate: licensePlate,
+    p_driver_name: driverName,
+  });
+  if (error) throw new Error(error.message);
+}

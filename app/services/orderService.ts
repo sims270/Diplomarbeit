@@ -31,10 +31,14 @@ export interface Order {
    * sich dieser Ladung gar nicht zuordnen und werden nicht abgefragt.
    */
   cargoType: CargoType;
-  /** Anfahrt zur Ladestelle. Nur bei Komplettladung, vom Fahrer erfasst. */
+  /** Anfahrt zur Ladestelle. Nur bei Komplettladung, aus den Kilometerständen errechnet. */
   emptyKm: number | null;
-  /** Ladestelle bis Entladestelle. Nur bei Komplettladung, vom Fahrer erfasst. */
+  /** Ladestelle bis Entladestelle. Nur bei Komplettladung, aus den Kilometerständen errechnet. */
   freightKm: number | null;
+  /** Kilometerstände des LKW — nur bei Komplettladung, vom Fahrer erfasst. */
+  startOdometer: number | null;
+  loadingOdometer: number | null;
+  unloadingOdometer: number | null;
 
   loadingDate: string;
   loadingTimeFrom: string;
@@ -54,9 +58,9 @@ export interface Order {
 // from the sequence shared with externalOrderService (see fieldsToRow and
 // the order_nr_seq comment in the migration) — eigene Aufträge and
 // Fremdaufträge never collide on the same number. Typing one overrides it.
-// emptyKm/freightKm sind hier bewusst nicht dabei: Die trägt der Fahrer
-// beim Erledigen ein, nicht der Chef beim Anlegen — geschrieben werden sie
-// ausschließlich über complete_order.
+// Kilometer und Kilometerstände sind hier bewusst nicht dabei: Die trägt
+// der Fahrer beim Erledigen ein, nicht der Chef beim Anlegen — geschrieben
+// werden sie ausschließlich über complete_order.
 export type OrderFields = Omit<
   Order,
   | 'id'
@@ -67,6 +71,9 @@ export type OrderFields = Omit<
   | 'completedAt'
   | 'emptyKm'
   | 'freightKm'
+  | 'startOdometer'
+  | 'loadingOdometer'
+  | 'unloadingOdometer'
 >;
 
 // orders.loading_date/unloading_date are real `date` columns — an empty
@@ -92,6 +99,9 @@ function rowToOrder(row: any): Order {
     cargoType: (row.cargo_type as CargoType | null) ?? 'komplett',
     emptyKm: row.empty_km ?? null,
     freightKm: row.freight_km ?? null,
+    startOdometer: row.start_odometer ?? null,
+    loadingOdometer: row.loading_odometer ?? null,
+    unloadingOdometer: row.unloading_odometer ?? null,
     loadingDate: fromDateColumn(row.loading_date),
     loadingTimeFrom: row.loading_time_from,
     loadingTimeUntil: row.loading_time_until,
@@ -213,24 +223,40 @@ export async function assignOrderToDriver(orderId: string, driverId: string): Pr
 // supabase/migrations/20260908110000_driver_complete_order.sql), die den
 // Status setzt und dabei selbst prüft, dass der Auftrag dem angemeldeten
 // Fahrer gehört — die orders-Policies erlauben Fahrern kein UPDATE.
-// Die Kilometer gehen hier mit durch: Bei einer Komplettladung besteht die
-// Funktion selbst darauf (siehe 20260914100000), beim Beilader verwirft sie
-// sie — zu dieser Ladung allein gehören keine Kilometer.
+// Die Kilometerstände gehen hier mit durch: Bei einer Komplettladung
+// besteht die Funktion selbst darauf und errechnet daraus Leer- und
+// Frachtkilometer (siehe 20260930110000), beim Beilader verwirft sie sie.
+export type OdometerReadings = {
+  startOdometer: number | null;
+  loadingOdometer: number | null;
+  unloadingOdometer: number | null;
+};
+
 export async function completeOrder(
   orderId: string,
-  km: { emptyKm: number | null; freightKm: number | null } = {
-    emptyKm: null,
-    freightKm: null,
+  odometer: OdometerReadings = {
+    startOdometer: null,
+    loadingOdometer: null,
+    unloadingOdometer: null,
   }
 ): Promise<Order> {
   const { data, error } = await supabase.rpc('complete_order', {
     order_id: orderId,
-    empty_km: km.emptyKm,
-    freight_km: km.freightKm,
+    start_odometer: odometer.startOdometer,
+    loading_odometer: odometer.loadingOdometer,
+    unloading_odometer: odometer.unloadingOdometer,
   });
 
   if (error) throw new Error(error.message);
   return rowToOrder(data);
+}
+
+// Abladestand des letzten erledigten Auftrags mit dem LKW des angemeldeten
+// Fahrers — oder null, wenn es noch keinen gibt.
+export async function getSuggestedStartOdometer(): Promise<number | null> {
+  const { data, error } = await supabase.rpc('get_suggested_start_odometer');
+  if (error) throw new Error(error.message);
+  return typeof data === 'number' ? data : null;
 }
 
 export async function getOrderStats(): Promise<{
