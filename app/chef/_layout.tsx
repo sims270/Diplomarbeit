@@ -19,6 +19,8 @@ export default function ChefLayout() {
       <Stack.Screen name="drivers" />
       <Stack.Screen name="vehicles" />
       <Stack.Screen name="external-order" />
+      <Stack.Screen name="account" />
+      <Stack.Screen name="bosses" />
     </Stack>
   );
 }

@@ -121,6 +121,23 @@ export const Gradients = {
   content: [charcoal, '#3a1414'] as const,
 };
 
+/**
+ * Verläufe der öffentlichen Seiten, abhängig vom Farbschema: im Light Mode
+ * fast weiß mit einem Hauch Rot, im Dark Mode das bekannte Schwarz-Rot.
+ */
+export function pageGradients(scheme: 'light' | 'dark') {
+  if (scheme === 'dark') {
+    return {
+      header: [charcoal, '#2b2b2b'] as const,
+      content: [charcoal, '#3a1414'] as const,
+    };
+  }
+  return {
+    header: ['#FFFFFF', '#F7F7F7'] as const,
+    content: ['#FFFFFF', '#F7F0F0'] as const,
+  };
+}
+
 /** 8px-Raster (mit 4px als Halbschritt für feine Abstände). */
 export const Spacing = {
   xxs: 4,

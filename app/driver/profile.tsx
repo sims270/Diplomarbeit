@@ -4,9 +4,10 @@ import { Layout, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
+import { getOrdersByDriver } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function DriverProfileScreen() {
@@ -15,7 +16,29 @@ export default function DriverProfileScreen() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
+  // null = noch nicht geladen oder nicht ermittelbar (kein Netz, Fehler)
+  const [stats, setStats] = useState<{ total: number; completed: number } | null>(null);
+
+  const loadStats = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const orders = await getOrdersByDriver(user.id);
+      setStats({
+        total: orders.length,
+        completed: orders.filter((order) => order.status === 'completed').length,
+      });
+    } catch {
+      setStats(null);
+    }
+  }, [user?.id]);
+
+  // Beim Öffnen neu laden — nach dem Erledigen eines Auftrags soll die Zahl
+  // stimmen, wenn der Fahrer ins Profil wechselt.
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -43,10 +66,9 @@ export default function DriverProfileScreen() {
         code={user?.username?.[0]?.toUpperCase() || 'U'}
       />
 
-      {/* Über den Tabs, damit der Weg zurück in beiden Reitern gleich
-          bleibt. canGoBack(): Im Web lässt sich das Profil direkt über
-          seine URL öffnen — dann gibt es keinen Eintrag, zu dem back()
-          zurückspringen könnte, und ohne diesen Zweig passierte nichts. */}
+      {/* canGoBack(): Im Web lässt sich das Profil direkt über seine URL
+          öffnen — dann gibt es keinen Eintrag, zu dem back() zurückspringen
+          könnte, und ohne diesen Zweig passierte nichts. */}
       <View style={styles.backBar}>
         <FluidPressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/driver'))}
@@ -56,69 +78,35 @@ export default function DriverProfileScreen() {
         </FluidPressable>
       </View>
 
-      <View style={styles.tabsContainer}>
-        <FluidPressable
-          style={[styles.tab, activeTab === 'profile' && styles.tabActive]}
-          onPress={() => setActiveTab('profile')}
-        >
-          <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>
-            {t('driverProfile', 'tabProfile')}
-          </Text>
-        </FluidPressable>
-        <FluidPressable
-          style={[styles.tab, activeTab === 'settings' && styles.tabActive]}
-          onPress={() => setActiveTab('settings')}
-        >
-          <Text style={[styles.tabText, activeTab === 'settings' && styles.tabTextActive]}>
-            {t('driverProfile', 'tabSettings')}
-          </Text>
-        </FluidPressable>
-      </View>
-
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {activeTab === 'profile' ? (
-          <>
-            <View style={styles.profileCard}>
-              <View style={styles.avatarContainer}>
-                <Text style={styles.avatar}>
-                  {user?.name?.charAt(0).toUpperCase() || '?'}
-                </Text>
-              </View>
-              <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
-              <Text style={styles.profileRole}>
-                {t('driverProfile', 'accountBadge')}
+          <View style={styles.profileCard}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatar}>
+                {user?.name?.charAt(0).toUpperCase() || '?'}
               </Text>
-              <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
+            <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
+            <Text style={styles.profileRole}>
+              {t('driverProfile', 'accountBadge')}
+            </Text>
+            <Text style={styles.profileUsername}>@{user?.username}</Text>
+          </View>
 
-            <View style={styles.statsContainer}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>{t('driverProfile', 'statsTrips')}</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>{t('driverProfile', 'statsDistance')}</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0h</Text>
-                <Text style={styles.statLabel}>{t('driverProfile', 'statsDuration')}</Text>
-              </View>
+          <View style={styles.statsContainer}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{stats?.total ?? '—'}</Text>
+              <Text style={styles.statLabel}>{t('driverProfile', 'statsOrders')}</Text>
             </View>
-          </>
-        ) : (
-          <View style={styles.settingsSection}>
-            <Text style={styles.sectionTitle}>{t('driverProfile', 'accountSection')}</Text>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>{t('driverProfile', 'usernameLabel')}</Text>
-              <Text style={styles.settingValue}>{user?.username}</Text>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{stats?.completed ?? '—'}</Text>
+              <Text style={styles.statLabel}>{t('driverProfile', 'statsCompleted')}</Text>
             </View>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingLabel}>{t('driverProfile', 'roleLabel')}</Text>
-              <Text style={styles.settingValue}>{t('driverProfile', 'roleValue')}</Text>
+            {/* Nicht jeder Fahrer hat einen fest zugeteilten LKW. */}
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{user?.licensePlate || '—'}</Text>
+              <Text style={styles.statLabel}>{t('driverProfile', 'statsVehicle')}</Text>
             </View>
           </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -147,10 +135,6 @@ const createStyles = (theme: AppTheme) => {
       ...u.segmented,
       ...u.formInset,
     },
-    tab: u.segment,
-    tabActive: u.segmentActive,
-    tabText: u.segmentText,
-    tabTextActive: u.segmentTextActive,
     content: {
       flex: 1,
     },

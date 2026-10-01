@@ -1,15 +1,16 @@
-import { FluidPressable } from "@/components/fluid/FluidPressable";
+import { BusinessFooter } from "@/components/business-footer";
 import { PageMeta } from "@/components/page-meta";
-import { Colors, Gradients, Layout, Radius, Spacing, Typography } from "@/constants/theme";
-import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { PublicHeader } from "@/components/public-header";
+import { pageGradients, Layout, Radius, shadow, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useAppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ServicesScreen() {
   const styles = useThemedStyles(createStyles);
-  const router = useRouter();
+  const { scheme } = useAppTheme();
+  const gradients = pageGradients(scheme);
   const { t } = useTranslation();
 
   const services = [
@@ -28,25 +29,11 @@ export default function ServicesScreen() {
         description={t("seo", "servicesDescription")}
       />
 
-      {/* Header */}
-      <LinearGradient
-        colors={Gradients.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <FluidPressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← {t("common", "back")}</Text>
-          </FluidPressable>
-          <Text style={styles.headerTitle}>{t("services", "headerTitle")}</Text>
-          <View style={{ width: 40 }} />
-        </View>
-      </LinearGradient>
+      <PublicHeader active="services" />
 
       {/* Content */}
       <LinearGradient
-        colors={Gradients.content}
+        colors={gradients.content}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.content}
@@ -67,6 +54,8 @@ export default function ServicesScreen() {
           ))}
         </View>
       </LinearGradient>
+
+      <BusinessFooter />
     </ScrollView>
   );
 }
@@ -76,17 +65,17 @@ export default function ServicesScreen() {
 // einer lesbaren, mittigen Spalte.
 const readable = { width: '100%', maxWidth: 1120 } as const;
 
-const createStyles = ({ isTablet, gutter }: AppTheme) =>
+const createStyles = ({ c, scheme, isTablet, gutter }: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: Colors.ui.charcoal,
+      backgroundColor: c.background,
     },
     header: {
       paddingHorizontal: gutter,
       paddingVertical: Spacing.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: 'rgba(255,255,255,0.15)',
+      borderBottomColor: c.separator,
     },
     headerContent: {
       width: '100%',
@@ -100,14 +89,14 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     },
     backBtn: {
       ...Typography.body,
-      color: '#FFFFFF',
+      color: c.text,
       minHeight: Layout.minTouch,
       lineHeight: Layout.minTouch,
       paddingRight: Spacing.xs,
     },
     headerTitle: {
       ...Typography.headline,
-      color: '#FFFFFF',
+      color: c.text,
       flexShrink: 1,
       textAlign: 'center',
     },
@@ -120,13 +109,13 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     title: {
       ...readable,
       ...(isTablet ? Typography.title1 : Typography.title2),
-      color: '#FFFFFF',
+      color: c.text,
       marginBottom: Spacing.xs,
     },
     subtitle: {
       ...readable,
       ...Typography.callout,
-      color: 'rgba(255,255,255,0.85)',
+      color: c.textSecondary,
       marginBottom: Spacing.lg,
     },
     // Auf Tablet/Desktop zweispaltig
@@ -141,19 +130,20 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     serviceCard: {
       flexGrow: 1,
       flexBasis: isTablet ? '45%' : 'auto',
-      backgroundColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: c.surface,
+      ...shadow(1, scheme),
       borderRadius: Radius.lg,
       padding: Spacing.lg,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.18)',
+      borderColor: c.separator,
     },
     serviceTitle: {
       ...Typography.headline,
-      color: '#FFFFFF',
+      color: c.text,
       marginBottom: Spacing.xs,
     },
     serviceDescription: {
       ...Typography.subhead,
-      color: 'rgba(255,255,255,0.8)',
+      color: c.textSecondary,
     },
   });

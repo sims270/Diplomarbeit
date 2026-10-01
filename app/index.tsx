@@ -1,7 +1,10 @@
+import { BusinessFooter } from "@/components/business-footer";
 import { FluidPressable } from "@/components/fluid/FluidPressable";
+import { HeroPreview } from "@/components/hero-preview";
 import { PageMeta } from "@/components/page-meta";
-import { Colors, Gradients, Layout, Radius, Spacing, Typography } from "@/constants/theme";
-import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { PublicHeader } from "@/components/public-header";
+import { Colors, Layout, pageGradients, Radius, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useAppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { useAuth } from "@/app/context/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
@@ -10,7 +13,6 @@ import { useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +21,8 @@ import {
 
 export default function WelcomeScreen() {
   const styles = useThemedStyles(createStyles);
+  const { scheme } = useAppTheme();
+  const gradients = pageGradients(scheme);
   const router = useRouter();
   const { isLoading } = useAuth();
   const colorScheme = useColorScheme();
@@ -54,96 +58,71 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} scrollEnabled={false}>
+    // Scrollen bleibt an: In niedrigen Fenstern waren sonst der
+    // Login-Button und die Fußzeile mit Impressum und Datenschutz
+    // nicht erreichbar.
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {meta}
 
-      {/* Header Navigation */}
+      <PublicHeader />
+
+      {/* Hero: ruhiger Verlauf, Produktname, Nutzen und zwei Wege weiter */}
       <LinearGradient
-        colors={Gradients.header}
+        colors={gradients.content}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <Image
-            source={require("@/assets/images/logo_bg.png")}
-            style={styles.logoImage}
-          />{" "}
-          <View style={styles.navLinks}>
-            <FluidPressable onPress={() => router.push("/(auth)/login")}>
-              <Text style={styles.navLink}>{t("home", "navLogin")}</Text>
-            </FluidPressable>
-            <Text style={styles.navDivider}>|</Text>
-            <FluidPressable onPress={() => router.push("/business/about")}>
-              <Text style={styles.navLink}>{t("home", "navAbout")}</Text>
-            </FluidPressable>
-            <Text style={styles.navDivider}>|</Text>
-            <FluidPressable onPress={() => router.push("/business/services")}>
-              <Text style={styles.navLink}>{t("home", "navGoals")}</Text>
-            </FluidPressable>
-            <Text style={styles.navDivider}>|</Text>
-            <FluidPressable onPress={() => router.push("/business/contact")}>
-              <Text style={styles.navLink}>{t("home", "navContact")}</Text>
-            </FluidPressable>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Hero Section */}
-      <LinearGradient
-        colors={Gradients.hero}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
         style={styles.hero}
       >
-        {/* Sun/Moon */}
-        <View style={styles.sunContainer}>
-          <View style={styles.sun} />
-        </View>
-
-        {/* Mountain Silhouettes */}
-        <View style={styles.mountains}>
-          <View style={[styles.mountain, styles.mountain1]} />
-          <View style={[styles.mountain, styles.mountain2]} />
-          <View style={[styles.mountain, styles.mountain3]} />
-          <View style={[styles.mountain, styles.mountain4]} />
-          <View style={[styles.mountain, styles.mountain5]} />
-        </View>
-
-        {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.mainTitle}>{t("home", "heroTitle")}</Text>
-          <Text style={styles.subtitle}>
-            {" "}
-            {t("home", "heroSubtitle")}
-          </Text>
+          <View style={styles.textColumn}>
+            <Text style={styles.eyebrow}>{t("home", "heroEyebrow")}</Text>
+            <Text style={styles.mainTitle}>{t("home", "heroTitle")}</Text>
+            <Text style={styles.subtitle}>{t("home", "heroSubtitle")}</Text>
 
-          <FluidPressable
-            style={styles.seeMoreBtn}
-            onPress={() => router.push("/(auth)/login")}
-          >
-            <Text style={styles.seeMoreText}>{t("home", "heroButton")}</Text>
-          </FluidPressable>
+            <View style={styles.actions}>
+              <FluidPressable
+                style={styles.primaryBtn}
+                onPress={() => router.push("/(auth)/login")}
+              >
+                <Text style={styles.primaryText}>{t("home", "heroButton")}</Text>
+              </FluidPressable>
+
+              <FluidPressable
+                style={styles.secondaryBtn}
+                onPress={() => router.push("/business/about")}
+              >
+                <Text style={styles.secondaryText}>
+                  {t("home", "heroSecondaryButton")}
+                </Text>
+              </FluidPressable>
+            </View>
+          </View>
+
+          <HeroPreview style={styles.preview} />
         </View>
       </LinearGradient>
+
+      <BusinessFooter />
     </ScrollView>
   );
 }
 
-// Die Startseite ist bewusst eine dunkle Markenseite (Schwarz → Rot) und
-// sieht in Light und Dark Mode gleich aus. Angepasst werden nur Typografie,
-// Touch-Ziele und die Größen je Bildschirmbreite.
-const createStyles = ({ isTablet, gutter }: AppTheme) =>
-  StyleSheet.create({
+const createStyles = ({ c, isTablet, isDesktop, gutter, sideInset }: AppTheme) => {
+  const inset = isDesktop ? sideInset(Layout.wideMaxWidth) : gutter;
+
+  return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: Colors.ui.charcoal,
+      backgroundColor: c.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
     },
     header: {
-      paddingHorizontal: gutter,
+      paddingHorizontal: inset,
       paddingVertical: Spacing.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: 'rgba(255,255,255,0.15)',
+      borderBottomColor: c.separator,
     },
     headerContent: {
       width: '100%',
@@ -156,8 +135,8 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
       columnGap: Spacing.md,
     },
     logoImage: {
-      width: 44,
-      height: 44,
+      width: isTablet ? 88 : 64,
+      height: isTablet ? 88 : 64,
       resizeMode: 'contain',
     },
     navLinks: {
@@ -169,128 +148,99 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     navLink: {
       ...Typography.subhead,
       fontWeight: '500',
-      color: '#FFFFFF',
+      color: c.text,
       opacity: 0.9,
       minHeight: Layout.minTouch,
       lineHeight: Layout.minTouch,
       paddingHorizontal: Spacing.xxs,
     },
     navDivider: {
-      color: '#FFFFFF',
-      opacity: 0.35,
+      color: c.textTertiary,
     },
     hero: {
-      height: isTablet ? 640 : 560,
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-      paddingBottom: isTablet ? 72 : Spacing.xxl,
-      paddingHorizontal: gutter,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    sunContainer: {
-      position: 'absolute',
-      top: '22%',
-      zIndex: 1,
-    },
-    sun: {
-      width: isTablet ? 140 : 112,
-      height: isTablet ? 140 : 112,
-      borderRadius: isTablet ? 70 : 56,
-      backgroundColor: Colors.ui.primary,
-      opacity: 0.9,
-      shadowColor: Colors.ui.primary,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.45,
-      shadowRadius: 36,
-      elevation: 10,
-    },
-    mountains: {
-      position: 'absolute',
-      bottom: 0,
-      width: '120%',
-      height: '50%',
-      zIndex: 2,
-    },
-    mountain: {
-      position: 'absolute',
-      bottom: 0,
-      backgroundColor: Colors.ui.charcoal,
-    },
-    mountain1: {
-      left: -50,
-      width: 200,
-      height: 250,
-      borderTopLeftRadius: 500,
-      borderTopRightRadius: 500,
-    },
-    mountain2: {
-      left: 50,
-      width: 280,
-      height: 200,
-      borderTopLeftRadius: 500,
-      borderTopRightRadius: 500,
-    },
-    mountain3: {
-      right: -50,
-      width: 250,
-      height: 220,
-      borderTopLeftRadius: 500,
-      borderTopRightRadius: 500,
-    },
-    mountain4: {
-      left: 150,
-      width: 220,
-      height: 180,
-      borderTopLeftRadius: 500,
-      borderTopRightRadius: 500,
-      opacity: 0.8,
-    },
-    mountain5: {
-      right: 150,
-      width: 200,
-      height: 200,
-      borderTopLeftRadius: 500,
-      borderTopRightRadius: 500,
-      opacity: 0.8,
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: inset,
+      paddingVertical: isDesktop ? 96 : Spacing.xxl,
     },
     content: {
       width: '100%',
-      maxWidth: 720,
+      maxWidth: Layout.wideMaxWidth,
+      alignSelf: 'center',
+      // Ab Laptop stehen Text und Produktansicht nebeneinander
+      flexDirection: isDesktop ? 'row' : 'column',
       alignItems: 'center',
-      zIndex: 3,
+      gap: isDesktop ? Spacing.xxl : Spacing.xl,
+    },
+    textColumn: {
+      flex: isDesktop ? 1 : undefined,
+      width: '100%',
+      maxWidth: 560,
+      // Am Handy mittig, ab Tablet linksbündig wie auf Produktseiten üblich
+      alignItems: isTablet ? 'flex-start' : 'center',
+    },
+    preview: {
+      flex: isDesktop ? 1 : undefined,
+      width: '100%',
+      maxWidth: 560,
+    },
+    /** Kleine Zeile über dem Titel, ordnet das Produkt ein */
+    eyebrow: {
+      ...Typography.footnote,
+      fontWeight: '700',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: c.tint,
+      marginBottom: Spacing.sm,
+      textAlign: isTablet ? 'left' : 'center',
     },
     mainTitle: {
-      fontSize: isTablet ? 64 : 44,
-      lineHeight: isTablet ? 70 : 50,
+      fontSize: isDesktop ? 60 : isTablet ? 48 : 36,
+      lineHeight: isDesktop ? 66 : isTablet ? 54 : 42,
       fontWeight: '800',
       letterSpacing: isTablet ? -1 : -0.5,
-      color: '#FFFFFF',
-      textAlign: 'center',
-      marginBottom: Spacing.xs,
+      color: c.text,
+      textAlign: isTablet ? 'left' : 'center',
+      marginBottom: Spacing.md,
     },
     subtitle: {
-      ...Typography.body,
-      color: '#FFFFFF',
-      opacity: 0.85,
-      textAlign: 'center',
+      ...(isTablet ? Typography.title3 : Typography.callout),
+      fontWeight: '400',
+      lineHeight: isTablet ? 32 : 26,
+      color: c.textSecondary,
+      maxWidth: 680,
+      textAlign: isTablet ? 'left' : 'center',
       marginBottom: Spacing.xl,
     },
-    // Weiße Pill im iOS-Stil — auf dem roten Verlauf klar sichtbar
-    seeMoreBtn: {
+    actions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      justifyContent: isTablet ? 'flex-start' : 'center',
+    },
+    primaryBtn: {
       minHeight: 52,
       justifyContent: 'center',
       paddingHorizontal: Spacing.xl,
-      borderRadius: Radius.pill,
-      backgroundColor: '#FFFFFF',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.25,
-      shadowRadius: 20,
-      elevation: 6,
+      borderRadius: Radius.md + 2,
+      backgroundColor: c.tintFill,
     },
-    seeMoreText: {
+    primaryText: {
       ...Typography.headline,
-      color: '#111111',
+      color: c.onTint,
+    },
+    secondaryBtn: {
+      minHeight: 52,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.xl,
+      borderRadius: Radius.md + 2,
+      borderWidth: 1,
+      borderColor: c.separator,
+      backgroundColor: c.surface,
+    },
+    secondaryText: {
+      ...Typography.headline,
+      color: c.text,
     },
   });
+};
