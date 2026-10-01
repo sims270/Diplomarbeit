@@ -1,21 +1,48 @@
 import { ActivityIndicator, StyleSheet, View, Text, ScrollView } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Layout, shadow, Spacing, Typography } from '@/constants/theme';
+import { shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
+import { getDrivers } from '@/app/services/driverService';
 import { useTranslation } from '@/hooks/use-translation';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 
 export default function ChefProfileScreen() {
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
-  const { user, logout, isLoading, isAuthenticated } = useAuth();
+  const { user, logout, isLoading, isAuthenticated, isOfflineMode } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
+  // null = noch nicht geladen oder nicht ermittelbar (Offline-Modus, Fehler)
+  const [driverCount, setDriverCount] = useState<number | null>(null);
+
+
+  const loadDriverCount = useCallback(async () => {
+    // Im Offline-Modus fehlt das JWT, das die Edge Function verlangt — der
+    // Aufruf würde zwangsläufig scheitern (siehe app/chef/drivers/index.tsx).
+    if (isOfflineMode) {
+      setDriverCount(null);
+      return;
+    }
+
+    try {
+      setDriverCount((await getDrivers()).length);
+    } catch {
+      setDriverCount(null);
+    }
+  }, [isOfflineMode]);
+
+  // Beim Öffnen neu laden, damit die Zahl nach dem Anlegen oder Löschen
+  // eines Fahrers stimmt.
+  useFocusEffect(
+    useCallback(() => {
+      loadDriverCount();
+    }, [loadDriverCount])
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -83,7 +110,7 @@ export default function ChefProfileScreen() {
 
             <View style={styles.statsContainer}>
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>0</Text>
+                <Text style={styles.statValue}>{driverCount ?? '—'}</Text>
                 <Text style={styles.statLabel}>{t('chefProfile', 'statsDrivers')}</Text>
               </View>
               <View style={styles.statBox}>
@@ -124,14 +151,26 @@ export default function ChefProfileScreen() {
 
             <View style={styles.settingsSection}>
               <Text style={styles.sectionTitle}>{t('chefProfile', 'accountSection')}</Text>
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>{t('chefProfile', 'usernameLabel')}</Text>
-                <Text style={styles.settingValue}>{user?.username}</Text>
-              </View>
-              <View style={styles.settingItem}>
-                <Text style={styles.settingLabel}>{t('chefProfile', 'roleLabel')}</Text>
-                <Text style={styles.settingValue}>{t('chefProfile', 'roleValue')}</Text>
-              </View>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'accountCardDesc')}</Text>
+
+              <FluidPressable
+                style={styles.createButton}
+                onPress={() => router.push('/chef/account')}
+              >
+                <Text style={styles.createButtonText}>{t('chefProfile', 'accountCardButton')}</Text>
+              </FluidPressable>
+            </View>
+
+            <View style={styles.settingsSection}>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'bossesCardTitle')}</Text>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'bossesCardDesc')}</Text>
+
+              <FluidPressable
+                style={styles.createButton}
+                onPress={() => router.push('/chef/bosses')}
+              >
+                <Text style={styles.createButtonText}>{t('chefProfile', 'bossesCardButton')}</Text>
+              </FluidPressable>
             </View>
           </>
         )}
@@ -235,27 +274,6 @@ const createStyles = (theme: AppTheme) => {
       marginBottom: Spacing.xxs,
       color: c.text,
     },
-    settingItem: {
-      minHeight: Layout.minTouch,
-      paddingVertical: Spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.separator,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: Spacing.md,
-    },
-    settingLabel: {
-      ...Typography.callout,
-      color: c.textSecondary,
-    },
-    settingValue: {
-      ...Typography.callout,
-      fontWeight: '600',
-      color: c.text,
-      flexShrink: 1,
-      textAlign: 'right',
-    },
     settingsSection: {
       ...u.card,
       marginBottom: Spacing.md,
@@ -264,12 +282,6 @@ const createStyles = (theme: AppTheme) => {
       ...Typography.subhead,
       color: c.textSecondary,
       marginBottom: Spacing.md,
-    },
-    input: {
-      ...u.input,
-      backgroundColor: c.surfaceSecondary,
-      borderColor: 'transparent',
-      marginBottom: Spacing.sm,
     },
     createButton: {
       ...u.primaryButton,

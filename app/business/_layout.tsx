@@ -10,6 +10,8 @@ export default function BusinessLayout() {
       <Stack.Screen name="about" />
       <Stack.Screen name="services" />
       <Stack.Screen name="contact" />
+      <Stack.Screen name="impressum" />
+      <Stack.Screen name="datenschutz" />
     </Stack>
   );
 }

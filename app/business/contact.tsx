@@ -1,59 +1,92 @@
+import { BusinessFooter } from "@/components/business-footer";
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { PageMeta } from "@/components/page-meta";
-import { Colors, Gradients, Layout, Radius, Spacing, Typography } from "@/constants/theme";
-import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
+import { PublicHeader } from "@/components/public-header";
+import { pageGradients, Layout, Spacing, Typography } from "@/constants/theme";
+import { type AppTheme, useAppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { useTranslation } from "@/hooks/use-translation";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+
+// Kontaktdaten stehen bewusst nicht in den Übersetzungen: Namen,
+// Telefonnummern und Adressen sind in jeder Sprache gleich.
+const COMPANY_NAME = "LSC - ITSolutions";
+const ADDRESS = ["Bundesstraße 24a", "A-8770 Stadlhof (Stmk)"];
+
+const TEAM = [
+  { name: "Simon Reiter", tel: "+43 670 201 51 35", email: "simon.reiter@hakju.at" },
+  { name: "Christian Hochreiter", tel: "+43 664 154 74 79", email: "christian.hochreiter@hakju.at" },
+  { name: "Leon Wedam", tel: "+43 676 432 20 20", email: "leon.wedam@hakju.at" },
+];
+
+/** Leerzeichen und Trennzeichen raus — tel: verträgt nur die reine Nummer. */
+const toDialable = (number: string) => number.replace(/[^+\d]/g, "");
 
 export default function ContactScreen() {
   const styles = useThemedStyles(createStyles);
-  const router = useRouter();
+  const { scheme } = useAppTheme();
+  const gradients = pageGradients(scheme);
   const { t } = useTranslation();
 
+  const open = (url: string) => {
+    Linking.openURL(url).catch(() => {
+      // Kein Mail- oder Telefonprogramm vorhanden: Die Nummer steht
+      // daneben, abschreiben geht immer — ein Absturz hilft niemandem.
+    });
+  };
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <PageMeta
         title={t("seo", "contactTitle")}
         description={t("seo", "contactDescription")}
       />
 
-      {/* Header */}
-      <LinearGradient
-        colors={Gradients.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <FluidPressable onPress={() => router.back()}>
-            <Text style={styles.backBtn}>← {t("common", "back")}</Text>
-          </FluidPressable>
-          <Text style={styles.headerTitle}>{t("contact", "headerTitle")}</Text>
-          <View style={{ width: 40 }} />
-        </View>
-      </LinearGradient>
+      <PublicHeader active="contact" />
 
       {/* Content */}
       <LinearGradient
-        colors={Gradients.content}
+        colors={gradients.content}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.content}
       >
-        <Text style={styles.title}>{t("contact", "title")}</Text>
-        <Text style={styles.subtitle}>
-          {t("contact", "subtitle")}
-        </Text>
+        <Text style={styles.title}>{COMPANY_NAME}</Text>
 
-        <View style={styles.contactInfo}>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>{t("contact", "emailLabel")}</Text>
-            <Text style={styles.infoValue}>simon.reiter@hakju.at</Text>
-          </View>
+        <View style={styles.block}>
+          {ADDRESS.map((line) => (
+            <Text key={line} style={styles.text}>
+              {line}
+            </Text>
+          ))}
         </View>
+
+        {TEAM.map((person) => (
+          <View key={person.email} style={styles.block}>
+            <Text style={styles.personName}>{person.name}</Text>
+
+            <FluidPressable
+              style={styles.row}
+              onPress={() => open(`tel:${toDialable(person.tel)}`)}
+              accessibilityRole="link"
+            >
+              <Text style={styles.label}>{t("contact", "telLabel")}</Text>
+              <Text style={styles.text}>{person.tel}</Text>
+            </FluidPressable>
+
+            <FluidPressable
+              style={styles.row}
+              onPress={() => open(`mailto:${person.email}`)}
+              accessibilityRole="link"
+            >
+              <Text style={styles.label}>{t("contact", "emailLabel")}</Text>
+              <Text style={styles.email}>{person.email}</Text>
+            </FluidPressable>
+          </View>
+        ))}
       </LinearGradient>
+
+      <BusinessFooter />
     </ScrollView>
   );
 }
@@ -63,17 +96,21 @@ export default function ContactScreen() {
 // einer lesbaren, mittigen Spalte.
 const readable = { width: '100%', maxWidth: 720 } as const;
 
-const createStyles = ({ isTablet, gutter }: AppTheme) =>
+const createStyles = ({ c, scheme, isTablet, gutter }: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: Colors.ui.charcoal,
+      backgroundColor: c.background,
+    },
+    // Der Verlauf soll die ganze Seite füllen, auch wenn der Text kurz ist
+    scrollContent: {
+      flexGrow: 1,
     },
     header: {
       paddingHorizontal: gutter,
       paddingVertical: Spacing.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: 'rgba(255,255,255,0.15)',
+      borderBottomColor: c.separator,
     },
     headerContent: {
       width: '100%',
@@ -87,18 +124,19 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     },
     backBtn: {
       ...Typography.body,
-      color: '#FFFFFF',
+      color: c.text,
       minHeight: Layout.minTouch,
       lineHeight: Layout.minTouch,
       paddingRight: Spacing.xs,
     },
     headerTitle: {
       ...Typography.headline,
-      color: '#FFFFFF',
+      color: c.text,
       flexShrink: 1,
       textAlign: 'center',
     },
     content: {
+      flexGrow: 1,
       alignItems: 'center',
       paddingHorizontal: gutter,
       paddingTop: isTablet ? Spacing.xl : Spacing.lg,
@@ -106,37 +144,44 @@ const createStyles = ({ isTablet, gutter }: AppTheme) =>
     },
     title: {
       ...readable,
-      ...(isTablet ? Typography.title1 : Typography.title2),
-      color: '#FFFFFF',
-      marginBottom: Spacing.xs,
+      ...(isTablet ? Typography.largeTitle : Typography.title1),
+      color: c.text,
+      marginBottom: Spacing.lg,
     },
-    subtitle: {
+    /** Ein Ansprechpartner: Name, Telefon, E-Mail — durch Luft getrennt */
+    block: {
       ...readable,
-      ...Typography.callout,
-      color: 'rgba(255,255,255,0.85)',
-      marginBottom: Spacing.xl,
+      marginBottom: Spacing.lg,
     },
-    contactInfo: {
-      ...readable,
-      padding: Spacing.md,
-      borderRadius: Radius.lg,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-      marginBottom: Spacing.xl,
-    },
-    infoItem: {
-      paddingVertical: Spacing.sm,
-    },
-    infoLabel: {
-      ...Typography.caption1,
-      fontWeight: '600',
-      color: 'rgba(255,255,255,0.7)',
-      textTransform: 'uppercase',
-      letterSpacing: 0.4,
+    personName: {
+      ...Typography.headline,
+      color: c.text,
       marginBottom: Spacing.xxs,
     },
-    infoValue: {
-      ...Typography.body,
-      color: '#FFFFFF',
-      fontWeight: '500',
+    text: {
+      ...Typography.callout,
+      lineHeight: 26,
+      color: c.textSecondary,
+    },
+    /** Zeile aus Beschriftung und Wert; 44px hoch, damit sie sich gut treffen lässt */
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: Layout.minTouch,
+      alignSelf: 'flex-start',
+    },
+    label: {
+      ...Typography.callout,
+      lineHeight: 26,
+      color: c.textSecondary,
+      width: 72,
+    },
+    // Rot wie im Vorbild, aber heller — auf dunklem Grund bliebe das
+    // Corporate-Rot sonst unter dem Mindestkontrast.
+    email: {
+      ...Typography.callout,
+      lineHeight: 26,
+      color: c.tint,
+      textDecorationLine: 'underline',
     },
   });

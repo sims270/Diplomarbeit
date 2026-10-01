@@ -1,7 +1,7 @@
 import { FluidPressable } from "@/components/fluid/FluidPressable";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, Radius, shadow, Spacing, Typography } from "@/constants/theme";
+import { Colors, Layout, Radius, shadow, Spacing, Typography } from "@/constants/theme";
 import { type AppTheme, useAppTheme, useThemedStyles } from "@/hooks/use-app-theme";
 import { uiStyles } from "@/constants/ui-styles";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -22,6 +22,16 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  // Direkt aufgerufene Anmeldeseite (Lesezeichen, Neuladen) hat keine
+  // Verlaufsposition — dann geht es auf die Startseite statt ins Leere.
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/");
+  };
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -137,6 +147,17 @@ export default function LoginScreen() {
             </ThemedText>
           )}
         </FluidPressable>
+
+        {/* Zurück zur Startseite — ohne ihn säße man auf der Anmeldeseite fest. */}
+        <FluidPressable
+          style={styles.backButton}
+          onPress={handleBack}
+          accessibilityRole="link"
+        >
+          <ThemedText style={[styles.backButtonText, { color: themeColors.tint }]}>
+            ← {t("common", "back")}
+          </ThemedText>
+        </FluidPressable>
       </ThemedView>
     </ThemedView>
   );
@@ -188,5 +209,14 @@ const createStyles = (theme: AppTheme) => {
       marginBottom: Spacing.xs,
     },
     loginButtonText: u.primaryButtonText,
+    backButton: {
+      minHeight: Layout.minTouch,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    backButtonText: {
+      ...Typography.body,
+      fontWeight: '600',
+    },
   });
 };
