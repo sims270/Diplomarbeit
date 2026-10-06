@@ -12,7 +12,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAllOrders, type Order } from '../../services/orderService';
 import { currentMonth, isInMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
-import { getServiceStatus, getVehicles } from '../../services/licensePlateService';
+import {
+  getPickerlStatus,
+  getServiceStatus,
+  getVehicles,
+} from '../../services/licensePlateService';
+import { getTrailers } from '../../services/trailerService';
 import {
   deleteAccess,
   extendAccess,
@@ -48,6 +53,14 @@ export default function ChefDashboardScreen() {
   // LKW mit fälligem Service. Ausgeflottete bleiben außen vor — die fahren
   // nicht mehr.
   const [serviceDue, setServiceDue] = useState<string[]>([]);
+  // LKW, deren Pickerl in spätestens einem Monat fällig ist — Kennzeichen
+  // samt Fälligkeitsdatum.
+  const [pickerlDue, setPickerlDue] = useState<string[]>([]);
+  // Dasselbe für die Auflieger — eigener Hinweis, weil er zu einer
+  // anderen Liste führt.
+  const [trailerPickerlDue, setTrailerPickerlDue] = useState<string[]>([]);
+  // Genehmigungen der Auflieger, die in spätestens einem Monat ablaufen.
+  const [permitsDue, setPermitsDue] = useState<string[]>([]);
 
   // Abgelaufene Zugänge fremder Fahrer. Sie sind schon gesperrt; hier
   // entscheidet der Chef, ob gelöscht oder verlängert wird.
@@ -67,6 +80,7 @@ export default function ChefDashboardScreen() {
       if (isAuthenticated) {
         loadStats();
         loadServiceDue();
+        loadTrailerPickerlDue();
         loadExpiredAccesses();
       }
     }, [isAuthenticated])
@@ -127,10 +141,46 @@ export default function ChefDashboardScreen() {
           .filter((v) => v.retiredAt === null && getServiceStatus(v)?.isDue)
           .map((v) => v.plate)
       );
+      // Pickerl ab einem Monat vor der Fälligkeit — aus derselben Abfrage.
+      setPickerlDue(
+        vehicles
+          .filter((v) => v.retiredAt === null && getPickerlStatus(v.pickerlDueDate)?.isDue)
+          .map((v) => {
+            const status = getPickerlStatus(v.pickerlDueDate);
+            return status ? `${v.plate} (${isoToGerman(status.dueDate)})` : v.plate;
+          })
+      );
     } catch {
       // Wie die Kennzahlen darunter: eine Erinnerung, kein Grund das
       // Dashboard daran scheitern zu lassen.
       setServiceDue([]);
+      setPickerlDue([]);
+    }
+  };
+
+  const loadTrailerPickerlDue = async () => {
+    try {
+      const trailers = await getTrailers();
+      setTrailerPickerlDue(
+        trailers
+          .filter((trailer) => getPickerlStatus(trailer.pickerlDueDate)?.isDue)
+          .map((trailer) => `${trailer.plate} (${isoToGerman(trailer.pickerlDueDate ?? '')})`)
+      );
+      // Aus derselben Abfrage: "GR123AB Deutschland (01.11.2026)".
+      setPermitsDue(
+        trailers.flatMap((trailer) =>
+          trailer.permits
+            .filter((permit) => getPickerlStatus(permit.validUntil)?.isDue)
+            .map(
+              (permit) =>
+                `${trailer.plate} ${permit.name} (${isoToGerman(permit.validUntil)})`
+            )
+        )
+      );
+    } catch {
+      // Wie beim Service: eine Erinnerung, kein Grund zum Scheitern.
+      setTrailerPickerlDue([]);
+      setPermitsDue([]);
     }
   };
 
@@ -185,6 +235,53 @@ export default function ChefDashboardScreen() {
                 : `${serviceDue.length} ${t('vehicles', 'serviceBannerMany')}`}
             </Text>
             <Text style={styles.serviceBannerPlates}>{serviceDue.join(' · ')}</Text>
+          </FluidPressable>
+        )}
+
+        {pickerlDue.length > 0 && (
+          <FluidPressable
+            style={styles.serviceBanner}
+            onPress={() => router.push('/chef/vehicles')}
+          >
+            <Text style={styles.serviceBannerTitle}>
+              {t('vehicles', 'pickerlBannerTitle')}
+            </Text>
+            <Text style={styles.serviceBannerText}>
+              {pickerlDue.length === 1
+                ? t('vehicles', 'pickerlBannerOne')
+                : `${pickerlDue.length} ${t('vehicles', 'pickerlBannerMany')}`}
+            </Text>
+            <Text style={styles.serviceBannerPlates}>{pickerlDue.join(' · ')}</Text>
+          </FluidPressable>
+        )}
+
+        {trailerPickerlDue.length > 0 && (
+          <FluidPressable
+            style={styles.serviceBanner}
+            onPress={() => router.push('/chef/trailers')}
+          >
+            <Text style={styles.serviceBannerTitle}>{t('trailers', 'pickerlBannerTitle')}</Text>
+            <Text style={styles.serviceBannerText}>
+              {trailerPickerlDue.length === 1
+                ? t('trailers', 'pickerlBannerOne')
+                : `${trailerPickerlDue.length} ${t('trailers', 'pickerlBannerMany')}`}
+            </Text>
+            <Text style={styles.serviceBannerPlates}>{trailerPickerlDue.join(' · ')}</Text>
+          </FluidPressable>
+        )}
+
+        {permitsDue.length > 0 && (
+          <FluidPressable
+            style={styles.serviceBanner}
+            onPress={() => router.push('/chef/trailers')}
+          >
+            <Text style={styles.serviceBannerTitle}>{t('trailers', 'permitBannerTitle')}</Text>
+            <Text style={styles.serviceBannerText}>
+              {permitsDue.length === 1
+                ? t('trailers', 'permitBannerOne')
+                : `${permitsDue.length} ${t('trailers', 'permitBannerMany')}`}
+            </Text>
+            <Text style={styles.serviceBannerPlates}>{permitsDue.join(' · ')}</Text>
           </FluidPressable>
         )}
 

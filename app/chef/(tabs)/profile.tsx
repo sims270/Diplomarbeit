@@ -150,6 +150,18 @@ export default function ChefProfileScreen() {
             </View>
 
             <View style={styles.settingsSection}>
+              <Text style={styles.sectionTitle}>{t('chefProfile', 'trailersCardTitle')}</Text>
+              <Text style={styles.sectionDescription}>{t('chefProfile', 'trailersCardDesc')}</Text>
+
+              <FluidPressable
+                style={styles.createButton}
+                onPress={() => router.push('/chef/trailers')}
+              >
+                <Text style={styles.createButtonText}>{t('chefProfile', 'trailersCardButton')}</Text>
+              </FluidPressable>
+            </View>
+
+            <View style={styles.settingsSection}>
               <Text style={styles.sectionTitle}>{t('chefProfile', 'accountSection')}</Text>
               <Text style={styles.sectionDescription}>{t('chefProfile', 'accountCardDesc')}</Text>
 

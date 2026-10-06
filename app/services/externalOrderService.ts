@@ -46,13 +46,36 @@ export interface ExternalOrder {
 
   licensePlate?: string;
   driverName?: string;
+
+  /**
+   * Auftraggeber — bekommt die Rechnung. Leer = die Ladestelle ist der
+   * Auftraggeber. Nicht zu verwechseln mit recipientCompany, dem fremden
+   * Frachtführer. Steht auf keinem PDF und nicht in der App des fremden
+   * Fahrers (siehe 20261005150000_add_client_to_orders.sql).
+   */
+  clientCompany: string;
+  /** Anschrift des Auftraggebers, aus der Firmenliste mitgenommen; leer, wenn getippt. */
+  clientAddress: string;
+
+  /**
+   * 'pending' bis zum Abschluss, dann 'completed' — wie bei den eigenen
+   * Aufträgen (Spalte aus 20260915130000_external_driver_access.sql).
+   * Abschließen kann ihn der fremde Fahrer in seiner App oder der Chef
+   * (markExternalOrderCompleted). Erst dann lässt er sich verrechnen.
+   */
+  status: string;
+  completedAt: string | null;
 }
 
 // orderNr stays editable: leaving it blank auto-assigns the next number
 // from the sequence shared with orderService (see fieldsToRow and the
 // order_nr_seq comment in the migration) — Fremdaufträge and eigene
 // Aufträge never collide on the same number. Typing one overrides it.
-export type ExternalOrderFields = Omit<ExternalOrder, 'id' | 'createdAt' | 'updatedAt'>;
+// Status und Abschluss gehören nicht ins Formular — die setzt das Erledigen.
+export type ExternalOrderFields = Omit<
+  ExternalOrder,
+  'id' | 'createdAt' | 'updatedAt' | 'status' | 'completedAt'
+>;
 
 // external_orders.loading_date/unloading_date are real `date` columns —
 // an empty string isn't a valid date, so store that as null instead.
@@ -94,6 +117,10 @@ function rowToOrder(row: any): ExternalOrder {
     notes: row.notes,
     licensePlate: row.license_plate ?? '',
     driverName: row.driver_name ?? '',
+    clientCompany: row.client_company ?? '',
+    clientAddress: row.client_address ?? '',
+    status: row.status ?? 'pending',
+    completedAt: row.completed_at ?? null,
   };
 }
 
@@ -126,6 +153,9 @@ function fieldsToRow(data: ExternalOrderFields): Record<string, unknown> {
     notes: data.notes,
     license_plate: data.licensePlate || null,
     driver_name: data.driverName || null,
+    client_company: data.clientCompany.trim(),
+    // Ohne Auftraggeber auch keine Anschrift — sonst bliebe eine alte stehen.
+    client_address: data.clientCompany.trim() ? data.clientAddress.trim() : '',
   };
 
   if (data.orderNr.trim()) {
@@ -176,6 +206,33 @@ export async function addExternalOrder(data: ExternalOrderFields): Promise<Exter
 
   if (error) throw toFriendlyError(error);
   return rowToOrder(row);
+}
+
+/**
+ * Der Chef schließt einen Fremdauftrag selbst ab — für Frachtführer ohne
+ * Zugang zur App, die ihn sonst nie erledigen könnten. Danach lässt er sich
+ * verrechnen. Die Policy "Boss can edit external orders" erlaubt das.
+ *
+ * Nur, solange er noch offen ist: ein schon erledigter behält seinen
+ * ursprünglichen Abschlusszeitpunkt.
+ */
+export async function markExternalOrderCompleted(id: string): Promise<ExternalOrder> {
+  const now = new Date().toISOString();
+  const { data: row, error } = await supabase
+    .from('external_orders')
+    .update({ status: 'completed', completed_at: now, updated_at: now })
+    .eq('id', id)
+    .neq('status', 'completed')
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (row) return rowToOrder(row);
+
+  // Schon erledigt (etwa vom fremden Fahrer gerade eben) — den aktuellen Stand zurückgeben.
+  const current = await getExternalOrderById(id);
+  if (!current) throw new Error('Fremdauftrag nicht gefunden.');
+  return current;
 }
 
 export async function updateExternalOrder(

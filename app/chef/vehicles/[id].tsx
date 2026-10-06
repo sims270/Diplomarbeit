@@ -1,11 +1,15 @@
 import {
+  getPickerlStatus,
+  markPickerlDone,
   markServiceDone,
   MAX_YEAR_BUILT,
   MIN_YEAR_BUILT,
+  nextPickerlDueDate,
   saveVehicleDetails,
   SERVICE_INTERVAL_OPTIONS,
   setVehicleRetired,
 } from '@/app/services/licensePlateService';
+import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
@@ -54,6 +58,7 @@ export default function EditVehicleScreen() {
     kmStand?: string;
     serviceIntervalKm?: string;
     lastServiceKm?: string;
+    pickerlDueDate?: string;
   }>();
 
   const [model, setModel] = useState(params.model ?? '');
@@ -65,6 +70,11 @@ export default function EditVehicleScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRetiring, setIsRetiring] = useState(false);
   const [isServicing, setIsServicing] = useState(false);
+  // '' = kein Pickerl-Datum, so wie DateField einen leeren Wert kennt.
+  const [pickerlDueDate, setPickerlDueDate] = useState(params.pickerlDueDate ?? '');
+  const [isPickerlSaving, setIsPickerlSaving] = useState(false);
+  // Wie beim Service die Vorschau auf das gewählte, nicht das gespeicherte Datum.
+  const pickerl = getPickerlStatus(pickerlDueDate || null);
 
   const kmStand = params.kmStand ? Number(params.kmStand) : null;
   const lastServiceKm = params.lastServiceKm ? Number(params.lastServiceKm) : null;
@@ -81,7 +91,7 @@ export default function EditVehicleScreen() {
   // und die Übersicht lädt beim Zurückkommen ohnehin neu.
   const retiredAt = params.retiredAt ?? '';
   const isRetired = !!retiredAt;
-  const busy = isSaving || isRetiring || isServicing;
+  const busy = isSaving || isRetiring || isServicing || isPickerlSaving;
   const label = params.plate ?? '';
 
   const handleSave = async () => {
@@ -115,6 +125,7 @@ export default function EditVehicleScreen() {
         serviceIntervalKm: serviceInterval,
         lastServiceKm:
           serviceInterval === null ? lastServiceKm : lastServiceKm ?? kmStand ?? 0,
+        pickerlDueDate: pickerlDueDate || null,
       });
       showAlert(
         t('common', 'success'),
@@ -176,6 +187,40 @@ export default function EditVehicleScreen() {
         cancelText: t('vehicles', 'serviceDoneConfirmCancel'),
       }
     );
+
+  // Quittiert das Pickerl zum gewählten Datum — die Rückfrage nennt schon
+  // das neue, damit der Chef sieht, was gespeichert wird.
+  const handlePickerlDone = () => {
+    if (!pickerlDueDate) return;
+    showConfirm(
+      t('vehicles', 'pickerlDoneConfirmTitle'),
+      `"${label}" — ${t('vehicles', 'pickerlDoneConfirmMessage')} ${isoToGerman(
+        nextPickerlDueDate(pickerlDueDate)
+      )}.`,
+      async () => {
+        setIsPickerlSaving(true);
+        try {
+          const next = await markPickerlDone(params.id, pickerlDueDate);
+          showAlert(
+            t('common', 'success'),
+            `"${label}": ${t('vehicles', 'alertPickerlDone')} ${isoToGerman(next)}`
+          );
+          router.back();
+        } catch (error) {
+          showAlert(
+            t('common', 'error'),
+            error instanceof Error ? error.message : t('vehicles', 'alertPickerlFailed')
+          );
+        } finally {
+          setIsPickerlSaving(false);
+        }
+      },
+      {
+        confirmText: t('vehicles', 'pickerlDoneConfirmConfirm'),
+        cancelText: t('common', 'cancel'),
+      }
+    );
+  };
 
   // Rückfrage nur beim Ausflotten. Das Zurückholen ist harmlos und
   // jederzeit wieder umkehrbar — eine Warnung davor wäre Lärm.
@@ -288,6 +333,48 @@ export default function EditVehicleScreen() {
 
           <Text style={styles.hint}>{t('vehicles', 'serviceIntervalHint')}</Text>
 
+          <Text style={styles.sectionSubTitle}>{t('vehicles', 'pickerlSection')}</Text>
+
+          <Text style={styles.label}>{t('vehicles', 'pickerlDueLabel')}</Text>
+          <DateField
+            value={pickerlDueDate}
+            onChange={setPickerlDueDate}
+            placeholder={t('vehicles', 'pickerlDuePlaceholder')}
+          />
+
+          {pickerl !== null && (
+            <View style={styles.serviceBox}>
+              <Text style={styles.serviceText}>
+                {`${t('vehicles', 'pickerlRemindFrom')} ${isoToGerman(pickerl.remindFrom)}`}
+              </Text>
+              <Text
+                style={[
+                  styles.serviceRemaining,
+                  pickerl.isDue && styles.serviceOverdue,
+                ]}
+              >
+                {pickerl.isOverdue
+                  ? t('vehicles', 'pickerlOverdue').replace(
+                      '{days}',
+                      String(-pickerl.daysRemaining)
+                    )
+                  : pickerl.daysRemaining === 0
+                    ? t('vehicles', 'pickerlDueToday')
+                    : t('vehicles', 'pickerlDaysLeft').replace(
+                        '{days}',
+                        String(pickerl.daysRemaining)
+                      )}
+              </Text>
+              {/* Überwachung abschalten — z. B. ein LKW, dessen Pickerl
+                  der Chef noch nicht nachgeschaut hat. */}
+              <FluidPressable onPress={() => setPickerlDueDate('')} disabled={busy}>
+                <Text style={styles.clearLink}>{t('vehicles', 'pickerlClear')}</Text>
+              </FluidPressable>
+            </View>
+          )}
+
+          <Text style={styles.hint}>{t('vehicles', 'pickerlHint')}</Text>
+
           <FluidPressable
             style={[styles.saveButton, busy && styles.buttonDisabled]}
             onPress={handleSave}
@@ -314,6 +401,24 @@ export default function EditVehicleScreen() {
             ) : (
               <Text style={styles.serviceButtonText}>
                 {t('vehicles', 'serviceDoneButton')}
+              </Text>
+            )}
+          </FluidPressable>
+        )}
+
+        {/* Quittiert wird das gespeicherte Datum — ein gerade erst
+            eingetragenes muss zuerst gespeichert sein. */}
+        {!!params.pickerlDueDate && pickerlDueDate === params.pickerlDueDate && (
+          <FluidPressable
+            style={[styles.serviceButton, busy && styles.buttonDisabled]}
+            onPress={handlePickerlDone}
+            disabled={busy}
+          >
+            {isPickerlSaving ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.serviceButtonText}>
+                {t('vehicles', 'pickerlDoneButton')}
               </Text>
             )}
           </FluidPressable>
@@ -482,6 +587,12 @@ const createStyles = (theme: AppTheme) => {
     serviceOverdue: {
       color: c.danger,
       fontWeight: '700',
+    },
+    clearLink: {
+      ...Typography.footnote,
+      color: c.tint,
+      fontWeight: '600',
+      marginTop: Spacing.xs,
     },
     // Dunkelrot im Light Mode, dunkles Grau im Dark Mode — weißer Text bleibt lesbar
     serviceButton: {

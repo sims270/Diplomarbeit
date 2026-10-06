@@ -7,6 +7,7 @@ import {
   type Order,
   type OrderFields,
 } from '@/app/services/orderService';
+import { billingCompanyOf } from '@/app/services/invoiceService';
 import { InvoiceForm } from '@/components/InvoiceForm';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
@@ -223,7 +224,7 @@ export default function ChefOrderDetailScreen() {
             <InvoiceForm
               orderId={order.id}
               orderNr={order.orderNr}
-              loadingCompany={order.loadingCompany}
+              billingCompany={billingCompanyOf(order)}
             />
           </View>
         ) : null}

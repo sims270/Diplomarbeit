@@ -26,7 +26,7 @@ import {
   View,
 } from 'react-native';
 
-type PickerField = 'loadingCompany' | 'unloadingCompany' | 'cargoType';
+type PickerField = 'loadingCompany' | 'unloadingCompany' | 'cargoType' | 'clientCompany';
 
 interface PickerOption {
   /** Was ins Formular geschrieben wird. */
@@ -55,6 +55,8 @@ const emptyFields: OrderFields = {
   unloadingTimeUntil: '',
   unloadingCompany: '',
   unloadingAddress: '',
+  clientCompany: '',
+  clientAddress: '',
 };
 
 interface OwnOrderFormProps {
@@ -100,7 +102,8 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
   // `value` ist, was ins Formular geschrieben wird, `label` was dasteht.
   // Bei Firmen ist beides derselbe Name; bei der Ladungsart steht in der
   // Spalte 'komplett'/'beilader', angezeigt wird der ausgeschriebene Text.
-  const isLoadingPicker = activePicker === 'loadingCompany';
+  // Der Auftraggeber kommt aus derselben Kundenliste wie die Ladestelle.
+  const isLoadingPicker = activePicker === 'loadingCompany' || activePicker === 'clientCompany';
   const isCargoTypePicker = activePicker === 'cargoType';
 
   const pickerCompanies: PickerOption[] = isCargoTypePicker
@@ -144,10 +147,26 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
       if (option.address && field === 'loadingCompany') {
         next.loadingAddress = option.address;
       }
+      // Beim Auftraggeber immer übernehmen, auch leer: Die Anschrift gehört
+      // zum gewählten Eintrag, eine vom vorigen darf nicht stehen bleiben.
+      if (field === 'clientCompany') next.clientAddress = option.address;
       return next;
     });
     setActivePicker(null);
   };
+
+  // Auftraggeber ohne Listeneintrag: entweder keiner (dann die Ladestelle)
+  // oder ein Name, der noch nicht in der Liste steht. Ohne Anschrift — die
+  // Rechnung sucht sie dann selbst über den Namen.
+  const setClientWithoutAddress = (name: string) => {
+    setForm((prev) => ({ ...prev, clientCompany: name.trim(), clientAddress: '' }));
+    setActivePicker(null);
+  };
+  const typedClient = companySearch.trim();
+  const canUseTypedClient =
+    activePicker === 'clientCompany' &&
+    !!typedClient &&
+    !pickerCompanies.some((option) => option.value.toLowerCase() === typedClient.toLowerCase());
 
   const handleSubmit = async () => {
     const { loadingDate, loadingCompany, loadingAddress, unloadingDate, unloadingCompany, unloadingAddress } = form;
@@ -204,6 +223,22 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
           <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'cargoTypeHint')}</Text>
         </View>
       </View>
+
+      {/* Nur für die Rechnung — steht auf keinem PDF und nicht beim Fahrer. */}
+      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'clientLabel')}</Text>
+      {/* Ein Auswahlfeld wie bei der Ladungsart: Tippen öffnet die
+          Firmenliste der Ladestelle. */}
+      <FluidPressable style={styles.selectField} onPress={() => openPicker('clientCompany')}>
+        <Text style={form.clientCompany ? styles.selectValue : styles.selectPlaceholder}>
+          {form.clientCompany || t('chefOwnOrder', 'clientPlaceholder')}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </FluidPressable>
+      <Text style={styles.cargoTypeHint}>
+        {form.clientCompany.trim() && form.clientAddress
+          ? form.clientAddress
+          : t('chefOwnOrder', 'clientHint')}
+      </Text>
 
       {/* Laptop/Desktop: zwei Spalten nebeneinander */}
       <View style={styles.pair}>
@@ -357,6 +392,23 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
                 autoFocus
               />
             )}
+            {activePicker === 'clientCompany' && (
+              <>
+                <FluidPressable style={styles.vehicleOption} onPress={() => setClientWithoutAddress('')}>
+                  <Text style={styles.pickerOptionMuted}>{t('chefOwnOrder', 'clientNone')}</Text>
+                </FluidPressable>
+                {canUseTypedClient && (
+                  <FluidPressable
+                    style={styles.vehicleOption}
+                    onPress={() => setClientWithoutAddress(typedClient)}
+                  >
+                    <Text style={styles.vehicleOptionText}>
+                      {t('chefOwnOrder', 'clientUseTyped').replace('{name}', typedClient)}
+                    </Text>
+                  </FluidPressable>
+                )}
+              </>
+            )}
             {pickerCompanies.length === 0 ? (
               <Text style={styles.emptyPickerText}>
                 {t('chefOwnOrder', 'noCompaniesYet')}
@@ -435,6 +487,12 @@ const createStyles = (theme: AppTheme) => {
     vehicleOptionText: u.optionText,
     selectField: u.field,
     selectValue: u.fieldValue,
+    selectPlaceholder: u.fieldPlaceholder,
+    pickerOptionMuted: {
+      ...u.optionText,
+      color: theme.c.textSecondary,
+      fontStyle: 'italic',
+    },
     cargoTypeHint: u.hint,
     vehicleOptionAddress: u.optionSubtext,
   });

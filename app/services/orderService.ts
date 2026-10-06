@@ -52,6 +52,15 @@ export interface Order {
   unloadingTimeUntil: string;
   unloadingCompany: string;
   unloadingAddress: string;
+
+  /**
+   * Auftraggeber — bekommt die Rechnung. Leer = die Ladestelle ist der
+   * Auftraggeber. Nur für die Rechnung: steht auf keinem PDF und nicht in
+   * der Fahreransicht (siehe 20261005150000_add_client_to_orders.sql).
+   */
+  clientCompany: string;
+  /** Anschrift des Auftraggebers, aus der Firmenliste mitgenommen; leer, wenn getippt. */
+  clientAddress: string;
 }
 
 // orderNr stays editable: leaving it blank auto-assigns the next number
@@ -113,6 +122,8 @@ function rowToOrder(row: any): Order {
     unloadingTimeUntil: row.unloading_time_until,
     unloadingCompany: row.unloading_company,
     unloadingAddress: row.unloading_address,
+    clientCompany: row.client_company ?? '',
+    clientAddress: row.client_address ?? '',
   };
 }
 
@@ -134,6 +145,9 @@ function fieldsToRow(data: OrderFields): Record<string, unknown> {
     unloading_time_until: data.unloadingTimeUntil,
     unloading_company: data.unloadingCompany,
     unloading_address: data.unloadingAddress,
+    client_company: data.clientCompany.trim(),
+    // Ohne Auftraggeber auch keine Anschrift — sonst bliebe eine alte stehen.
+    client_address: data.clientCompany.trim() ? data.clientAddress.trim() : '',
   };
 
   if (data.orderNr.trim()) {

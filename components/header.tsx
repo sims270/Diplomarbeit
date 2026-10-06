@@ -95,6 +95,14 @@ export function Header({ title, subtitle, code }: HeaderProps) {
             >
               <Text style={styles.settingsButtonText}>🚚</Text>
             </FluidPressable>
+            <FluidPressable
+              style={styles.settingsButton}
+              onPress={() => router.push('/chef/trailers')}
+              accessibilityLabel={t('chefProfile', 'trailersCardButton')}
+            >
+              {/* Für einen Auflieger gibt es kein Emoji — deshalb ein "A". */}
+              <Text style={[styles.settingsButtonText, styles.letterButtonText]}>A</Text>
+            </FluidPressable>
           </>
         )}
         <FluidPressable
@@ -197,6 +205,9 @@ const createStyles = ({ c, isTablet, isDesktop, sideInset }: AppTheme) =>
       fontSize: 18,
       lineHeight: 22,
       color: c.text,
+    },
+    letterButtonText: {
+      fontWeight: '700',
     },
     logoutButton: {
       minHeight: Layout.minTouch,

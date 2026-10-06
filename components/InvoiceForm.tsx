@@ -4,6 +4,7 @@ import {
   downloadInvoiceXlsx,
   getBillableOrders,
   loadInvoiceForOrder,
+  parseAmount,
   removeInvoiceItem,
   saveInvoice,
   type BillableOrder,
@@ -20,6 +21,7 @@ import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
+import { computeInvoiceTotals, formatAmount, type InvoiceTotals } from '@/lib/invoiceTotals';
 import { PAYMENT_TERMS_OPTIONS } from '@/lib/transportauftragPdf';
 import { useEffect, useState } from 'react';
 import {
@@ -34,10 +36,11 @@ import {
 } from 'react-native';
 
 interface InvoiceFormProps {
+  /** Eigener Auftrag oder Fremdauftrag — die Edge Function findet beide über die id. */
   orderId: string;
   orderNr: string;
-  /** Zum Vorsortieren der Auswahl: Aufträge desselben Kunden stehen oben. */
-  loadingCompany: string;
+  /** Rechnungsempfänger dieses Auftrags (billingCompanyOf) — Aufträge desselben Kunden stehen in der Auswahl oben. */
+  billingCompany: string;
 }
 
 /** Was gerade läuft — immer nur eine Aktion, alle Buttons sind so lange gesperrt. */
@@ -45,6 +48,19 @@ type BusyAction = 'saving' | 'exporting' | 'creating' | 'adding' | 'removing';
 
 /** Wofür die Auftragsauswahl gerade offen ist. */
 type PickerMode = 'create' | 'add';
+
+type TotalField = 'nettoBetrag' | 'ustBetrag' | 'endBetrag';
+
+/** Die drei Beträge unter den Positionen, in der Reihenfolge der Rechnung. */
+const TOTAL_FIELDS: {
+  field: TotalField;
+  key: keyof InvoiceTotals;
+  label: 'totalNetto' | 'totalUst' | 'totalEnd';
+}[] = [
+  { field: 'nettoBetrag', key: 'netto', label: 'totalNetto' },
+  { field: 'ustBetrag', key: 'ust', label: 'totalUst' },
+  { field: 'endBetrag', key: 'end', label: 'totalEnd' },
+];
 
 function sameCompany(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -63,7 +79,7 @@ function sameCompany(a: string, b: string): boolean {
  * der Auftrag wird durch eine Änderung an der Rechnung nie verändert, und
  * ein erneuter Download liefert dieselbe Belegnummer.
  */
-export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormProps) {
+export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormProps) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
@@ -101,6 +117,10 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
   }, [orderId]);
 
   const setHeader = (field: keyof InvoiceHeader) => (value: string) =>
+    setForm((prev) => (prev ? { ...prev, header: { ...prev.header, [field]: value } } : prev));
+
+  // null stellt den Betrag zurück auf automatisch.
+  const setTotal = (field: TotalField, value: string | null) =>
     setForm((prev) => (prev ? { ...prev, header: { ...prev.header, [field]: value } } : prev));
 
   const setItem = (index: number, field: keyof InvoiceItem) => (value: string) =>
@@ -226,10 +246,10 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
     (order) => order.id !== orderId && !form?.items.some((item) => item.orderId === order.id)
   );
   const sameCustomer = candidates.filter((order) =>
-    sameCompany(order.loadingCompany, loadingCompany)
+    sameCompany(order.billingCompany, billingCompany)
   );
   const otherCustomers = candidates.filter(
-    (order) => !sameCompany(order.loadingCompany, loadingCompany)
+    (order) => !sameCompany(order.billingCompany, billingCompany)
   );
 
   const renderCandidate = (order: BillableOrder) => {
@@ -245,10 +265,18 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
           <Text style={styles.candidateTitle}>
             Nr. {order.orderNr}
             {order.date ? ` · ${isoToGerman(order.date)}` : ''}
+            {order.external ? ` · ${t('chefInvoice', 'externalTag')}` : ''}
           </Text>
           <Text style={styles.candidateSubtitle}>
             {order.loadingCompany || '—'} → {order.unloadingCompany || '—'}
           </Text>
+          {/* Nur wenn der Auftraggeber nicht die Ladestelle ist — sonst stünde
+              derselbe Name zweimal da. */}
+          {!sameCompany(order.billingCompany, order.loadingCompany) ? (
+            <Text style={styles.candidateSubtitle}>
+              {t('chefOwnOrder', 'clientLabel')}: {order.billingCompany}
+            </Text>
+          ) : null}
         </View>
       </FluidPressable>
     );
@@ -364,6 +392,19 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
   const { header, items } = form;
   const isBusy = busy !== null;
 
+  // Ein leer getippter Betrag zählt wie "automatisch" — sonst rechneten Ust
+  // und Endbetrag mit nichts weiter, während der Chef gerade tippt.
+  const manualTotal = (value: string | null) => (value === null ? null : parseAmount(value));
+  const totals = computeInvoiceTotals(
+    items.map((item) => parseAmount(item.preis)),
+    parseAmount(header.ustSatz),
+    {
+      netto: manualTotal(header.nettoBetrag),
+      ust: manualTotal(header.ustBetrag),
+      end: manualTotal(header.endBetrag),
+    }
+  );
+
   return (
     <>
       <View style={styles.typeBadge}>
@@ -447,6 +488,7 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
               {t('chefInvoice', 'itemTitle')
                 .replace('{index}', String(index + 1))
                 .replace('{orderNr}', item.orderNr)}
+              {item.external ? ` · ${t('chefInvoice', 'externalTag')}` : ''}
             </Text>
             {/* Die letzte Ladung bleibt: eine Rechnung ohne Position hätte
                 trotzdem eine Belegnummer verbraucht. */}
@@ -538,6 +580,37 @@ export function InvoiceForm({ orderId, orderNr, loadingCompany }: InvoiceFormPro
         onChangeText={setHeader('ustSatz')}
         keyboardType="decimal-pad"
       />
+
+      {/* Die Beträge rechnen sich aus Preisen und Ust-Satz. Tippt der Chef
+          einen ein, gilt seiner — bis er ihn wieder auf automatisch stellt. */}
+      <View style={styles.itemBlock}>
+        {TOTAL_FIELDS.map(({ field, key, label }) => {
+          const isManual = header[field] !== null;
+          return (
+            <View key={field}>
+              <View style={styles.itemHeader}>
+                <Text style={styles.totalLabel}>{t('chefInvoice', label)}</Text>
+                {isManual ? (
+                  <FluidPressable onPress={() => setTotal(field, null)} disabled={isBusy}>
+                    <Text style={styles.autoLink}>{t('chefInvoice', 'totalReset')}</Text>
+                  </FluidPressable>
+                ) : (
+                  <Text style={styles.autoBadge}>{t('chefInvoice', 'totalAuto')}</Text>
+                )}
+              </View>
+              <TextInput
+                placeholderTextColor={c.placeholder}
+                keyboardAppearance={scheme}
+                style={[styles.input, field === 'endBetrag' && styles.totalEnd]}
+                placeholder={t('chefInvoice', 'totalMissing')}
+                value={header[field] ?? formatAmount(totals[key])}
+                onChangeText={(value) => setTotal(field, value)}
+                keyboardType="decimal-pad"
+              />
+            </View>
+          );
+        })}
+      </View>
       {/* Dieselbe Konditionsliste wie im Transportauftrag (siehe
           ExternalOrderForm): So heißt dieselbe Kondition auf dem Auftrag
           und auf der Rechnung auch gleich. */}
@@ -662,6 +735,28 @@ const createStyles = (theme: AppTheme) => {
       ...Typography.subhead,
       fontWeight: '600',
       color: c.danger,
+      minHeight: Layout.minTouch,
+      lineHeight: Layout.minTouch,
+      paddingHorizontal: Spacing.xs,
+    },
+    totalLabel: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      flexShrink: 1,
+    },
+    totalEnd: {
+      fontWeight: '700',
+    },
+    autoBadge: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      paddingHorizontal: Spacing.xs,
+    },
+    autoLink: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.tint,
       minHeight: Layout.minTouch,
       lineHeight: Layout.minTouch,
       paddingHorizontal: Spacing.xs,

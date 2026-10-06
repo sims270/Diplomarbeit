@@ -37,7 +37,13 @@
 // dieses Projekts laufen bereits als Edge Function mit verifyBoss — so wie
 // export-tank-entries, an dem sich diese Function auch sonst orientiert.
 //
+// "Auftrag" heißt hier eigener Auftrag (orders) oder Fremdauftrag
+// (external_orders): Auch beim Fremdauftrag wird die Firma verrechnet, von
+// der er kommt — nur der fremde Frachtführer bekommt keine Rechnung, den
+// bezahlt die Firma. Beide Arten dürfen auf derselben Rechnung stehen.
+//
 // Tabellen: supabase/migrations/20260914130000_add_collective_invoices.sql
+// und 20261005140000_invoice_external_orders.sql
 //
 // Deploy: supabase functions deploy export-invoice
 
@@ -57,11 +63,18 @@ interface OrderRow {
   unloading_date: string | null;
   unloading_company: string;
   unloading_address: string;
+  /** Auftraggeber, der die Rechnung bekommt; '' = die Ladestelle. */
+  client_company: string;
+  /** Seine Anschrift aus der Firmenliste; '' = über den Namen nachschlagen. */
+  client_address: string;
+  /** true = Fremdauftrag (external_orders), sonst eigener Auftrag (orders). */
+  external: boolean;
 }
 
+/** Die Spalten gibt es in orders und external_orders gleichermaßen. */
 const ORDER_COLUMNS =
   "id, order_nr, status, loading_date, loading_company, loading_address, loading_meters, " +
-  "unloading_date, unloading_company, unloading_address";
+  "unloading_date, unloading_company, unloading_address, client_company, client_address";
 
 /**
  * Der Rechnungskopf, wie er in public.invoices steht — jedes Feld
@@ -78,11 +91,16 @@ interface InvoiceRow {
   uid_nummer: string | null;
   ust_satz: string | number | null;
   zahlungsziel: string | null;
+  /** null = aus Preisen und Ust-Satz berechnen (computeTotals). */
+  netto_betrag: string | number | null;
+  ust_betrag: string | number | null;
+  end_betrag: string | number | null;
 }
 
 const INVOICE_COLUMNS =
   "id, belegnummer, rechnungsdatum, empfaenger_name, empfaenger_strasse, " +
-  "empfaenger_ort, kundennummer, uid_nummer, ust_satz, zahlungsziel";
+  "empfaenger_ort, kundennummer, uid_nummer, ust_satz, zahlungsziel, " +
+  "netto_betrag, ust_betrag, end_betrag";
 
 /**
  * Eine Position = ein verrechneter Auftrag.
@@ -93,7 +111,15 @@ const INVOICE_COLUMNS =
  */
 interface ItemRow {
   id: string;
+  /**
+   * Der Auftrag hinter der Position — eigener oder Fremdauftrag. In der
+   * Tabelle sind das zwei Spalten (order_id, external_order_id);
+   * loadInvoiceById legt sie hier zu einer zusammen, denn die ids beider
+   * Tabellen sind uuids und können nicht kollidieren.
+   */
   order_id: string;
+  /** true = Fremdauftrag. */
+  external: boolean;
   reihenfolge: number;
   position_datum: string | null;
   bezeichnung: string | null;
@@ -108,8 +134,9 @@ interface ItemRow {
 }
 
 const ITEM_COLUMNS =
-  "id, order_id, reihenfolge, position_datum, bezeichnung, transportnr, ladestelle, " +
-  "ladedatum, entladestelle, entladedatum, preis, orders(order_nr)";
+  "id, order_id, external_order_id, reihenfolge, position_datum, bezeichnung, transportnr, " +
+  "ladestelle, ladedatum, entladestelle, entladedatum, preis, orders(order_nr), " +
+  "external_orders(order_nr)";
 
 interface InvoiceWithItems {
   invoice: InvoiceRow;
@@ -195,6 +222,30 @@ function toNumber(value: string | number | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const roundCents = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Nettobetrag, Ust und Endbetrag: was der Chef eingetragen hat, sonst
+ * ausgerechnet. Ein eingetragener Betrag rechnet nach unten weiter.
+ * Dieselbe Rechnung wie lib/invoiceTotals.ts im Formular — bei einer
+ * Änderung beide anpassen.
+ */
+function computeTotals({ invoice, items }: InvoiceWithItems) {
+  const prices = items
+    .map((item) => toNumber(item.preis))
+    .filter((price): price is number => price !== null);
+  const ustSatz = toNumber(invoice.ust_satz);
+
+  const netto = toNumber(invoice.netto_betrag) ??
+    (prices.length > 0 ? roundCents(prices.reduce((a, b) => a + b, 0)) : null);
+  const ust = toNumber(invoice.ust_betrag) ??
+    (netto !== null && ustSatz !== null ? roundCents((netto * ustSatz) / 100) : null);
+  const end = toNumber(invoice.end_betrag) ??
+    (netto !== null ? roundCents(netto + (ust ?? 0)) : null);
+
+  return { netto, ust, end };
+}
+
 /**
  * Die Adressen stehen als "Straße, A-PLZ Ort" in der Datenbank (siehe
  * formatAddress in app/services/siteCompanyService.ts). Für den
@@ -260,10 +311,27 @@ function buildDescription(loadingMeters: string): string {
 interface CustomerRow {
   bmd_kto_nr: string | number | null;
   uid_nummer: string | null;
+  strasse: string | null;
+  plz: string | null;
+  ort: string | null;
 }
 
 /**
- * Kundenstammdaten der Ladestelle aus site_companies — bmd_kto_nr ist die
+ * "Straße, A-PLZ Ort" aus site_companies — dieselbe Schreibweise wie
+ * formatCompanyAddress in app/services/companyAddress.ts, damit
+ * splitAddress sie wieder in Straße und Ort zerlegen kann.
+ */
+function customerAddress(customer: CustomerRow | null): string {
+  if (!customer) return "";
+  const plz = customer.plz?.trim();
+  const postcode = plz && !/^[A-Za-z]{1,3}-/.test(plz) ? `A-${plz}` : plz;
+  const town = [postcode, customer.ort?.trim()].filter(Boolean).join(" ");
+  return [customer.strasse?.trim(), town].filter(Boolean).join(", ");
+}
+
+/**
+ * Kundenstammdaten des Rechnungsempfängers (Auftraggeber, sonst
+ * Ladestelle) aus site_companies — bmd_kto_nr ist die
  * Kundennummer, uid_nummer die UID.
  *
  * Verbunden wird über den Firmennamen, denn im Auftrag steht nur er als
@@ -283,19 +351,22 @@ async function loadCustomer(
   const name = companyName.trim();
   if (!name) return null;
 
-  const columns = "bmd_kto_nr, uid_nummer";
+  const columns = "bmd_kto_nr, uid_nummer, strasse, plz, ort";
 
+  // limit(1) statt maybeSingle(): Eine Firma mit mehreren Werken steht
+  // mehrfach in site_companies, und maybeSingle() scheiterte dann an "mehr
+  // als eine Zeile" — Kundennummer und UID blieben leer.
   const exact = await adminClient
     .from("site_companies")
     .select(columns)
     .eq("name", name)
-    .maybeSingle();
+    .limit(1);
 
   if (exact.error) {
     console.warn("[export-invoice] Kundendaten nicht lesbar:", exact.error.message);
     return null;
   }
-  if (exact.data) return exact.data as CustomerRow;
+  if (exact.data?.[0]) return exact.data[0] as unknown as CustomerRow;
 
   // % und _ sind in ilike Platzhalter — in einem Firmennamen sind sie als
   // Zeichen gemeint und werden deshalb maskiert.
@@ -333,6 +404,30 @@ class HttpError extends Error {
 }
 
 /**
+ * Die Aufträge zu den ids, aus beiden Tabellen: eigene Aufträge (orders)
+ * und Fremdaufträge (external_orders). Beim Fremdauftrag fährt ein fremder
+ * Frachtführer — verrechnet wird trotzdem die Firma, von der der Auftrag
+ * kommt, genau wie beim eigenen. Die ids sind uuids, eine id steht also
+ * höchstens in einer der beiden Tabellen.
+ */
+async function fetchOrders(adminClient: SupabaseClient, orderIds: string[]): Promise<OrderRow[]> {
+  if (orderIds.length === 0) return [];
+
+  const [own, external] = await Promise.all([
+    adminClient.from("orders").select(ORDER_COLUMNS).in("id", orderIds),
+    adminClient.from("external_orders").select(ORDER_COLUMNS).in("id", orderIds),
+  ]);
+
+  if (own.error) throw new HttpError(own.error.message, 400);
+  if (external.error) throw new HttpError(external.error.message, 400);
+
+  return [
+    ...((own.data ?? []) as unknown as Omit<OrderRow, "external">[]).map((o) => ({ ...o, external: false })),
+    ...((external.data ?? []) as unknown as Omit<OrderRow, "external">[]).map((o) => ({ ...o, external: true })),
+  ];
+}
+
+/**
  * Die Aufträge zu den ids — geprüft, dass es sie gibt und dass sie erledigt
  * sind. Sortiert nach Ladedatum, damit eine Sammelrechnung die Fahrten in
  * der Reihenfolge aufführt, in der sie stattgefunden haben.
@@ -341,14 +436,7 @@ async function loadCompletedOrders(
   adminClient: SupabaseClient,
   orderIds: string[],
 ): Promise<OrderRow[]> {
-  const { data, error } = await adminClient
-    .from("orders")
-    .select(ORDER_COLUMNS)
-    .in("id", orderIds);
-
-  if (error) throw new HttpError(error.message, 400);
-
-  const orders = (data ?? []) as OrderRow[];
+  const orders = await fetchOrders(adminClient, orderIds);
   if (orders.length !== orderIds.length) {
     throw new HttpError("Mindestens ein Auftrag wurde nicht gefunden.", 404);
   }
@@ -406,9 +494,9 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
     ...new Set([...emptyItems.map((item) => item.order_id), ...(needsHeader ? [items[0]?.order_id] : [])]),
   ].filter((id): id is string => Boolean(id));
 
-  const { data, error } = await adminClient.from("orders").select(ORDER_COLUMNS).in("id", orderIds);
-  if (error) throw new HttpError(error.message, 400);
-  const orders = new Map(((data ?? []) as OrderRow[]).map((order) => [order.id, order]));
+  const orders = new Map(
+    (await fetchOrders(adminClient, orderIds)).map((order) => [order.id, order]),
+  );
 
   for (const item of emptyItems) {
     const order = orders.get(item.order_id);
@@ -422,17 +510,27 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
 
   const firstOrder = items[0] ? orders.get(items[0].order_id) : undefined;
   if (needsHeader && firstOrder) {
-    const loading = splitAddress(firstOrder.loading_address);
-    const customer = await loadCustomer(adminClient, firstOrder.loading_company);
+    // Die Rechnung bekommt der Auftraggeber — ist keiner eingetragen, wie
+    // bisher die Ladestelle. Seine Anschrift kommt aus dem Auftrag (aus der
+    // Firmenliste gewählt) oder, wenn er nur getippt wurde, über den Namen
+    // aus site_companies.
+    const client = (firstOrder.client_company ?? "").trim();
+    const billTo = client || firstOrder.loading_company;
+    const customer = await loadCustomer(adminClient, billTo);
+    const recipient = splitAddress(
+      client
+        ? (firstOrder.client_address ?? "").trim() || customerAddress(customer)
+        : firstOrder.loading_address,
+    );
 
     const { error: headerError } = await adminClient
       .from("invoices")
       .update({
         rechnungsdatum: invoice.rechnungsdatum ?? heuteInOesterreich(),
-        empfaenger_name: firstOrder.loading_company,
-        empfaenger_strasse: loading.street,
-        empfaenger_ort: loading.town,
-        kundennummer: buildKundennummer(customer?.bmd_kto_nr, loading.town),
+        empfaenger_name: billTo,
+        empfaenger_strasse: recipient.street,
+        empfaenger_ort: recipient.town,
+        kundennummer: buildKundennummer(customer?.bmd_kto_nr, recipient.town),
         uid_nummer: customer?.uid_nummer ?? "",
         ust_satz: invoice.ust_satz ?? MWST_SATZ,
         zahlungsziel: invoice.zahlungsziel ?? ZAHLUNGSZIEL,
@@ -460,11 +558,24 @@ async function loadInvoiceById(
   if (!invoiceResult.data) throw new HttpError("Rechnung nicht gefunden.", 404);
 
   // Die eingebettete Auftragsnummer flach machen — der Client soll nicht
-  // wissen müssen, wie PostgREST Beziehungen verschachtelt.
-  const items = ((itemsResult.data ?? []) as (ItemRow & { orders?: { order_nr?: string } | null })[])
-    .map(({ orders, ...item }) => ({ ...item, order_nr: orders?.order_nr ?? "" }));
+  // wissen müssen, wie PostgREST Beziehungen verschachtelt. Dazu eigener
+  // und Fremdauftrag in eine order_id zusammengelegt (siehe ItemRow).
+  type RawItem = Omit<ItemRow, "order_id" | "external" | "order_nr"> & {
+    order_id: string | null;
+    external_order_id: string | null;
+    orders?: { order_nr?: string } | null;
+    external_orders?: { order_nr?: string } | null;
+  };
+  const items: ItemRow[] = ((itemsResult.data ?? []) as unknown as RawItem[]).map(
+    ({ orders, external_orders, order_id, external_order_id, ...item }) => ({
+      ...item,
+      order_id: (order_id ?? external_order_id) as string,
+      external: order_id === null,
+      order_nr: orders?.order_nr ?? external_orders?.order_nr ?? "",
+    }),
+  );
 
-  return { invoice: invoiceResult.data as InvoiceRow, items };
+  return { invoice: invoiceResult.data as unknown as InvoiceRow, items };
 }
 
 /** Prüft die ids aus dem Request-Body: nicht leer, keine Doppelten. */
@@ -475,16 +586,23 @@ function parseOrderIds(value: unknown): string[] {
   return ids;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Einzelne Zeile oder unique-Verletzung — beides heißt: schon verrechnet. */
 function alreadyBilled(message: string): boolean {
   return message.includes("bereits auf einer Rechnung") || message.includes("duplicate key");
 }
 
 async function handleLoad(adminClient: SupabaseClient, orderId: string) {
+  // orderId kann ein eigener oder ein Fremdauftrag sein. Er landet als
+  // Text im or()-Filter — deshalb vorher sicherstellen, dass er wirklich nur
+  // eine uuid ist und keine Filtersyntax (Beistrich, Klammern) mitbringt.
+  if (!UUID_PATTERN.test(orderId)) throw new HttpError("Ungültige Auftrags-id.", 400);
+
   const { data, error } = await adminClient
     .from("invoice_items")
     .select("invoice_id")
-    .eq("order_id", orderId)
+    .or(`order_id.eq.${orderId},external_order_id.eq.${orderId}`)
     .maybeSingle();
 
   if (error) throw new HttpError(error.message, 400);
@@ -533,7 +651,9 @@ async function handleAddItems(
   const { error } = await adminClient.from("invoice_items").insert(
     orders.map((order, index) => ({
       invoice_id: invoiceId,
-      order_id: order.id,
+      // Genau eine der beiden Spalten (CHECK in 20261005140000).
+      order_id: order.external ? null : order.id,
+      external_order_id: order.external ? order.id : null,
       reihenfolge: start + index + 1,
       ...itemPrefill(order),
     })),
@@ -737,12 +857,15 @@ async function buildWorkbook({ invoice, items }: InvoiceWithItems): Promise<Arra
   }
 
   // --- Summen --------------------------------------------------------------
-  // Nur die Beschriftungen: die Beträge trägt die Buchhaltung wie bisher
-  // selbst ein, hier steht bewusst keine Formel.
+  // Die Beträge als feste Zahlen, keine Formeln: sie dürfen vom Chef
+  // überschrieben sein (z. B. ein vereinbarter Gesamtpreis), und eine Formel
+  // würde das beim Öffnen wieder zurückrechnen. Fehlt jeder Preis, bleiben
+  // die Zellen leer wie bisher.
   ensureRoom(5);
   const s = next;
+  const totals = computeTotals({ invoice, items });
 
-  const nettoRow = writeRow(s, { a: "Nettobetrag gesamt:", d: "€" });
+  const nettoRow = writeRow(s, { a: "Nettobetrag gesamt:", d: "€", e: totals.netto });
   nettoRow.font = { ...BASE_FONT, bold: true };
 
   // Der Satz ist im Formular änderbar; numeric kommt als "20.00" an und
@@ -751,10 +874,11 @@ async function buildWorkbook({ invoice, items }: InvoiceWithItems): Promise<Arra
   const ustRow = writeRow(s + 1, {
     a: ustSatz === null ? "Ust von EUR" : `${ustSatz} % Ust von EUR`,
     d: "€",
+    e: totals.ust,
   });
   ustRow.getCell("e").border = { bottom: { style: "thin" } };
 
-  const endRow = writeRow(s + 2, { a: "Rechnungsendbetrag:", d: "€" });
+  const endRow = writeRow(s + 2, { a: "Rechnungsendbetrag:", d: "€", e: totals.end });
   endRow.font = { ...BASE_FONT, bold: true };
   endRow.getCell("e").border = { bottom: { style: "double" } };
 

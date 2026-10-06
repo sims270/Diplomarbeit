@@ -28,10 +28,14 @@ function printHtmlInNewWindow(html: string, title: string): void {
   printWindow.document.close();
   printWindow.document.title = title;
 
-  // Give the new document a moment to finish layout before printing.
+  // Give the new document a moment to finish layout before printing — and
+  // wait for the embedded letterhead font (lib/briefkopfFont.ts), otherwise
+  // the header could be printed in the fallback font.
   printWindow.setTimeout(() => {
-    printWindow.focus();
-    printWindow.print();
+    printWindow.document.fonts.ready.then(() => {
+      printWindow.focus();
+      printWindow.print();
+    });
   }, 250);
 }
 

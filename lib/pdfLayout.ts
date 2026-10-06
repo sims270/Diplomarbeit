@@ -10,6 +10,8 @@
  * and previewed outside the app too (e.g. headless Chromium).
  */
 
+import { BRIEFKOPF_FONT_BASE64 } from './briefkopfFont';
+
 export const COMPANY = {
   name: 'Sascha Hochreiter Transport GmbH',
   addressLine:
@@ -47,32 +49,63 @@ export function formatTimeWindow(from: string, until: string): string {
   return '';
 }
 
-// Top of every page: just the company name + address/contact lines. The
-// surname gets its own script-style span to echo the paper letterhead's
-// signature-like logotype (a plain italic font can't fully reproduce that,
-// this is the closest a web-safe font stack gets).
+/*
+ * Briefkopf und Brieffuß 1:1 vom Firmenpapier übernommen — Vorlage ist ein
+ * echter Transportauftrag der Firma (Word-Dokument als PDF, "TA.558").
+ * Aus dessen Seitenbeschreibung stammen alle Zahlen unten: Schriftgrößen,
+ * Grundlinien und die Linie unter dem Namen, in Punkt (1/72 Zoll) von der
+ * oberen Blattkante gemessen. Die Schrift ist die eingebettete
+ * Original-Schreibschrift (lib/briefkopfFont.ts).
+ *
+ * Gezeichnet als SVG, nicht als HTML-Text: In einem SVG sitzt jede Zeile
+ * exakt auf ihrer Grundlinie, unabhängig von Zeilenhöhen und Rändern — so
+ * liegt der Kopf auf jedem Gerät an genau derselben Stelle wie im Original.
+ * Die viewBox ist das A4-Blatt in Punkt (595,32 x 841,92), das SVG selbst
+ * so breit wie das Blatt.
+ */
+const PAGE_WIDTH_PT = 595.32;
+const PAGE_HEIGHT_PT = 841.92;
+/** Mitte des Textbereichs im Original (Ränder 52,44 pt links, 35,30 pt rechts) — dort ist zentriert. */
+const CENTER_X = 306.23;
+const RIGHT_X = 560.02;
+
+/** Kopfbereich: obere 110 pt des Blatts. */
+const HEADER_HEIGHT_PT = 110;
+/** Fußbereich: von 731,92 pt bis 800 pt — endet sicher vor dem Seitenende (siehe .page). */
+const FOOTER_TOP_PT = 731.92;
+const FOOTER_HEIGHT_PT = 68.08;
+
+const ptToMm = (pt: number) => `${((pt * 25.4) / 72).toFixed(2)}mm`;
+
 export const letterhead = `
-  <div class="letterhead">
-    <div class="companyName">Sascha <span class="brandName">Hochreiter</span> Transport GmbH</div>
-    <hr/>
-    <div class="companyLine">${COMPANY.addressLine}</div>
-    <div class="companyLine">${COMPANY.contactLine}</div>
-  </div>
+  <svg class="letterhead" xmlns="http://www.w3.org/2000/svg"
+       viewBox="0 0 ${PAGE_WIDTH_PT} ${HEADER_HEIGHT_PT}"
+       style="width:${ptToMm(PAGE_WIDTH_PT)};height:${ptToMm(HEADER_HEIGHT_PT)}">
+    <text x="${CENTER_X}" y="60.36" text-anchor="middle" font-size="15.96">Sascha <tspan font-size="20.04">Hochreiter</tspan> Transport GmbH</text>
+    <rect x="52.44" y="79.58" width="507.58" height="0.48" fill="#000"/>
+    <text x="${CENTER_X}" y="87.62" text-anchor="middle" font-size="8.04">${COMPANY.addressLine}</text>
+    <text x="${CENTER_X}" y="102.5" text-anchor="middle" font-size="8.04">${COMPANY.contactLine}</text>
+  </svg>
 `;
 
-// Bottom of every page: bank/UID/court/company-register details plus that
-// page's number. Deliberately a page footer here rather than matching the
-// paper template's actual top placement — chosen this way on purpose.
 export function footer(pageLabel: string): string {
+  // Grundlinien der fünf Zeilen und der Seitenzahl, wie im Original.
+  const lines: [string, number][] = [
+    [COMPANY.bankLine1, 743.28],
+    [COMPANY.bankLine2, 753.24],
+    [COMPANY.uid, 763.08],
+    [COMPANY.gerichtsstand, 773.04],
+    [COMPANY.firmenbuch, 783.0],
+  ];
   return `
-    <div class="footer">
-      <div>${COMPANY.bankLine1}</div>
-      <div>${COMPANY.bankLine2}</div>
-      <div>${COMPANY.uid}</div>
-      <div>${COMPANY.gerichtsstand}</div>
-      <div>${COMPANY.firmenbuch}</div>
-      <div class="pageLabel">${pageLabel}</div>
-    </div>
+    <svg class="footer" xmlns="http://www.w3.org/2000/svg"
+         viewBox="0 ${FOOTER_TOP_PT} ${PAGE_WIDTH_PT} ${FOOTER_HEIGHT_PT}"
+         style="top:${ptToMm(FOOTER_TOP_PT)};width:${ptToMm(PAGE_WIDTH_PT)};height:${ptToMm(FOOTER_HEIGHT_PT)}">
+      ${lines
+        .map(([text, y]) => `<text x="${CENTER_X}" y="${y}" text-anchor="middle" font-size="8.04">${text}</text>`)
+        .join('\n      ')}
+      <text x="${RIGHT_X}" y="792.84" text-anchor="end" font-size="8.04">${escapeHtml(pageLabel)}</text>
+    </svg>
   `;
 }
 
@@ -103,21 +136,26 @@ export const PDF_STYLES = `
      294mm statt 297mm lässt bewusst 3mm Luft: bei einer exakten
      Übereinstimmung schiebt schon eine Rundung in der mm->px-Umrechnung
      eine fast leere Zusatzseite heraus. */
-  .page { position: relative; min-height: 294mm; box-sizing: border-box; padding: 12mm 16mm 30mm; page-break-after: always; }
+  /* Oben 40mm: Platz für den Briefkopf (letzte Zeile bei 36,2mm) plus Abstand.
+     Unten 36mm: Der Brieffuß beginnt bei rund 260mm, der Text der Seite
+     muss davor enden (294mm - 36mm = 258mm). */
+  .page { position: relative; min-height: 294mm; box-sizing: border-box; padding: 40mm 16mm 36mm; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .letterhead { text-align: center; margin-bottom: 10px; }
-  .companyName { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 21px; font-weight: 700; }
-  .brandName { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-size: 28px; font-weight: 400; vertical-align: -3px; }
-  .companyLine { font-size: 9px; line-height: 1.4; }
+  /* Die AGB-Seiten 2 und 3 des Transportauftrags: dichter Text, der mit dem
+     Original-Briefkopf genau eine Seite füllt — eine Spur kleiner gesetzt,
+     damit er auch bei leicht anderen Schriftmaßen (iOS/Android) nicht auf
+     eine vierte Seite rutscht. */
+  .page.legal { font-size: 10.5px; }
+  /* Die Original-Schreibschrift des Firmenpapiers, eingebettet. */
+  @font-face { font-family: 'HochreiterBriefkopf'; src: url(data:font/ttf;base64,${BRIEFKOPF_FONT_BASE64}) format('truetype'); }
+  /* Kopf und Fuß liegen absolut auf dem Blatt (Koordinaten siehe letterhead/
+     footer), left:0 ist die Blattkante, nicht der Innenrand der Seite. */
+  .letterhead, .footer { position: absolute; left: 0; display: block; font-family: 'HochreiterBriefkopf', 'Segoe Print', cursive; fill: #000; }
+  .letterhead { top: 0; }
   hr { border: none; border-top: 1px solid #999; margin: 6px 0 8px; }
-  /* left/right auf die Seitenränder gesetzt, weil absolut positionierte
-     Elemente sich am padding-*Rand* der Seite ausrichten und das padding
-     von .page sonst übersprungen würde — die Fußzeile liefe sonst über
-     die volle Blattbreite hinaus. bottom:8mm hält sie am Blattende, aber
-     außerhalb des nicht bedruckbaren Randbereichs der meisten Drucker. */
-  .footer { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; text-align: center; font-style: italic; font-size: 8px; line-height: 1.4; color: #333; border-top: 1px solid #ccc; padding-top: 6px; }
-  .pageLabel { text-align: right; font-style: normal; margin-top: 2px; }
   .dateRow { text-align: right; font-size: 12px; margin: 10px 0 4px; }
+  /* Nummer mittig unter dem Datum, der Block selbst rechtsbündig — wie auf dem Firmenpapier. */
+  .dateBlock { display: inline-block; text-align: center; }
   h1.title { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 24px; letter-spacing: 1px; margin: 18px 0 26px; }
   .field-row { margin-bottom: 14px; }
   .field-label { font-weight: 700; display: inline-block; min-width: 110px; }

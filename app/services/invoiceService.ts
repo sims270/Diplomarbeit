@@ -29,12 +29,23 @@ export interface InvoiceHeader {
   uidNummer: string;
   ustSatz: string;
   zahlungsziel: string;
+  /**
+   * Die Beträge unter den Positionen. null = automatisch aus Preisen und
+   * Ust-Satz berechnet (lib/invoiceTotals.ts); ein String = vom Chef
+   * eingetragen, auch während er gerade leer getippt ist.
+   */
+  nettoBetrag: string | null;
+  ustBetrag: string | null;
+  endBetrag: string | null;
 }
 
 /** Eine Position = eine verrechnete Ladung (ein Auftrag). */
 export interface InvoiceItem {
   id: string;
+  /** Eigener Auftrag oder Fremdauftrag — die Edge Function legt beide in ein Feld zusammen. */
   orderId: string;
+  /** true = Fremdauftrag (fremder Frachtführer, verrechnet wird trotzdem der Auftraggeber). */
+  external: boolean;
   /** Nur zur Anzeige — auf der Rechnung steht die bearbeitbare transportnr. */
   orderNr: string;
   positionDatum: string;
@@ -56,7 +67,11 @@ export interface Invoice {
 /** Ein erledigter Auftrag, der noch auf keiner Rechnung steht. */
 export interface BillableOrder {
   id: string;
+  /** true = Fremdauftrag. */
+  external: boolean;
   orderNr: string;
+  /** Wer die Rechnung bekommt: der Auftraggeber, sonst die Ladestelle. */
+  billingCompany: string;
   loadingCompany: string;
   unloadingCompany: string;
   /** ISO 'YYYY-MM-DD' — Ladedatum, sonst Entladedatum; leer, wenn beides fehlt. */
@@ -76,6 +91,12 @@ function text(value: Nullable): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
+// Ein gespeicherter Betrag ist einer, den der Chef eingetragen hat — im
+// Formular mit Komma ("1395,5"), so wie er ihn tippt.
+function manualAmount(value: Nullable): string | null {
+  return value === null || value === undefined ? null : String(value).replace('.', ',');
+}
+
 function toInvoice(response: InvoiceResponse): Invoice | null {
   const row = response.invoice;
   if (!row) return null;
@@ -92,10 +113,14 @@ function toInvoice(response: InvoiceResponse): Invoice | null {
       uidNummer: text(row.uid_nummer),
       ustSatz: text(row.ust_satz),
       zahlungsziel: text(row.zahlungsziel),
+      nettoBetrag: manualAmount(row.netto_betrag),
+      ustBetrag: manualAmount(row.ust_betrag),
+      endBetrag: manualAmount(row.end_betrag),
     },
     items: (response.items ?? []).map((item) => ({
       id: text(item.id),
       orderId: text(item.order_id),
+      external: Boolean(item.external),
       orderNr: text(item.order_nr),
       positionDatum: text(item.position_datum),
       bezeichnung: text(item.bezeichnung),
@@ -115,7 +140,7 @@ function toInvoice(response: InvoiceResponse): Invoice | null {
  * den Litern in tankEntryService: das Komma entscheidet — steht eines drin,
  * ist es das Dezimaltrennzeichen und Punkte sind Tausenderpunkte.
  */
-function parseAmount(input: string): number | null {
+export function parseAmount(input: string): number | null {
   const cleaned = input.trim().replace(/\s/g, '');
   if (!cleaned) return null;
 
@@ -218,35 +243,61 @@ export async function removeInvoiceItem(invoiceId: string, itemId: string): Prom
   return invoice;
 }
 
+const BILLABLE_COLUMNS =
+  'id, order_nr, client_company, loading_company, unloading_company, loading_date, unloading_date';
+
+/**
+ * Wer die Rechnung zu einem Auftrag bekommt: der eingetragene Auftraggeber,
+ * sonst die Ladestelle — dieselbe Regel wie in der Edge Function.
+ */
+export function billingCompanyOf(order: { clientCompany: string; loadingCompany: string }): string {
+  return order.clientCompany.trim() || order.loadingCompany;
+}
+
 /**
  * Erledigte Aufträge, die noch auf keiner Rechnung stehen — die Auswahl für
- * die Sammelrechnung. Direkt aus der Datenbank, die RLS-Policies des Chefs
- * erlauben das Lesen beider Tabellen.
+ * die Sammelrechnung. Eigene Aufträge und Fremdaufträge gemeinsam: Auch
+ * beim Fremdauftrag wird die Firma verrechnet, von der er kommt (den
+ * fremden Frachtführer bezahlt die Firma, der bekommt keine Rechnung).
+ * Direkt aus der Datenbank, die RLS-Policies des Chefs erlauben das Lesen
+ * aller drei Tabellen.
  */
 export async function getBillableOrders(): Promise<BillableOrder[]> {
-  const [ordersResult, itemsResult] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, order_nr, loading_company, unloading_company, loading_date, unloading_date')
-      .eq('status', 'completed')
-      .order('loading_date', { ascending: false, nullsFirst: false }),
-    supabase.from('invoice_items').select('order_id'),
+  const [ordersResult, externalResult, itemsResult] = await Promise.all([
+    supabase.from('orders').select(BILLABLE_COLUMNS).eq('status', 'completed'),
+    supabase.from('external_orders').select(BILLABLE_COLUMNS).eq('status', 'completed'),
+    supabase.from('invoice_items').select('order_id, external_order_id'),
   ]);
 
   if (ordersResult.error) throw new Error(ordersResult.error.message);
+  if (externalResult.error) throw new Error(externalResult.error.message);
   if (itemsResult.error) throw new Error(itemsResult.error.message);
 
-  const billed = new Set((itemsResult.data ?? []).map((row) => row.order_id as string));
+  const billed = new Set(
+    (itemsResult.data ?? []).map((row) => (row.order_id ?? row.external_order_id) as string)
+  );
 
-  return (ordersResult.data ?? [])
-    .filter((row) => !billed.has(row.id))
-    .map((row) => ({
-      id: row.id,
-      orderNr: row.order_nr ?? '',
+  type Row = NonNullable<typeof ordersResult.data>[number];
+  const toBillable = (external: boolean) => (row: Row) => ({
+    id: row.id as string,
+    external,
+    orderNr: row.order_nr ?? '',
+    billingCompany: billingCompanyOf({
+      clientCompany: row.client_company ?? '',
       loadingCompany: row.loading_company ?? '',
-      unloadingCompany: row.unloading_company ?? '',
-      date: row.loading_date ?? row.unloading_date ?? '',
-    }));
+    }),
+    loadingCompany: row.loading_company ?? '',
+    unloadingCompany: row.unloading_company ?? '',
+    date: row.loading_date ?? row.unloading_date ?? '',
+  });
+
+  // Neueste zuerst, eigene und Fremdaufträge gemischt; ohne Datum ans Ende.
+  return [
+    ...(ordersResult.data ?? []).map(toBillable(false)),
+    ...(externalResult.data ?? []).map(toBillable(true)),
+  ]
+    .filter((order) => !billed.has(order.id))
+    .sort((a, b) => (b.date || '0000').localeCompare(a.date || '0000'));
 }
 
 /**
@@ -272,6 +323,10 @@ export async function saveInvoice(invoice: Invoice): Promise<void> {
         uid_nummer: header.uidNummer.trim(),
         ust_satz: parseAmount(header.ustSatz),
         zahlungsziel: header.zahlungsziel.trim(),
+        // Ein leer gelassener Betrag heißt wieder: ausrechnen.
+        netto_betrag: header.nettoBetrag === null ? null : parseAmount(header.nettoBetrag),
+        ust_betrag: header.ustBetrag === null ? null : parseAmount(header.ustBetrag),
+        end_betrag: header.endBetrag === null ? null : parseAmount(header.endBetrag),
         updated_at: now,
       })
       .eq('id', header.id),

@@ -1,3 +1,4 @@
+import { dateToIso, isoToDate } from '@/lib/dateFormat';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -37,6 +38,8 @@ export interface Vehicle {
   serviceIntervalKm: number | null;
   /** Kilometerstand beim letzten Service — der Nullpunkt des laufenden Intervalls. */
   lastServiceKm: number | null;
+  /** Bis wann das nächste Pickerl gemacht sein muss ('YYYY-MM-DD'); null = nicht überwacht. */
+  pickerlDueDate: string | null;
 }
 
 /**
@@ -85,6 +88,77 @@ export function getServiceStatus(vehicle: Vehicle): ServiceStatus | null {
   };
 }
 
+/** Wie lange vor der Fälligkeit die Erinnerung ans Pickerl kommt. */
+export const PICKERL_REMINDER_MONTHS = 1;
+
+/**
+ * Ein ISO-Datum um ganze Monate verschoben. Fällt der Tag im Zielmonat weg
+ * (31. März minus ein Monat), gilt der letzte Tag des Monats — sonst
+ * schöbe JavaScript das Datum still in den Folgemonat.
+ */
+export function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const target = new Date(y, m - 1 + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return dateToIso(target);
+}
+
+/**
+ * Wie es um das Pickerl steht.
+ *
+ * `null`, wenn für den LKW kein Datum hinterlegt ist. `isDue` wird ab
+ * einem Monat vor der Fälligkeit wahr — das ist die Erinnerung, damit der
+ * Chef noch Zeit für einen Termin in der Werkstatt hat.
+ */
+export interface PickerlStatus {
+  dueDate: string;
+  /** Ab diesem Tag erinnert die App. */
+  remindFrom: string;
+  /** Negativ, wenn schon überfällig. */
+  daysRemaining: number;
+  isDue: boolean;
+  isOverdue: boolean;
+}
+
+export function getPickerlStatus(
+  dueDate: string | null,
+  today: string = dateToIso(new Date())
+): PickerlStatus | null {
+  if (!dueDate) return null;
+
+  const remindFrom = addMonthsIso(dueDate, -PICKERL_REMINDER_MONTHS);
+  // Beide Daten auf lokale Mitternacht: so ergibt die Differenz ganze Tage,
+  // auch über die Sommerzeitumstellung hinweg (Math.round fängt die Stunde ab).
+  const daysRemaining = Math.round(
+    (isoToDate(dueDate).getTime() - isoToDate(today).getTime()) / 86_400_000
+  );
+
+  return {
+    dueDate,
+    remindFrom,
+    daysRemaining,
+    isDue: today >= remindFrom,
+    isOverdue: daysRemaining < 0,
+  };
+}
+
+/**
+ * Das Fälligkeitsdatum nach einer erledigten Begutachtung: ein Jahr später.
+ *
+ * Gerechnet vom bisherigen Fälligkeitsdatum, nicht von heute: Nach §57a
+ * bleibt der gelochte Monat gleich, wenn das Pickerl innerhalb der
+ * Toleranz (ein Monat vorher bis vier Monate danach) gemacht wird. Erst wer
+ * später dran ist, bekommt ein neues Datum ab dem Tag der Begutachtung.
+ */
+export function nextPickerlDueDate(
+  dueDate: string,
+  today: string = dateToIso(new Date())
+): string {
+  const toleranceEnd = addMonthsIso(dueDate, 4);
+  return addMonthsIso(today > toleranceEnd ? today : dueDate, 12);
+}
+
 /**
  * Wirft bei einem Fehler, statt eine leere Liste zurückzugeben: In der
  * Übersicht wäre die eine Falschaussage — "keine LKW eingetragen" sähe
@@ -96,7 +170,7 @@ export async function getVehicles(): Promise<Vehicle[]> {
   const { data, error } = await supabase
     .from('license_plates')
     .select(
-      'id, name, model, year_built, km_stand, km_entry_date, retired_at, service_interval_km, last_service_km'
+      'id, name, model, year_built, km_stand, km_entry_date, retired_at, service_interval_km, last_service_km, pickerl_due_date'
     )
     .order('name');
 
@@ -112,6 +186,7 @@ export async function getVehicles(): Promise<Vehicle[]> {
     retiredAt: (row.retired_at as string | null) ?? null,
     serviceIntervalKm: (row.service_interval_km as number | null) ?? null,
     lastServiceKm: (row.last_service_km as number | null) ?? null,
+    pickerlDueDate: (row.pickerl_due_date as string | null) ?? null,
   }));
 
   // Ausgeflottete nach hinten: In der Übersicht stehen sie weiterhin (der
@@ -179,6 +254,7 @@ export async function saveVehicleDetails(
     yearBuilt: number | null;
     serviceIntervalKm: number | null;
     lastServiceKm: number | null;
+    pickerlDueDate: string | null;
   }
 ): Promise<void> {
   const { error } = await supabase
@@ -188,6 +264,7 @@ export async function saveVehicleDetails(
       year_built: details.yearBuilt,
       service_interval_km: details.serviceIntervalKm,
       last_service_km: details.lastServiceKm,
+      pickerl_due_date: details.pickerlDueDate,
     })
     .eq('id', id);
 
@@ -210,6 +287,22 @@ export async function markServiceDone(id: string, kmStand: number): Promise<void
     .eq('id', id);
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Quittiert ein erledigtes Pickerl: Die Fälligkeit rückt ein Jahr weiter
+ * (siehe nextPickerlDueDate). Gibt das neue Datum zurück, damit der Screen
+ * es dem Chef zeigen kann.
+ */
+export async function markPickerlDone(id: string, dueDate: string): Promise<string> {
+  const next = nextPickerlDueDate(dueDate);
+  const { error } = await supabase
+    .from('license_plates')
+    .update({ pickerl_due_date: next })
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+  return next;
 }
 
 /**

@@ -37,7 +37,8 @@ type PickerField =
   | 'paymentTerms'
   | 'recipientCompany'
   | 'loadingCompany'
-  | 'unloadingCompany';
+  | 'unloadingCompany'
+  | 'clientCompany';
 
 const emptyFields: ExternalOrderFields = {
   createdBy: '',
@@ -65,6 +66,8 @@ const emptyFields: ExternalOrderFields = {
   notes: '',
   licensePlate: '',
   driverName: '',
+  clientCompany: '',
+  clientAddress: '',
 };
 
 interface ExternalOrderFormProps {
@@ -145,8 +148,12 @@ export function ExternalOrderForm({
   // Ort findet sich der richtige Standort. Bei Transportmittel,
   // Zahlungskonditionen und Entladefirmen bleibt die Suche aus: Die Listen
   // sind kurz genug, ein Suchfeld wäre dort nur im Weg.
+  // Der Auftraggeber kommt aus derselben Kundenliste wie die Ladestelle
+  // (siehe pickerOptions: alles, was kein anderer Picker ist, ist siteCompanies).
   const isSearchablePicker =
-    activePicker === 'loadingCompany' || activePicker === 'recipientCompany';
+    activePicker === 'loadingCompany' ||
+    activePicker === 'recipientCompany' ||
+    activePicker === 'clientCompany';
   const query = companySearch.trim().toLowerCase();
   const visibleOptions =
     isSearchablePicker && query
@@ -177,10 +184,26 @@ export function ExternalOrderForm({
         if (field === 'loadingCompany') next.loadingAddress = option.address;
         if (field === 'recipientCompany') next.recipientAddress = option.address;
       }
+      // Beim Auftraggeber immer übernehmen, auch leer: Die Anschrift gehört
+      // zum gewählten Eintrag, eine vom vorigen darf nicht stehen bleiben.
+      if (field === 'clientCompany') next.clientAddress = option.address;
       return next;
     });
     setActivePicker(null);
   };
+
+  // Auftraggeber ohne Listeneintrag: entweder keiner (dann die Ladestelle)
+  // oder ein Name, der noch nicht in der Liste steht. Ohne Anschrift — die
+  // Rechnung sucht sie dann selbst über den Namen.
+  const setClientWithoutAddress = (name: string) => {
+    setForm((prev) => ({ ...prev, clientCompany: name.trim(), clientAddress: '' }));
+    setActivePicker(null);
+  };
+  const typedClient = companySearch.trim();
+  const canUseTypedClient =
+    activePicker === 'clientCompany' &&
+    !!typedClient &&
+    !pickerOptions.some((option) => option.name.toLowerCase() === typedClient.toLowerCase());
 
   const handleSubmit = async () => {
     const {
@@ -229,6 +252,22 @@ export function ExternalOrderForm({
         onChangeText={set('orderNr')}
         keyboardType="numeric"
       />
+
+      {/* Nur für die Rechnung — steht nicht auf dem Transportauftrag und
+          nicht in der App des fremden Fahrers. */}
+      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'clientLabel')}</Text>
+      {/* Ein Auswahlfeld: Tippen öffnet die Firmenliste der Ladestelle. */}
+      <FluidPressable style={styles.selectField} onPress={() => openPicker('clientCompany')}>
+        <Text style={form.clientCompany ? styles.selectValue : styles.selectPlaceholder}>
+          {form.clientCompany || t('chefOwnOrder', 'clientPlaceholder')}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </FluidPressable>
+      <Text style={styles.hint}>
+        {form.clientCompany.trim() && form.clientAddress
+          ? form.clientAddress
+          : t('chefOwnOrder', 'clientHint')}
+      </Text>
 
       <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'recipientSection')}</Text>
       <View style={styles.comboRow}>
@@ -504,6 +543,23 @@ export function ExternalOrderForm({
                 autoFocus
               />
             )}
+            {activePicker === 'clientCompany' && (
+              <>
+                <FluidPressable style={styles.vehicleOption} onPress={() => setClientWithoutAddress('')}>
+                  <Text style={styles.pickerOptionMuted}>{t('chefOwnOrder', 'clientNone')}</Text>
+                </FluidPressable>
+                {canUseTypedClient && (
+                  <FluidPressable
+                    style={styles.vehicleOption}
+                    onPress={() => setClientWithoutAddress(typedClient)}
+                  >
+                    <Text style={styles.vehicleOptionText}>
+                      {t('chefOwnOrder', 'clientUseTyped').replace('{name}', typedClient)}
+                    </Text>
+                  </FluidPressable>
+                )}
+              </>
+            )}
             {!isClosedListPicker && pickerOptions.length === 0 ? (
               <Text style={styles.emptyPickerText}>
                 {t('chefExternalOrder', 'noCompaniesYet')}
@@ -579,6 +635,11 @@ const createStyles = (theme: AppTheme) => {
     selectField: u.field,
     selectValue: u.fieldValue,
     selectPlaceholder: u.fieldPlaceholder,
+    pickerOptionMuted: {
+      ...u.optionText,
+      color: theme.c.textSecondary,
+      fontStyle: 'italic',
+    },
     selectChevron: u.chevron,
     createButton: {
       ...u.primaryButton,

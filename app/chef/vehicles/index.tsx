@@ -1,6 +1,7 @@
 import { useAuth } from '@/app/context/AuthContext';
 import {
   addVehicle,
+  getPickerlStatus,
   getServiceStatus,
   getVehicles,
   MAX_YEAR_BUILT,
@@ -260,6 +261,7 @@ export default function ChefVehiclesScreen() {
                           item.serviceIntervalKm === null ? '' : String(item.serviceIntervalKm),
                         lastServiceKm:
                           item.lastServiceKm === null ? '' : String(item.lastServiceKm),
+                        pickerlDueDate: item.pickerlDueDate ?? '',
                       },
                     })
                   }
@@ -280,6 +282,13 @@ export default function ChefVehiclesScreen() {
                         <View style={styles.serviceBadge}>
                           <Text style={styles.serviceBadgeText}>
                             {t('vehicles', 'serviceDueBadge')}
+                          </Text>
+                        </View>
+                      )}
+                      {item.retiredAt === null && getPickerlStatus(item.pickerlDueDate)?.isDue && (
+                        <View style={styles.serviceBadge}>
+                          <Text style={styles.serviceBadgeText}>
+                            {t('vehicles', 'pickerlDueBadge')}
                           </Text>
                         </View>
                       )}

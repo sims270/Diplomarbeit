@@ -1,5 +1,5 @@
 import type { Order } from '@/app/services/orderService';
-import { isoToGerman } from '@/lib/dateFormat';
+import { dateToIso, isoToGerman } from '@/lib/dateFormat';
 import { escapeHtml, footer, formatTimeWindow, letterhead, PDF_STYLES } from '@/lib/pdfLayout';
 
 /**
@@ -22,7 +22,9 @@ export function buildOwnOrderHtml(order: Order, driverUsername?: string): string
   const unloadingUntil = unloadingTimeWindow
     ? `${unloadingDateDisplay}, ${unloadingTimeWindow}`
     : unloadingDateDisplay;
-  const today = new Date().toLocaleDateString('de-AT');
+  // "05.10.2026" mit führender Null wie auf dem Firmenpapier —
+  // toLocaleDateString('de-AT') ließe sie weg ("5.10.2026").
+  const today = isoToGerman(dateToIso(new Date()));
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -36,7 +38,7 @@ ${PDF_STYLES}
 
   <div class="page">
     ${letterhead}
-    <div class="dateRow">Stadlhof, ${today}<br/>Transportnummer ${escapeHtml(order.orderNr)}</div>
+    <div class="dateRow"><span class="dateBlock">Stadlhof, ${today}<br/>Transportnummer ${escapeHtml(order.orderNr)}</span></div>
 
     <h1 class="title">TRANSPORTAUFTRAG</h1>
 

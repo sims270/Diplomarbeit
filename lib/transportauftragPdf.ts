@@ -1,5 +1,5 @@
 import type { ExternalOrder } from '@/app/services/externalOrderService';
-import { isoToGerman } from '@/lib/dateFormat';
+import { dateToIso, isoToGerman } from '@/lib/dateFormat';
 import { escapeHtml, footer, formatTimeWindow, letterhead, nl2p, PDF_STYLES } from '@/lib/pdfLayout';
 
 /**
@@ -146,7 +146,9 @@ export function buildTransportauftragHtml(order: ExternalOrder): string {
   const unloadingUntil = unloadingTimeWindow
     ? `${unloadingDateDisplay}, ${unloadingTimeWindow}`
     : unloadingDateDisplay;
-  const today = new Date().toLocaleDateString('de-AT');
+  // "05.10.2026" mit führender Null wie auf dem Firmenpapier —
+  // toLocaleDateString('de-AT') ließe sie weg ("5.10.2026").
+  const today = isoToGerman(dateToIso(new Date()));
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -160,7 +162,7 @@ ${PDF_STYLES}
 
   <div class="page">
     ${letterhead}
-    <div class="dateRow">Stadlhof, ${today}<br/>Transportauftragsnr. ${escapeHtml(order.orderNr)}</div>
+    <div class="dateRow"><span class="dateBlock">Stadlhof, ${today}<br/>Nr. ${escapeHtml(order.orderNr)}</span></div>
 
     <h1 class="title">TRANSPORTAUFTRAG</h1>
 
@@ -197,7 +199,7 @@ ${PDF_STYLES}
     ${footer('Seite | 1')}
   </div>
 
-  <div class="page">
+  <div class="page legal">
     ${letterhead}
     ${PAGE_2_TERMS}
     ${PAGE_2_VERSICHERUNG}
@@ -209,7 +211,7 @@ ${PDF_STYLES}
     ${footer('Seite | 2')}
   </div>
 
-  <div class="page">
+  <div class="page legal">
     ${letterhead}
     ${PAGE_3_TOP}
     ${PAGE_3_AUSLAENDERBESCHAEFTIGUNG}
