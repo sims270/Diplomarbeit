@@ -247,6 +247,127 @@ function toExcelDate(isoDate: string): Date | string {
   return new Date(Date.UTC(y, m - 1, d, 12));
 }
 
+/** Was die Auswertung unter einem Monatsblatt braucht. */
+interface SummaryInput {
+  /** Excel-Zeile der ersten Tankung im Monat (= erste Volltankung). */
+  firstRow: number;
+  /** Excel-Zeile der letzten Tankung im Monat (= letzte Volltankung). */
+  lastRow: number;
+  /** Letzte Zeile des Tageskalenders. */
+  lastCalendarRow: number;
+  firstKm: number;
+  lastKm: number;
+  dieselTotal: number;
+  dieselFirst: number;
+  dieselCost: number;
+  adblueTotal: number;
+  adblueCost: number;
+}
+
+/**
+ * Die Auswertung unter dem Kalender — derselbe Block, den die Excel-Datei
+ * des Chefs unten im Blatt hatte.
+ *
+ * Gerechnet wird von Volltankung zu Volltankung: Die gefahrenen km sind der
+ * km-Stand der letzten Tankung im Monat minus den der ersten. Der Diesel der
+ * ersten Tankung zählt für den Verbrauch nicht mit — er wurde vor dieser
+ * Strecke verfahren und füllt den Tank nur auf den Ausgangsstand. Erst die
+ * Liter danach gehören zu den gefahrenen km.
+ *
+ * Als Formeln statt fester Zahlen, damit die Werte mitrechnen, wenn der
+ * Chef in der Datei noch etwas korrigiert. Das mitgegebene Ergebnis ist nur
+ * der Anzeigewert für Programme, die nicht selbst rechnen (Vorschau am
+ * Handy, Mail-Anhang) — Excel rechnet beim Öffnen neu.
+ */
+function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
+  const km = s.lastKm - s.firstKm;
+  const dieselAfterFirst = s.dieselTotal - s.dieselFirst;
+  const consumption = km > 0 ? (dieselAfterFirst / km) * 100 : "";
+  const calendar = (col: string) => `${col}2:${col}${s.lastCalendarRow}`;
+
+  // Zwei Leerzeilen Abstand zum Kalender, wie in der bisherigen Datei. Die
+  // Reihenfolge unten legt fest, in welcher Zeile km und Liter landen.
+  const start = s.lastCalendarRow + 3;
+  const kmRow = start;
+  const afterFirstRow = start + 2;
+
+  // Bei nur einer Tankung im Monat bleibt der Bereich "ohne erste Tankung"
+  // leer — SUM über eine umgedrehte Spanne (C5:C4) würde die erste Tankung
+  // wieder mitzählen.
+  const afterFirstFormula =
+    s.lastRow > s.firstRow ? `SUM(C${s.firstRow + 1}:C${s.lastRow})` : "0";
+
+  const rows: {
+    label: string;
+    formula: string;
+    result: number | string;
+    numFmt: string;
+  }[] = [
+    {
+      label: "Gefahrene km",
+      formula: `B${s.lastRow}-B${s.firstRow}`,
+      result: km,
+      numFmt: '#,##0 "km"',
+    },
+    {
+      label: "Diesel gesamt",
+      formula: `SUM(${calendar("C")})`,
+      result: s.dieselTotal,
+      numFmt: '#,##0.00 "l"',
+    },
+    {
+      label: "Diesel ohne 1. Tankung",
+      formula: afterFirstFormula,
+      result: dieselAfterFirst,
+      numFmt: '#,##0.00 "l"',
+    },
+    {
+      label: "Ø-Verbrauch / 100 km",
+      // Ohne gefahrene km (nur eine Tankung) gibt es keinen Verbrauch —
+      // leer statt #DIV/0!.
+      formula: `IF(C${kmRow}>0,C${afterFirstRow}/C${kmRow}*100,"")`,
+      result: consumption,
+      numFmt: '#,##0.00 "l"',
+    },
+    {
+      label: "Dieselkosten / Monat",
+      formula: `SUM(${calendar("H")})`,
+      result: s.dieselCost,
+      numFmt: '"EUR" #,##0.00',
+    },
+    {
+      label: "AdBlue gesamt",
+      formula: `SUM(${calendar("D")})`,
+      result: s.adblueTotal,
+      numFmt: '#,##0.00 "l"',
+    },
+    {
+      label: "AdBlue-Kosten / Monat",
+      formula: `SUM(${calendar("E")})`,
+      result: s.adblueCost,
+      numFmt: '"EUR" #,##0.00',
+    },
+  ];
+
+  rows.forEach((entry, index) => {
+    const rowNumber = start + index;
+
+    // Die Bezeichnung über A und B, damit sie neben den schmalen
+    // Datenspalten Platz hat; der Wert steht in C unter den Litern.
+    sheet.mergeCells(`A${rowNumber}:B${rowNumber}`);
+    const label = sheet.getCell(`A${rowNumber}`);
+    label.value = entry.label;
+    // Sonst erbt die Zelle das Datumsformat der Spalte A.
+    label.numFmt = "General";
+    label.font = { bold: true };
+
+    const value = sheet.getCell(`C${rowNumber}`);
+    value.value = { formula: entry.formula, result: entry.result };
+    value.numFmt = entry.numFmt;
+    value.font = { bold: true };
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -266,7 +387,10 @@ Deno.serve(async (req) => {
       "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_per_liter, price_total",
     )
     .order("license_plate_key", { ascending: true })
-    .order("entry_date", { ascending: true });
+    .order("entry_date", { ascending: true })
+    // Zwei Tankungen am selben Tag: der km-Stand legt fest, welche die
+    // erste ist — die Auswertung rechnet ab der ersten Volltankung.
+    .order("km_stand", { ascending: true });
 
   if (queryError) {
     return json({ error: queryError.message }, 400);
@@ -337,6 +461,10 @@ Deno.serve(async (req) => {
     // bisherige Blatt des Chefs aus: ein Kalender, in dem nur an Tanktagen
     // etwas steht. (group.month ist 0 beim Platzhalterblatt für "noch
     // keine Tankvorgänge" — das bleibt leer.)
+    // Für die Auswertung unter dem Kalender: wo die erste und letzte
+    // Tankung steht und was sich über den Monat summiert.
+    let summary: SummaryInput | null = null;
+
     if (group.month >= 1) {
       const lastDay = daysInMonth(group.year, group.month);
 
@@ -353,7 +481,7 @@ Deno.serve(async (req) => {
         // Wurde an einem Tag mehrfach getankt, bekommt jeder Vorgang seine
         // eigene Zeile unter demselben Datum — sonst ginge einer verloren.
         for (const entry of dayEntries) {
-          sheet.addRow({
+          const row = sheet.addRow({
             date: toExcelDate(isoDate),
             km: entry.km_stand,
             diesel: toNumber(entry.liters_diesel),
@@ -367,6 +495,28 @@ Deno.serve(async (req) => {
             pricePerLiter: entry.price_per_liter === null ? null : toNumber(entry.price_per_liter),
             priceTotal: entry.price_total === null ? null : toNumber(entry.price_total),
           });
+
+          const diesel = toNumber(entry.liters_diesel);
+          if (!summary) {
+            summary = {
+              firstRow: row.number,
+              lastRow: row.number,
+              lastCalendarRow: row.number,
+              firstKm: entry.km_stand,
+              lastKm: entry.km_stand,
+              dieselTotal: 0,
+              dieselFirst: diesel,
+              dieselCost: 0,
+              adblueTotal: 0,
+              adblueCost: 0,
+            };
+          }
+          summary.lastRow = row.number;
+          summary.lastKm = entry.km_stand;
+          summary.dieselTotal += diesel;
+          summary.dieselCost += entry.price_total === null ? 0 : toNumber(entry.price_total);
+          summary.adblueTotal += entry.liters_adblue === null ? 0 : toNumber(entry.liters_adblue);
+          summary.adblueCost += entry.price_adblue === null ? 0 : toNumber(entry.price_adblue);
         }
       }
     }
@@ -381,6 +531,13 @@ Deno.serve(async (req) => {
     // Vier Nachkommastellen, weil Literpreise so notiert werden (1,3775).
     sheet.getColumn("pricePerLiter").numFmt = "#,##0.0000";
     sheet.getColumn("priceTotal").numFmt = '"EUR" #,##0.00';
+
+    // Erst nach den Spaltenformaten: die gelten für jede schon vorhandene
+    // Zelle der Spalte und würden die Formate der Auswertung überschreiben.
+    if (summary) {
+      summary.lastCalendarRow = sheet.rowCount;
+      addSummary(sheet, summary);
+    }
 
     // Kopfzeile beim Scrollen stehen lassen — die Blätter werden mit der
     // Zeit lang.
