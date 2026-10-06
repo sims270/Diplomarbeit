@@ -22,6 +22,8 @@ export default function ChefLayout() {
       <Stack.Screen name="external-order" />
       <Stack.Screen name="account" />
       <Stack.Screen name="bosses" />
+      <Stack.Screen name="reminders" />
+      <Stack.Screen name="invoices" />
     </Stack>
   );
 }

@@ -1,4 +1,9 @@
-import { addMonthsIso, nextPickerlDueDate } from '@/app/services/licensePlateService';
+import {
+  addMonthsIso,
+  getPickerlStatus,
+  nextPickerlDueDate,
+  type PickerlStatus,
+} from '@/app/services/licensePlateService';
 import { dateToIso } from '@/lib/dateFormat';
 import { supabase } from '@/lib/supabase';
 
@@ -23,8 +28,8 @@ export interface Trailer {
 
 /**
  * Eine Genehmigung eines Aufliegers, z. B. für ein bestimmtes Land.
- * Erinnert wird wie beim Pickerl einen Monat vor Ablauf — die Rechnung
- * dafür ist dieselbe (getPickerlStatus mit validUntil).
+ * Erinnert wird PERMIT_REMINDER_MONTHS vor Ablauf — die Rechnung dafür ist
+ * dieselbe wie beim Pickerl (getPermitStatus).
  *
  * Table: supabase/migrations/20261005130000_create_trailer_permits.sql
  */
@@ -35,6 +40,21 @@ export interface TrailerPermit {
   validUntil: string;
   /** Wie viele Jahre eine Genehmigung gilt — um so viel verlängert "Erneuert". */
   validityYears: number;
+}
+
+/**
+ * Wie lange vor Ablauf die Erinnerung an eine Genehmigung kommt. Kürzer
+ * als beim Pickerl (PICKERL_REMINDER_MONTHS): Erneuern ist nur ein Antrag,
+ * kein Werkstatttermin.
+ */
+export const PERMIT_REMINDER_MONTHS = 1;
+
+/** Wie getPickerlStatus, nur mit dem Vorlauf der Genehmigungen. */
+export function getPermitStatus(
+  validUntil: string,
+  today: string = dateToIso(new Date())
+): PickerlStatus | null {
+  return getPickerlStatus(validUntil, today, PERMIT_REMINDER_MONTHS);
 }
 
 /** Zur Auswahl stehende Gültigkeitsdauern in Jahren (CHECK in der Migration: 1–10). */

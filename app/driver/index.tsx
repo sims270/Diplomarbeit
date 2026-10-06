@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ActivityIndicator, StyleSheet, ScrollView, View, Text, FlatList } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
@@ -12,7 +13,7 @@ import { isoToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
 import { currentMonth, isInMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export default function DriverDashboardScreen() {
@@ -40,6 +41,19 @@ export default function DriverDashboardScreen() {
   // niemandem zugewiesen) gibt es für den Fahrer nicht — ein Auftrag
   // unterwegs zählt noch als zugewiesen. Tippen filtert die Liste darunter.
   const [statusFilter, setStatusFilter] = useState<'assigned' | 'completed' | null>(null);
+
+  // Die Kachel "Offene Aufträge" im Profil (app/driver/profile.tsx) kommt
+  // mit Filter und Monat zurück. Als Effekt statt nur als Startwert: Das
+  // Dashboard liegt im Stack unter dem Profil und ist schon gemountet.
+  const params = useLocalSearchParams<{ status?: string; month?: string; at?: string }>();
+  useEffect(() => {
+    if (params.status === 'assigned' || params.status === 'completed') {
+      setStatusFilter(params.status);
+    }
+    if (params.month && /^\d{4}-\d{2}$/.test(params.month)) {
+      setMonth(params.month);
+    }
+  }, [params.status, params.month, params.at]);
   const isOpenOrder = (order: Order) =>
     order.status === 'assigned' || order.status === 'in_progress';
   const assignedCount = monthOrders.filter(isOpenOrder).length;
@@ -149,7 +163,7 @@ export default function DriverDashboardScreen() {
           {statusFilter !== null && (
             <FluidPressable style={styles.statusFilterChip} onPress={() => setStatusFilter(null)}>
               <Text style={styles.statusFilterChipText}>
-                {`${getStatusText(statusFilter)} ✕`}
+                {getStatusText(statusFilter)} <MaterialIcons name="close" size={14} />
               </Text>
             </FluidPressable>
           )}

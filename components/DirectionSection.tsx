@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   DIRECTION_SUGGESTIONS,
@@ -174,7 +175,7 @@ export function DirectionSection({
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
             {onlyMissing
-              ? t('chefUmsatzliste', 'emptyMissing')
+              ? <><MaterialIcons name="check-circle" size={18} color={c.success} /> {t('chefUmsatzliste', 'emptyMissing')}</>
               : t('chefUmsatzliste', 'emptyAll')}
           </Text>
         </View>

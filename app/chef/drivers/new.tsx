@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   formatVehicle,
   getActiveVehicles,
@@ -168,7 +169,7 @@ export default function CreateDriverScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('createDriver', 'vehicleLabel')}</Text>
               <FluidPressable onPress={() => setIsPlatePickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             {vehicles.length === 0 ? (

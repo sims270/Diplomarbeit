@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   deleteOrderDocument,
   getOrderDocumentDownloadUrl,
@@ -161,7 +162,10 @@ export function OrderDocuments({
               onPress={() => handleDownload(doc)}
               disabled={busyPath === doc.path}
             >
-              <Text style={styles.documentIcon}>{isImage(doc.fileName) ? '🖼️' : '📄'}</Text>
+              <MaterialIcons
+                name={isImage(doc.fileName) ? 'image' : 'description'}
+                style={styles.documentIcon}
+              />
               <View style={styles.documentTexts}>
                 <Text style={styles.documentName} numberOfLines={1}>
                   {doc.fileName}
@@ -258,7 +262,8 @@ const createStyles = (theme: AppTheme) => {
       backgroundColor: c.surfaceSecondary,
     },
     documentIcon: {
-      fontSize: 22,
+      fontSize: 24,
+      color: c.textSecondary,
     },
     documentTexts: {
       flex: 1,

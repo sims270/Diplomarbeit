@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
+import { computeInvoiceTotals } from '@/lib/invoiceTotals';
 
 /**
  * Rechnungen zu erledigten Aufträgen: als Einzelrechnung (eine Ladung) oder
@@ -298,6 +299,89 @@ export async function getBillableOrders(): Promise<BillableOrder[]> {
   ]
     .filter((order) => !billed.has(order.id))
     .sort((a, b) => (b.date || '0000').localeCompare(a.date || '0000'));
+}
+
+/** Eine erstellte Rechnung für die Übersicht (app/chef/invoices.tsx). */
+export interface InvoiceSummary {
+  id: string;
+  belegnummer: string;
+  /** ISO 'YYYY-MM-DD'; leer, wenn keins eingetragen ist. */
+  rechnungsdatum: string;
+  empfaengerName: string;
+  /** Wie viele Ladungen auf der Rechnung stehen. */
+  itemCount: number;
+  /** Rechnungsendbetrag — eingetragen oder ausgerechnet; null ohne Preise. */
+  total: number | null;
+  /**
+   * Bearbeitet wird eine Rechnung im Auftrag, der auf ihr steht — die
+   * Übersicht öffnet den ersten. null bei einer Rechnung ohne Positionen.
+   */
+  firstOrder: { id: string; external: boolean } | null;
+}
+
+/**
+ * Alle Rechnungen, neueste zuerst. Direkt aus den Tabellen — die
+ * RLS-Policies des Chefs erlauben das Lesen von invoices und invoice_items.
+ */
+export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
+  const [invoicesResult, itemsResult] = await Promise.all([
+    supabase
+      .from('invoices')
+      .select('id, belegnummer, rechnungsdatum, empfaenger_name, ust_satz, netto_betrag, ust_betrag, end_betrag'),
+    supabase
+      .from('invoice_items')
+      .select('invoice_id, order_id, external_order_id, preis, reihenfolge')
+      .order('reihenfolge'),
+  ]);
+
+  if (invoicesResult.error) throw new Error(invoicesResult.error.message);
+  if (itemsResult.error) throw new Error(itemsResult.error.message);
+
+  type ItemRow = NonNullable<typeof itemsResult.data>[number];
+  const itemsByInvoice = new Map<string, ItemRow[]>();
+  for (const item of itemsResult.data ?? []) {
+    const list = itemsByInvoice.get(item.invoice_id as string);
+    if (list) list.push(item);
+    else itemsByInvoice.set(item.invoice_id as string, [item]);
+  }
+
+  const toNumber = (value: Nullable): number | null =>
+    value === null || value === undefined || value === '' ? null : Number(value);
+
+  return (invoicesResult.data ?? [])
+    .map((row) => {
+      const items = itemsByInvoice.get(row.id as string) ?? [];
+      const first = items[0];
+      // Dieselbe Rechnung wie im Formular und im Export: ein eingetragener
+      // Betrag gilt, sonst aus den Preisen und dem Ust-Satz.
+      const totals = computeInvoiceTotals(
+        items.map((item) => toNumber(item.preis)),
+        toNumber(row.ust_satz),
+        {
+          netto: toNumber(row.netto_betrag),
+          ust: toNumber(row.ust_betrag),
+          end: toNumber(row.end_betrag),
+        }
+      );
+      return {
+        id: row.id as string,
+        belegnummer: text(row.belegnummer),
+        rechnungsdatum: text(row.rechnungsdatum),
+        empfaengerName: text(row.empfaenger_name),
+        itemCount: items.length,
+        total: totals.end,
+        firstOrder: first
+          ? first.order_id
+            ? { id: first.order_id as string, external: false }
+            : { id: first.external_order_id as string, external: true }
+          : null,
+      };
+    })
+    .sort(
+      (a, b) =>
+        (b.rechnungsdatum || '0000').localeCompare(a.rechnungsdatum || '0000') ||
+        b.belegnummer.localeCompare(a.belegnummer, undefined, { numeric: true })
+    );
 }
 
 /**

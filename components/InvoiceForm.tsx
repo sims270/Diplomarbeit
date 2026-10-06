@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   addInvoiceItems,
   createInvoice,
@@ -260,7 +261,7 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
         style={[styles.candidate, isSelected && styles.candidateSelected]}
         onPress={() => toggleSelected(order.id)}
       >
-        <Text style={styles.checkbox}>{isSelected ? '☑' : '☐'}</Text>
+        <MaterialIcons name={isSelected ? 'check-box' : 'check-box-outline-blank'} style={styles.checkbox} />
         <View style={styles.candidateText}>
           <Text style={styles.candidateTitle}>
             Nr. {order.orderNr}
@@ -302,7 +303,7 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
               {t('chefInvoice', pickerMode === 'add' ? 'pickerAddTitle' : 'pickerCreateTitle')}
             </Text>
             <FluidPressable onPress={() => setPickerMode(null)}>
-              <Text style={styles.closeButton}>✕</Text>
+              <MaterialIcons name="close" style={styles.closeButton} />
             </FluidPressable>
           </View>
           <Text style={styles.hint}>{t('chefInvoice', 'pickerHint')}</Text>
@@ -313,7 +314,7 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
             <ScrollView style={styles.pickerList}>
               {pickerMode === 'create' ? (
                 <View style={[styles.candidate, styles.candidateFixed]}>
-                  <Text style={styles.checkbox}>☑</Text>
+                  <MaterialIcons name="check-box" style={styles.checkbox} />
                   <Text style={styles.candidateTitle}>
                     {t('chefInvoice', 'pickerCurrentOrder').replace('{orderNr}', orderNr)}
                   </Text>
@@ -668,7 +669,7 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefInvoice', 'zahlungszielLabel')}</Text>
               <FluidPressable onPress={() => setIsTermsPickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             <FlatList

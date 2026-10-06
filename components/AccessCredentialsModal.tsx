@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Radius, Spacing, Typography } from '@/constants/theme';
@@ -65,7 +66,7 @@ export function AccessCredentialsModal({ credentials, onClose }: AccessCredentia
           <View style={styles.header}>
             <Text style={styles.title}>{t('externalAccess', 'credentialsTitle')}</Text>
             <FluidPressable onPress={onClose}>
-              <Text style={styles.closeButton}>✕</Text>
+              <MaterialIcons name="close" style={styles.closeButton} />
             </FluidPressable>
           </View>
 

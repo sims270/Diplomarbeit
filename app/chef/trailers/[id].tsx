@@ -7,6 +7,7 @@ import {
   addTrailerPermit,
   deleteTrailer,
   deleteTrailerPermit,
+  getPermitStatus,
   getTrailerPermits,
   markTrailerPickerlDone,
   nextPermitValidUntil,
@@ -356,7 +357,7 @@ export default function EditTrailerScreen() {
             <Text style={styles.statusRemaining}>{t('trailers', 'permitsEmpty')}</Text>
           ) : (
             permits.map((permit) => {
-              const status = getPickerlStatus(permit.validUntil);
+              const status = getPermitStatus(permit.validUntil);
               const isBusy = busyPermitId === permit.id;
               return (
                 <View key={permit.id} style={styles.statusBox}>

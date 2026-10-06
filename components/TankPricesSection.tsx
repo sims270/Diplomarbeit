@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   getAllTankEntries,
@@ -185,7 +186,7 @@ export function TankPricesSection({
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
             {onlyMissing
-              ? t('chefTankliste', 'emptyMissing')
+              ? <><MaterialIcons name="check-circle" size={18} color={c.success} /> {t('chefTankliste', 'emptyMissing')}</>
               : t('chefTankliste', 'emptyAll')}
           </Text>
         </View>

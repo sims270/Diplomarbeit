@@ -2,7 +2,7 @@ import { StyleSheet, ScrollView, View, Text, ActivityIndicator } from 'react-nat
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { StatusCard } from '@/components/status-card';
-import { Colors, shadow, Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
@@ -12,29 +12,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAllOrders, type Order } from '../../services/orderService';
 import { currentMonth, isInMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
-import {
-  getPickerlStatus,
-  getServiceStatus,
-  getVehicles,
-} from '../../services/licensePlateService';
-import { getTrailers } from '../../services/trailerService';
-import {
-  deleteAccess,
-  extendAccess,
-  type ExternalAccess,
-  getExpiredAccesses,
-} from '../../services/externalDriverAccessService';
-import { EXTEND_DAY_OPTIONS } from '@/components/ExternalAccessPanel';
-import { showAlert, showConfirm } from '@/lib/alert';
-import { isoToGerman } from '@/lib/dateFormat';
+import { ReminderGroups } from '@/components/ReminderGroups';
+import { TodayOrders } from '@/components/TodayOrders';
+import { type Driver, getDrivers } from '../../services/driverService';
+import { refreshReminders, useReminders } from '@/hooks/use-reminders';
 
 export default function ChefDashboardScreen() {
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, isOfflineMode } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
 
   // Die Kacheln zählen nur Aufträge des gewählten Monats — standardmäßig des
   // laufenden. Monat eines Auftrags: Ladedatum, sonst Entladedatum, wie beim
@@ -50,22 +40,15 @@ export default function ChefDashboardScreen() {
   }, [orders, month]);
   // Tankliste und Umsatzliste haben einen eigenen Tab (app/chef/(tabs)/tank.tsx).
 
-  // LKW mit fälligem Service. Ausgeflottete bleiben außen vor — die fahren
-  // nicht mehr.
-  const [serviceDue, setServiceDue] = useState<string[]>([]);
-  // LKW, deren Pickerl in spätestens einem Monat fällig ist — Kennzeichen
-  // samt Fälligkeitsdatum.
-  const [pickerlDue, setPickerlDue] = useState<string[]>([]);
-  // Dasselbe für die Auflieger — eigener Hinweis, weil er zu einer
-  // anderen Liste führt.
-  const [trailerPickerlDue, setTrailerPickerlDue] = useState<string[]>([]);
-  // Genehmigungen der Auflieger, die in spätestens einem Monat ablaufen.
-  const [permitsDue, setPermitsDue] = useState<string[]>([]);
-
-  // Abgelaufene Zugänge fremder Fahrer. Sie sind schon gesperrt; hier
-  // entscheidet der Chef, ob gelöscht oder verlängert wird.
-  const [expiredAccesses, setExpiredAccesses] = useState<ExternalAccess[]>([]);
-  const [busyAccessId, setBusyAccessId] = useState<string | null>(null);
+  // Erinnerungen (Service, Pickerl, Genehmigungen, abgelaufene Zugänge)
+  // stehen alle hinter dem 🔔-Button im Header. Hier nur die, die heute zum
+  // ersten Mal da sind — damit der Chef eine neue sofort sieht, ohne dass
+  // das Dashboard von alten zugestellt wird.
+  const { reminders, newToday } = useReminders();
+  const newReminders = useMemo(
+    () => reminders.filter((r) => newToday.has(r.key)),
+    [reminders, newToday]
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -73,117 +56,33 @@ export default function ChefDashboardScreen() {
     }
   }, [isLoading, isAuthenticated, router]);
 
+  // Für die Fahrernamen in "Aufträge heute". Im Offline-Modus fehlt das
+  // JWT, das die Edge Function list-drivers verlangt.
+  const loadDrivers = useCallback(async () => {
+    if (isOfflineMode) {
+      setDrivers([]);
+      return;
+    }
+    try {
+      setDrivers(await getDrivers());
+    } catch {
+      setDrivers([]);
+    }
+  }, [isOfflineMode]);
+
   // Auf Fokus statt nur beim Mounten: so zählt die Kachel "erledigt"
   // auch die Aufträge mit, die ein Fahrer gerade abgeschlossen hat.
+  // Erinnerungen bei jedem Öffnen neu: Der Kilometerstand wächst durch die
+  // Tankungen der Fahrer, auch wenn der Chef die App gar nicht offen hat.
   useFocusEffect(
     useCallback(() => {
       if (isAuthenticated) {
         loadStats();
-        loadServiceDue();
-        loadTrailerPickerlDue();
-        loadExpiredAccesses();
+        loadDrivers();
+        refreshReminders();
       }
-    }, [isAuthenticated])
+    }, [isAuthenticated, loadDrivers])
   );
-
-  const loadExpiredAccesses = async () => {
-    try {
-      setExpiredAccesses(await getExpiredAccesses());
-    } catch {
-      // Wie der Service-Hinweis: eine Erinnerung, kein Grund, das
-      // Dashboard daran scheitern zu lassen.
-      setExpiredAccesses([]);
-    }
-  };
-
-  const runAccessAction = async (userId: string, action: () => Promise<void>) => {
-    setBusyAccessId(userId);
-    try {
-      await action();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('externalAccess', 'actionFailed');
-      showAlert(t('common', 'error'), message);
-    } finally {
-      setBusyAccessId(null);
-      await loadExpiredAccesses();
-    }
-  };
-
-  const handleExtendAccess = (access: ExternalAccess, days: number) =>
-    runAccessAction(access.userId, async () => {
-      await extendAccess(access, days);
-    });
-
-  const handleDeleteAccess = (access: ExternalAccess) => {
-    showConfirm(
-      t('externalAccess', 'deleteConfirmTitle'),
-      t('externalAccess', 'deleteConfirmMessage')
-        .replace('{label}', access.label)
-        .replace('{username}', access.username)
-        .replace('{count}', String(access.orderCount)),
-      () => runAccessAction(access.userId, () => deleteAccess(access.userId)),
-      {
-        confirmText: t('externalAccess', 'deleteConfirmButton'),
-        cancelText: t('common', 'cancel'),
-        destructive: true,
-      }
-    );
-  };
-
-  // Bei jedem Öffnen neu: Der Kilometerstand wächst durch die Tankungen der
-  // Fahrer, also auch dann, wenn der Chef die App gar nicht offen hat.
-  const loadServiceDue = async () => {
-    try {
-      const vehicles = await getVehicles();
-      setServiceDue(
-        vehicles
-          .filter((v) => v.retiredAt === null && getServiceStatus(v)?.isDue)
-          .map((v) => v.plate)
-      );
-      // Pickerl ab einem Monat vor der Fälligkeit — aus derselben Abfrage.
-      setPickerlDue(
-        vehicles
-          .filter((v) => v.retiredAt === null && getPickerlStatus(v.pickerlDueDate)?.isDue)
-          .map((v) => {
-            const status = getPickerlStatus(v.pickerlDueDate);
-            return status ? `${v.plate} (${isoToGerman(status.dueDate)})` : v.plate;
-          })
-      );
-    } catch {
-      // Wie die Kennzahlen darunter: eine Erinnerung, kein Grund das
-      // Dashboard daran scheitern zu lassen.
-      setServiceDue([]);
-      setPickerlDue([]);
-    }
-  };
-
-  const loadTrailerPickerlDue = async () => {
-    try {
-      const trailers = await getTrailers();
-      setTrailerPickerlDue(
-        trailers
-          .filter((trailer) => getPickerlStatus(trailer.pickerlDueDate)?.isDue)
-          .map((trailer) => `${trailer.plate} (${isoToGerman(trailer.pickerlDueDate ?? '')})`)
-      );
-      // Aus derselben Abfrage: "GR123AB Deutschland (01.11.2026)".
-      setPermitsDue(
-        trailers.flatMap((trailer) =>
-          trailer.permits
-            .filter((permit) => getPickerlStatus(permit.validUntil)?.isDue)
-            .map(
-              (permit) =>
-                `${trailer.plate} ${permit.name} (${isoToGerman(permit.validUntil)})`
-            )
-        )
-      );
-    } catch {
-      // Wie beim Service: eine Erinnerung, kein Grund zum Scheitern.
-      setTrailerPickerlDue([]);
-      setPermitsDue([]);
-    }
-  };
-
   // Tippen auf eine Kachel öffnet die Auftragsliste mit genau diesen
   // Aufträgen: derselbe Status, derselbe Monat.
   const openOrders = (status: 'pending' | 'assigned' | 'completed') =>
@@ -221,118 +120,6 @@ export default function ChefDashboardScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Die Fahrerverwaltung erreicht der Chef über den 👤-Button im
             Header (components/header.tsx) — hier stand sie doppelt. */}
-        {serviceDue.length > 0 && (
-          <FluidPressable
-            style={styles.serviceBanner}
-            onPress={() => router.push('/chef/vehicles')}
-          >
-            <Text style={styles.serviceBannerTitle}>
-              🔧 {t('vehicles', 'serviceBannerTitle')}
-            </Text>
-            <Text style={styles.serviceBannerText}>
-              {serviceDue.length === 1
-                ? t('vehicles', 'serviceBannerOne')
-                : `${serviceDue.length} ${t('vehicles', 'serviceBannerMany')}`}
-            </Text>
-            <Text style={styles.serviceBannerPlates}>{serviceDue.join(' · ')}</Text>
-          </FluidPressable>
-        )}
-
-        {pickerlDue.length > 0 && (
-          <FluidPressable
-            style={styles.serviceBanner}
-            onPress={() => router.push('/chef/vehicles')}
-          >
-            <Text style={styles.serviceBannerTitle}>
-              {t('vehicles', 'pickerlBannerTitle')}
-            </Text>
-            <Text style={styles.serviceBannerText}>
-              {pickerlDue.length === 1
-                ? t('vehicles', 'pickerlBannerOne')
-                : `${pickerlDue.length} ${t('vehicles', 'pickerlBannerMany')}`}
-            </Text>
-            <Text style={styles.serviceBannerPlates}>{pickerlDue.join(' · ')}</Text>
-          </FluidPressable>
-        )}
-
-        {trailerPickerlDue.length > 0 && (
-          <FluidPressable
-            style={styles.serviceBanner}
-            onPress={() => router.push('/chef/trailers')}
-          >
-            <Text style={styles.serviceBannerTitle}>{t('trailers', 'pickerlBannerTitle')}</Text>
-            <Text style={styles.serviceBannerText}>
-              {trailerPickerlDue.length === 1
-                ? t('trailers', 'pickerlBannerOne')
-                : `${trailerPickerlDue.length} ${t('trailers', 'pickerlBannerMany')}`}
-            </Text>
-            <Text style={styles.serviceBannerPlates}>{trailerPickerlDue.join(' · ')}</Text>
-          </FluidPressable>
-        )}
-
-        {permitsDue.length > 0 && (
-          <FluidPressable
-            style={styles.serviceBanner}
-            onPress={() => router.push('/chef/trailers')}
-          >
-            <Text style={styles.serviceBannerTitle}>{t('trailers', 'permitBannerTitle')}</Text>
-            <Text style={styles.serviceBannerText}>
-              {permitsDue.length === 1
-                ? t('trailers', 'permitBannerOne')
-                : `${permitsDue.length} ${t('trailers', 'permitBannerMany')}`}
-            </Text>
-            <Text style={styles.serviceBannerPlates}>{permitsDue.join(' · ')}</Text>
-          </FluidPressable>
-        )}
-
-        {expiredAccesses.length > 0 && (
-          <View style={styles.accessCard}>
-            <Text style={styles.serviceBannerTitle}>
-              🔑 {t('externalAccess', 'expiredCardTitle')}
-            </Text>
-            <Text style={styles.serviceBannerText}>{t('externalAccess', 'expiredCardHint')}</Text>
-
-            {expiredAccesses.map((access) => (
-              <View key={access.userId} style={styles.accessRow}>
-                <Text style={styles.accessName}>
-                  {access.label} ({access.username})
-                </Text>
-                <Text style={styles.accessMeta}>
-                  {`${t('externalAccess', 'expiredOn')} ${isoToGerman(access.expiresOn)} · ${
-                    access.orderCount === 1
-                      ? t('externalAccess', 'orderCountOne')
-                      : `${access.orderCount} ${t('externalAccess', 'orderCountMany')}`
-                  }`}
-                </Text>
-                <View style={styles.accessButtons}>
-                  {EXTEND_DAY_OPTIONS.map((days) => (
-                    <FluidPressable
-                      key={days}
-                      style={styles.addButton}
-                      onPress={() => handleExtendAccess(access, days)}
-                      disabled={busyAccessId === access.userId}
-                    >
-                      <Text style={styles.addButtonText}>
-                        {t('externalAccess', 'extendDays').replace('{days}', String(days))}
-                      </Text>
-                    </FluidPressable>
-                  ))}
-                  <FluidPressable
-                    style={styles.deleteAccessButton}
-                    onPress={() => handleDeleteAccess(access)}
-                    disabled={busyAccessId === access.userId}
-                  >
-                    <Text style={styles.deleteAccessButtonText}>
-                      {t('externalAccess', 'deleteConfirmButton')}
-                    </Text>
-                  </FluidPressable>
-                  {busyAccessId === access.userId && <ActivityIndicator color={c.tint} />}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
         <View style={styles.monthBar}>
           <MonthPicker month={month} onChange={setMonth} />
         </View>
@@ -368,16 +155,32 @@ export default function ChefDashboardScreen() {
               <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/external-order')}>
                 <Text style={styles.addButtonText}>+ {t('chefDashboard', 'externalOrderButton')}</Text>
               </FluidPressable>
+              <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/invoices')}>
+                <Text style={styles.addButtonText}>{t('invoices', 'dashboardButton')}</Text>
+              </FluidPressable>
             </View>
           </View>
+          <TodayOrders orders={orders} drivers={drivers} />
         </View>
+
+        {/* Neue Erinnerungen ganz unten — Aufträge und Rechnungen bleiben
+            oben, wo der Chef täglich hinschaut. */}
+        {newReminders.length > 0 && (
+          <View style={styles.reminders}>
+            <ReminderGroups
+              reminders={newReminders}
+              variant="compact"
+              onChanged={refreshReminders}
+            />
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
 const createStyles = (theme: AppTheme) => {
-  const { c, scheme } = theme;
+  const { c } = theme;
   const u = uiStyles(theme);
   return StyleSheet.create({
     container: u.screen,
@@ -400,67 +203,9 @@ const createStyles = (theme: AppTheme) => {
       gap: Spacing.sm,
       paddingVertical: Spacing.lg,
     },
-    serviceBanner: {
+    reminders: {
       ...u.inset,
-      ...u.card,
-      borderLeftWidth: 4,
-      borderLeftColor: c.tintFill,
-      marginTop: Spacing.md,
-      ...shadow(2, scheme),
-    },
-    serviceBannerTitle: {
-      ...Typography.headline,
-      color: c.tint,
-    },
-    serviceBannerText: {
-      ...Typography.subhead,
-      color: c.text,
-      marginTop: Spacing.xxs,
-    },
-    serviceBannerPlates: {
-      ...Typography.subhead,
-      fontWeight: '700',
-      color: c.textSecondary,
-      marginTop: Spacing.xs,
-    },
-    // Wie der Service-Hinweis, nur mit Aktionen je Zugang.
-    accessCard: {
-      ...u.inset,
-      ...u.card,
-      borderLeftWidth: 4,
-      borderLeftColor: c.tintFill,
-      marginTop: Spacing.md,
-      ...shadow(2, scheme),
-    },
-    accessRow: {
-      marginTop: Spacing.md,
-      paddingTop: Spacing.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.separator,
-    },
-    accessName: {
-      ...Typography.headline,
-      color: c.text,
-    },
-    accessMeta: {
-      ...Typography.subhead,
-      color: c.textSecondary,
-      marginTop: Spacing.xxs,
-    },
-    accessButtons: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: Spacing.xs,
-      marginTop: Spacing.sm,
-    },
-    deleteAccessButton: {
-      ...u.smallButton,
-      backgroundColor: c.dangerSoft,
-    },
-    deleteAccessButtonText: {
-      ...u.smallButtonText,
-      color: c.danger,
+      paddingBottom: Spacing.xl,
     },
     section: {
       ...u.inset,

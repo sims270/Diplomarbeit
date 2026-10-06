@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { type ComponentProps, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
-import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
+import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
+import { refreshReminders, useReminders } from '@/hooks/use-reminders';
 
 export interface HeaderProps {
   title: string;
@@ -14,12 +16,28 @@ export interface HeaderProps {
   code?: string;
 }
 
+type IconName = ComponentProps<typeof MaterialIcons>['name'];
+
 export function Header({ title, subtitle, code }: HeaderProps) {
   const router = useRouter();
   const { isAuthenticated, user, isOfflineMode } = useAuth();
   const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
+  const { c, isTablet } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { reminders, loaded: remindersLoaded } = useReminders();
+
+  // Der Header sitzt auf jedem Chef-Screen. Geladen wird nur, wenn noch
+  // nichts da ist — danach hält das Dashboard (bei jedem Öffnen) und die
+  // Erinnerungsseite die Zahl aktuell.
+  // Die Chef-Werkzeuge nur online: Ohne gültiges JWT erkennt weder die Edge
+  // Function noch die RLS-Policy ihn als Chef, die Ansichten kämen leer zurück.
+  const isBossOnline = user?.role === 'boss' && !isOfflineMode;
+  useEffect(() => {
+    if (isBossOnline && !remindersLoaded) {
+      refreshReminders();
+    }
+  }, [isBossOnline, remindersLoaded]);
 
   const handleCodePress = () => {
     try {
@@ -57,6 +75,47 @@ export function Header({ title, subtitle, code }: HeaderProps) {
     }
   };
 
+  // Werkzeugleiste: Erinnerungen, Fahrer, LKW, Auflieger (nur Chef) und
+  // Einstellungen (alle). Echte Icons statt Emojis — die sehen auf jedem
+  // Gerät anders aus und wirken verspielt.
+  const toolbarItems: {
+    icon: IconName;
+    label: string;
+    onPress: () => void;
+    badge?: number;
+  }[] = [
+    ...(isBossOnline
+      ? [
+          {
+            icon: (reminders.length > 0 ? 'notifications-active' : 'notifications-none') as IconName,
+            label: t('reminders', 'title'),
+            onPress: () => router.push('/chef/reminders'),
+            badge: reminders.length,
+          },
+          {
+            icon: 'group' as IconName,
+            label: t('chefProfile', 'createDriverCardButton'),
+            onPress: () => router.push('/chef/drivers'),
+          },
+          {
+            icon: 'local-shipping' as IconName,
+            label: t('chefProfile', 'vehiclesCardButton'),
+            onPress: () => router.push('/chef/vehicles'),
+          },
+          {
+            icon: 'rv-hookup' as IconName,
+            label: t('chefProfile', 'trailersCardButton'),
+            onPress: () => router.push('/chef/trailers'),
+          },
+        ]
+      : []),
+    {
+      icon: 'settings',
+      label: t('settings', 'title'),
+      onPress: () => router.push('/settings'),
+    },
+  ];
+
   return (
     <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
       <View style={styles.titleContainer}>
@@ -70,53 +129,53 @@ export function Header({ title, subtitle, code }: HeaderProps) {
           </View>
         )}
       </View>
-      <View style={styles.rightContainer}>
+
+      <View style={styles.actions}>
+        <View style={styles.toolbar}>
+          {toolbarItems.map((item) => (
+            <FluidPressable
+              key={item.icon}
+              style={styles.iconButton}
+              onPress={item.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={
+                item.badge ? `${item.label}: ${item.badge}` : item.label
+              }
+            >
+              <MaterialIcons name={item.icon} size={22} color={c.icon} />
+              {!!item.badge && (
+                <View style={styles.countBadge} pointerEvents="none">
+                  <Text style={styles.countBadgeText}>
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </Text>
+                </View>
+              )}
+            </FluidPressable>
+          ))}
+        </View>
+
+        {(code || isAuthenticated) && <View style={styles.divider} />}
+
+        {/* Konto: Kürzel als Avatar führt zum Profil, daneben Abmelden. */}
         {code && (
-          <FluidPressable style={styles.codeButton} onPress={handleCodePress}>
-            <Text style={styles.code}>{code}</Text>
+          <FluidPressable
+            style={styles.avatar}
+            onPress={handleCodePress}
+            accessibilityRole="button"
+          >
+            <Text style={styles.avatarText}>{code}</Text>
           </FluidPressable>
         )}
-        {/* Fahrer- und LKW-Verwaltung. Beide nur für den Chef und nur
-            online: Ohne gültiges JWT erkennt weder die Edge Function noch
-            die RLS-Policy ihn als Chef, die Ansichten kämen leer zurück. */}
-        {user?.role === 'boss' && !isOfflineMode && (
-          <>
-            <FluidPressable
-              style={styles.settingsButton}
-              onPress={() => router.push('/chef/drivers')}
-              accessibilityLabel={t('chefProfile', 'createDriverCardButton')}
-            >
-              <Text style={styles.settingsButtonText}>👤</Text>
-            </FluidPressable>
-            <FluidPressable
-              style={styles.settingsButton}
-              onPress={() => router.push('/chef/vehicles')}
-              accessibilityLabel={t('chefProfile', 'vehiclesCardButton')}
-            >
-              <Text style={styles.settingsButtonText}>🚚</Text>
-            </FluidPressable>
-            <FluidPressable
-              style={styles.settingsButton}
-              onPress={() => router.push('/chef/trailers')}
-              accessibilityLabel={t('chefProfile', 'trailersCardButton')}
-            >
-              {/* Für einen Auflieger gibt es kein Emoji — deshalb ein "A". */}
-              <Text style={[styles.settingsButtonText, styles.letterButtonText]}>A</Text>
-            </FluidPressable>
-          </>
-        )}
-        <FluidPressable
-          style={styles.settingsButton}
-          onPress={() => router.push('/settings')}
-        >
-          <Text style={styles.settingsButtonText}>⚙</Text>
-        </FluidPressable>
         {isAuthenticated && (
           <FluidPressable
             style={styles.logoutButton}
             onPress={() => router.push('/logout')}
+            accessibilityRole="button"
+            accessibilityLabel={t('common', 'logout')}
           >
-            <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
+            <MaterialIcons name="logout" size={18} color={c.textSecondary} />
+            {/* Am Handy nur das Icon — dort zählt jeder Zentimeter. */}
+            {isTablet && <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>}
           </FluidPressable>
         )}
       </View>
@@ -173,53 +232,82 @@ const createStyles = ({ c, isTablet, isDesktop, sideInset }: AppTheme) =>
       color: c.tint,
       letterSpacing: 0.4,
     },
-    rightContainer: {
+    actions: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
       alignItems: 'center',
-      gap: Spacing.xs,
+      gap: Spacing.sm,
     },
-    codeButton: {
-      minWidth: Layout.minTouch,
-      height: Layout.minTouch,
-      paddingHorizontal: Spacing.sm,
+    // Die Werkzeuge als eine zusammenhängende Leiste statt einzelner Kreise.
+    toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 2,
+      gap: 2,
+      borderRadius: Radius.md,
+      backgroundColor: c.surfaceSecondary,
+    },
+    iconButton: {
+      width: Layout.minTouch - 4,
+      height: Layout.minTouch - 4,
+      borderRadius: Radius.sm + 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // Rote Zahl rechts oben an der Glocke, wie bei einer App-Benachrichtigung.
+    countBadge: {
+      position: 'absolute',
+      top: 1,
+      right: 1,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 4,
       borderRadius: Radius.pill,
       backgroundColor: c.tintFill,
+      borderWidth: 2,
+      borderColor: c.surfaceSecondary,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
     },
-    code: {
-      ...Typography.headline,
+    countBadgeText: {
+      fontSize: 10,
+      lineHeight: 12,
+      fontWeight: '700',
       color: c.onTint,
     },
-    settingsButton: {
-      width: Layout.minTouch,
-      height: Layout.minTouch,
-      borderRadius: Radius.pill,
-      backgroundColor: c.surfaceSecondary,
-      alignItems: 'center',
-      justifyContent: 'center',
+    divider: {
+      width: StyleSheet.hairlineWidth,
+      height: 28,
+      backgroundColor: c.separator,
     },
-    settingsButtonText: {
-      fontSize: 18,
-      lineHeight: 22,
-      color: c.text,
-    },
-    letterButtonText: {
-      fontWeight: '700',
-    },
-    logoutButton: {
-      minHeight: Layout.minTouch,
-      paddingHorizontal: Spacing.md,
+    avatar: {
+      width: Layout.minTouch - 4,
+      height: Layout.minTouch - 4,
       borderRadius: Radius.pill,
       backgroundColor: c.tintSoft,
       alignItems: 'center',
       justifyContent: 'center',
     },
+    avatarText: {
+      ...Typography.subhead,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      color: c.tint,
+    },
+    logoutButton: {
+      minWidth: Layout.minTouch - 4,
+      height: Layout.minTouch - 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.xxs,
+      paddingHorizontal: isTablet ? Spacing.sm : 0,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: c.separator,
+    },
     logoutButtonText: {
       ...Typography.subhead,
       fontWeight: '600',
-      color: c.tint,
+      color: c.textSecondary,
     },
   });

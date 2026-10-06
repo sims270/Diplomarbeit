@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Spacing } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
@@ -45,7 +46,7 @@ export function DateField({ value, onChange, placeholder }: DateFieldProps) {
         <Text style={value ? styles.value : styles.placeholder}>
           {value ? isoToGerman(value) : placeholder}
         </Text>
-        <Text style={styles.icon}>📅</Text>
+        <MaterialIcons name="event" style={styles.icon} />
       </FluidPressable>
 
       {Platform.OS === 'ios' && (
@@ -85,7 +86,8 @@ const createStyles = (theme: AppTheme) => {
     value: u.fieldValue,
     placeholder: u.fieldPlaceholder,
     icon: {
-      fontSize: 16,
+      fontSize: 20,
+      color: theme.c.textSecondary,
     },
     iosOverlay: {
       flex: 1,

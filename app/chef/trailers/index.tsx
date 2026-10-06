@@ -1,6 +1,11 @@
 import { useAuth } from '@/app/context/AuthContext';
 import { getPickerlStatus } from '@/app/services/licensePlateService';
-import { addTrailer, getTrailers, type Trailer } from '@/app/services/trailerService';
+import {
+  addTrailer,
+  getPermitStatus,
+  getTrailers,
+  type Trailer,
+} from '@/app/services/trailerService';
 import { DateField } from '@/components/DateField';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
@@ -206,7 +211,7 @@ export default function ChefTrailersScreen() {
                 // Nach Ablaufdatum sortiert — die erste läuft zuerst ab.
                 const nextPermit = item.permits[0];
                 const permitDue = item.permits.some(
-                  (permit) => getPickerlStatus(permit.validUntil)?.isDue
+                  (permit) => getPermitStatus(permit.validUntil)?.isDue
                 );
                 return (
                   <FluidPressable

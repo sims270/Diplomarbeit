@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ActivityIndicator, StyleSheet, View, Text, ScrollView } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
@@ -6,6 +7,9 @@ import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-the
 import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { getDrivers } from '@/app/services/driverService';
+import { getAllOrders } from '@/app/services/orderService';
+import { getBillableOrders } from '@/app/services/invoiceService';
+import { currentMonth, isInMonth } from '@/lib/month';
 import { useTranslation } from '@/hooks/use-translation';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -13,35 +17,55 @@ import { useCallback, useEffect, useState } from 'react';
 export default function ChefProfileScreen() {
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
-  const { user, logout, isLoading, isAuthenticated, isOfflineMode } = useAuth();
+  const { user, isLoading, isAuthenticated, isOfflineMode } = useAuth();
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
   // null = noch nicht geladen oder nicht ermittelbar (Offline-Modus, Fehler)
   const [driverCount, setDriverCount] = useState<number | null>(null);
+  // Eigene Aufträge im laufenden Monat — Monat wie auf dem Dashboard:
+  // Ladedatum, sonst Entladedatum.
+  const [monthOrderCount, setMonthOrderCount] = useState<number | null>(null);
+  // Erledigte Aufträge (eigene und Fremdaufträge) auf noch keiner Rechnung —
+  // da liegt Geld, das noch nicht verlangt wurde.
+  const [unbilledCount, setUnbilledCount] = useState<number | null>(null);
 
-
-  const loadDriverCount = useCallback(async () => {
+  const loadStats = useCallback(async () => {
     // Im Offline-Modus fehlt das JWT, das die Edge Function verlangt — der
     // Aufruf würde zwangsläufig scheitern (siehe app/chef/drivers/index.tsx).
     if (isOfflineMode) {
       setDriverCount(null);
+      setMonthOrderCount(null);
+      setUnbilledCount(null);
       return;
     }
 
-    try {
-      setDriverCount((await getDrivers()).length);
-    } catch {
-      setDriverCount(null);
-    }
+    // Unabhängig voneinander: Scheitert eine Zahl, zeigen die anderen
+    // trotzdem ihren Wert.
+    const month = currentMonth();
+    await Promise.all([
+      getDrivers()
+        .then((drivers) => setDriverCount(drivers.length))
+        .catch(() => setDriverCount(null)),
+      getAllOrders()
+        .then((orders) =>
+          setMonthOrderCount(
+            orders.filter((o) => isInMonth(o.loadingDate || o.unloadingDate, month)).length
+          )
+        )
+        .catch(() => setMonthOrderCount(null)),
+      getBillableOrders()
+        .then((orders) => setUnbilledCount(orders.length))
+        .catch(() => setUnbilledCount(null)),
+    ]);
   }, [isOfflineMode]);
 
-  // Beim Öffnen neu laden, damit die Zahl nach dem Anlegen oder Löschen
-  // eines Fahrers stimmt.
+  // Beim Öffnen neu laden, damit die Zahlen nach dem Anlegen eines Fahrers,
+  // eines Auftrags oder einer Rechnung stimmen.
   useFocusEffect(
     useCallback(() => {
-      loadDriverCount();
-    }, [loadDriverCount])
+      loadStats();
+    }, [loadStats])
   );
 
   useEffect(() => {
@@ -49,12 +73,6 @@ export default function ChefProfileScreen() {
       router.replace('/');
     }
   }, [isLoading, isAuthenticated, router]);
-
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/');
-  };
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -103,7 +121,7 @@ export default function ChefProfileScreen() {
               </View>
               <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
               <Text style={styles.profileRole}>
-                {t('chefProfile', 'accountBadge')}
+                <MaterialIcons name="verified-user" size={15} /> {t('chefProfile', 'accountBadge')}
               </Text>
               <Text style={styles.profileUsername}>@{user?.username}</Text>
             </View>
@@ -113,14 +131,24 @@ export default function ChefProfileScreen() {
                 <Text style={styles.statValue}>{driverCount ?? '—'}</Text>
                 <Text style={styles.statLabel}>{t('chefProfile', 'statsDrivers')}</Text>
               </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>{t('chefProfile', 'statsOrders')}</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>0 km</Text>
-                <Text style={styles.statLabel}>{t('chefProfile', 'statsDistance')}</Text>
-              </View>
+              {/* Öffnet die Auftragsliste des laufenden Monats. */}
+              <FluidPressable
+                style={styles.statBox}
+                onPress={() =>
+                  router.push({ pathname: '/chef/order', params: { month: currentMonth() } })
+                }
+              >
+                <Text style={styles.statValue}>{monthOrderCount ?? '—'}</Text>
+                <Text style={styles.statLabel}>{t('chefProfile', 'statsOrdersMonth')}</Text>
+              </FluidPressable>
+              {/* Öffnet die Rechnungsübersicht beim Reiter "Zu verrechnen". */}
+              <FluidPressable
+                style={styles.statBox}
+                onPress={() => router.push({ pathname: '/chef/invoices', params: { tab: 'open' } })}
+              >
+                <Text style={styles.statValue}>{unbilledCount ?? '—'}</Text>
+                <Text style={styles.statLabel}>{t('chefProfile', 'statsUnbilled')}</Text>
+              </FluidPressable>
             </View>
           </>
         ) : (
@@ -187,10 +215,7 @@ export default function ChefProfileScreen() {
           </>
         )}
       </ScrollView>
-
-      <FluidPressable style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>{t('common', 'logout')}</Text>
-      </FluidPressable>
+      {/* Abmelden über den Button rechts oben im Header — hier stand er doppelt. */}
     </View>
   );
 }
@@ -301,12 +326,5 @@ const createStyles = (theme: AppTheme) => {
     },
     createButtonText: u.primaryButtonText,
     buttonDisabled: u.disabled,
-    logoutButton: {
-      ...u.formInset,
-      ...u.tintedButton,
-      marginTop: Spacing.xs,
-      marginBottom: Spacing.lg,
-    },
-    logoutButtonText: u.tintedButtonText,
   });
 };

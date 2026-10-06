@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   getPickerlStatus,
   markPickerlDone,
@@ -456,7 +457,7 @@ export default function EditVehicleScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('vehicles', 'serviceIntervalLabel')}</Text>
               <FluidPressable onPress={() => setIsIntervalPickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             <FlatList

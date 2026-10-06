@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import { Driver, getDrivers } from '@/app/services/driverService';
 import { assignOrderToDriver, getAllOrders, type Order } from '@/app/services/orderService';
@@ -176,7 +177,7 @@ export default function OrdersListScreen() {
 
         <MonthPicker month={month} onChange={setMonth} />
 
-        {/* Der Status kommt von einer Kachel — ✕ führt zurück zu den Kacheln.
+        {/* Der Status kommt von einer Kachel — das X führt zurück zu den Kacheln.
             canGoBack(): Im Web lässt sich die Liste direkt über ihre URL
             öffnen, dann gibt es keinen Eintrag, zu dem back() springen könnte. */}
         {statusFilter !== null && (
@@ -185,7 +186,7 @@ export default function OrdersListScreen() {
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/chef'))}
           >
             <Text style={styles.statusFilterChipText}>
-              {`${getStatusFilterLabel(statusFilter)} ✕`}
+              {getStatusFilterLabel(statusFilter)} <MaterialIcons name="close" size={14} />
             </Text>
           </FluidPressable>
         )}
@@ -277,7 +278,7 @@ export default function OrdersListScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefDashboard', 'modalTitle')}</Text>
               <FluidPressable onPress={() => setShowAssignModal(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
 

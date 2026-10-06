@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ExternalOrderFields } from '@/app/services/externalOrderService';
 import {
   addCarrierCompanyIfNew,
@@ -529,7 +530,7 @@ export function ExternalOrderForm({
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{pickerTitle}</Text>
               <FluidPressable onPress={() => setActivePicker(null)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             {isSearchablePicker && (

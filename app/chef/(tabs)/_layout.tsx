@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { RevenueFuelIcon } from "@/components/ui/revenue-fuel-icon";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTranslation } from "@/hooks/use-translation";
 
 // Eigene Gruppe statt Tabs direkt in app/chef/_layout.tsx: Fahrer, LKW und
 // Aufträge öffnen sich im Stack darüber und sollen die Tab-Leiste nicht
@@ -14,6 +15,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 export default function ChefTabLayout() {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? "light"];
+  const { t } = useTranslation();
 
   return (
     <Tabs
@@ -42,7 +44,7 @@ export default function ChefTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
+          title: t("chefTabs", "dashboard"),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="square.grid.2x2" color={color} />
           ),
@@ -51,14 +53,14 @@ export default function ChefTabLayout() {
       <Tabs.Screen
         name="tank"
         options={{
-          title: "Umsatz-Tankliste",
+          title: t("chefTabs", "lists"),
           tabBarIcon: ({ color }) => <RevenueFuelIcon size={28} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profil",
+          title: t("chefTabs", "profile"),
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="person.fill" color={color} />
           ),

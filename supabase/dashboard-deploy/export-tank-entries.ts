@@ -285,9 +285,11 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
   const consumption = km > 0 ? (dieselAfterFirst / km) * 100 : "";
   const calendar = (col: string) => `${col}2:${col}${s.lastCalendarRow}`;
 
-  // Zwei Leerzeilen Abstand zum Kalender, wie in der bisherigen Datei. Die
-  // Reihenfolge unten legt fest, in welcher Zeile km und Liter landen.
-  const start = s.lastCalendarRow + 3;
+  // Zwei Leerzeilen Abstand zum Kalender, wie in der bisherigen Datei,
+  // darunter die Überschrift. Die Reihenfolge unten legt fest, in welcher
+  // Zeile km und Liter landen.
+  const titleRow = s.lastCalendarRow + 3;
+  const start = titleRow + 1;
   const kmRow = start;
   const afterFirstRow = start + 2;
 
@@ -302,6 +304,10 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
     formula: string;
     result: number | string;
     numFmt: string;
+    /** Die Kennzahl, nach der der Chef sucht — farbig hervorgehoben. */
+    highlight?: boolean;
+    /** Erste Zeile eines neuen Abschnitts — dickere Linie darüber. */
+    sectionStart?: boolean;
   }[] = [
     {
       label: "Gefahrene km",
@@ -328,6 +334,7 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
       formula: `IF(C${kmRow}>0,C${afterFirstRow}/C${kmRow}*100,"")`,
       result: consumption,
       numFmt: '#,##0.00 "l"',
+      highlight: true,
     },
     {
       label: "Dieselkosten / Monat",
@@ -340,6 +347,7 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
       formula: `SUM(${calendar("D")})`,
       result: s.adblueTotal,
       numFmt: '#,##0.00 "l"',
+      sectionStart: true,
     },
     {
       label: "AdBlue-Kosten / Monat",
@@ -349,22 +357,63 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
     },
   ];
 
+  const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
+  const thick = { style: "medium" as const, color: { argb: "FF9B2321" } };
+  const lastRow = start + rows.length - 1;
+
+  // Überschrift in der Primärfarbe, wie die Kopfzeile der Tabelle.
+  const title = sheet.getCell(`A${titleRow}`);
+  title.value = "Monatsauswertung";
+  title.numFmt = "General";
+  title.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+  title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF9B2321" } };
+  title.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  title.border = { top: thick, left: thick, right: thick, bottom: thick };
+  // Erst nach dem Formatieren verbinden: ExcelJS gibt den Stil nur beim
+  // Verbinden an B und C weiter — sonst fehlt dort Rahmen und Farbe.
+  sheet.mergeCells(`A${titleRow}:C${titleRow}`);
+  sheet.getRow(titleRow).height = 22;
+
   rows.forEach((entry, index) => {
     const rowNumber = start + index;
+    sheet.getRow(rowNumber).height = 18;
+
+    // Rahmen: außen in der Primärfarbe, innen dünn grau, zwischen Diesel
+    // und AdBlue eine kräftigere Trennlinie.
+    const border = {
+      top: entry.sectionStart ? thick : thin,
+      bottom: rowNumber === lastRow ? thick : thin,
+      left: thin,
+      right: thin,
+    };
 
     // Die Bezeichnung über A und B, damit sie neben den schmalen
     // Datenspalten Platz hat; der Wert steht in C unter den Litern.
-    sheet.mergeCells(`A${rowNumber}:B${rowNumber}`);
     const label = sheet.getCell(`A${rowNumber}`);
     label.value = entry.label;
     // Sonst erbt die Zelle das Datumsformat der Spalte A.
     label.numFmt = "General";
-    label.font = { bold: true };
+    label.font = { bold: entry.highlight ?? false };
+    label.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: entry.highlight ? "FFF6DEDD" : "FFF2F2F2" },
+    };
+    label.alignment = { vertical: "middle", indent: 1 };
+    label.border = { ...border, left: thick };
+    sheet.mergeCells(`A${rowNumber}:B${rowNumber}`);
 
     const value = sheet.getCell(`C${rowNumber}`);
     value.value = { formula: entry.formula, result: entry.result };
     value.numFmt = entry.numFmt;
-    value.font = { bold: true };
+    value.font = entry.highlight
+      ? { bold: true, color: { argb: "FF9B2321" } }
+      : { bold: true };
+    if (entry.highlight) {
+      value.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF6DEDD" } };
+    }
+    value.alignment = { vertical: "middle", horizontal: "right" };
+    value.border = { ...border, right: thick };
   });
 }
 

@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { Layout, shadow, Spacing, Typography } from '@/constants/theme';
@@ -6,6 +7,7 @@ import { uiStyles } from '@/constants/ui-styles';
 import { useAuth } from '@/app/context/AuthContext';
 import { getOrdersByDriver } from '@/app/services/orderService';
 import { useTranslation } from '@/hooks/use-translation';
+import { currentMonth } from '@/lib/month';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,15 +19,30 @@ export default function DriverProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   // null = noch nicht geladen oder nicht ermittelbar (kein Netz, Fehler)
-  const [stats, setStats] = useState<{ total: number; completed: number } | null>(null);
+  const [stats, setStats] = useState<{
+    open: number;
+    completed: number;
+    /** Monat des ältesten offenen Auftrags — dorthin springt die Kachel. */
+    oldestOpenMonth: string;
+  } | null>(null);
 
   const loadStats = useCallback(async () => {
     if (!user?.id) return;
     try {
       const orders = await getOrdersByDriver(user.id);
+      // Offen = zugewiesen oder unterwegs, wie die Kachel "Zugewiesen" auf
+      // dem Dashboard — hier aber über alle Monate.
+      const open = orders.filter(
+        (order) => order.status === 'assigned' || order.status === 'in_progress'
+      );
+      const openDates = open
+        .map((order) => order.loadingDate || order.unloadingDate)
+        .filter(Boolean)
+        .sort();
       setStats({
-        total: orders.length,
+        open: open.length,
         completed: orders.filter((order) => order.status === 'completed').length,
+        oldestOpenMonth: openDates[0]?.slice(0, 7) ?? currentMonth(),
       });
     } catch {
       setStats(null);
@@ -87,16 +104,32 @@ export default function DriverProfileScreen() {
             </View>
             <Text style={styles.profileName}>{user?.name || t('common', 'unknown')}</Text>
             <Text style={styles.profileRole}>
-              {t('driverProfile', 'accountBadge')}
+              <MaterialIcons name="local-shipping" size={15} /> {t('driverProfile', 'accountBadge')}
             </Text>
             <Text style={styles.profileUsername}>@{user?.username}</Text>
           </View>
 
           <View style={styles.statsContainer}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats?.total ?? '—'}</Text>
-              <Text style={styles.statLabel}>{t('driverProfile', 'statsOrders')}</Text>
-            </View>
+            {/* Öffnet das Dashboard mit den offenen Aufträgen — im Monat des
+                ältesten, damit der dringendste gleich zu sehen ist. */}
+            <FluidPressable
+              style={styles.statBox}
+              onPress={() =>
+                router.navigate({
+                  pathname: '/driver',
+                  params: {
+                    status: 'assigned',
+                    month: stats?.oldestOpenMonth ?? currentMonth(),
+                    // Neu bei jedem Tipp, damit das Dashboard den Filter auch
+                    // dann wieder setzt, wenn er dort inzwischen geändert wurde.
+                    at: String(Date.now()),
+                  },
+                })
+              }
+            >
+              <Text style={styles.statValue}>{stats?.open ?? '—'}</Text>
+              <Text style={styles.statLabel}>{t('driverProfile', 'statsOpenOrders')}</Text>
+            </FluidPressable>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{stats?.completed ?? '—'}</Text>
               <Text style={styles.statLabel}>{t('driverProfile', 'statsCompleted')}</Text>

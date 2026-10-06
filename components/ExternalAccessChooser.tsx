@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ExternalAccess } from '@/app/services/externalDriverAccessService';
 import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
@@ -113,7 +114,7 @@ export function ExternalAccessChooser({
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('externalAccess', 'pickerTitle')}</Text>
               <FluidPressable onPress={() => setIsPickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             <FlatList

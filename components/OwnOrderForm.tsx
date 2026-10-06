@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { OrderFields } from '@/app/services/orderService';
 import {
   addSiteCompanyIfNew,
@@ -378,7 +379,7 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('chefOwnOrder', 'companyLabel')}</Text>
               <FluidPressable onPress={() => setActivePicker(null)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             {isLoadingPicker && (

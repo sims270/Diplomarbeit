@@ -89,7 +89,7 @@ export function getServiceStatus(vehicle: Vehicle): ServiceStatus | null {
 }
 
 /** Wie lange vor der Fälligkeit die Erinnerung ans Pickerl kommt. */
-export const PICKERL_REMINDER_MONTHS = 1;
+export const PICKERL_REMINDER_MONTHS = 3;
 
 /**
  * Ein ISO-Datum um ganze Monate verschoben. Fällt der Tag im Zielmonat weg
@@ -108,8 +108,10 @@ export function addMonthsIso(iso: string, months: number): string {
  * Wie es um das Pickerl steht.
  *
  * `null`, wenn für den LKW kein Datum hinterlegt ist. `isDue` wird ab
- * einem Monat vor der Fälligkeit wahr — das ist die Erinnerung, damit der
- * Chef noch Zeit für einen Termin in der Werkstatt hat.
+ * PICKERL_REMINDER_MONTHS vor der Fälligkeit wahr — das ist die Erinnerung,
+ * damit der Chef noch Zeit für einen Termin in der Werkstatt hat.
+ * `reminderMonths` nur für die Genehmigungen der Auflieger, die mit
+ * kürzerem Vorlauf erinnern (getPermitStatus in trailerService.ts).
  */
 export interface PickerlStatus {
   dueDate: string;
@@ -123,11 +125,12 @@ export interface PickerlStatus {
 
 export function getPickerlStatus(
   dueDate: string | null,
-  today: string = dateToIso(new Date())
+  today: string = dateToIso(new Date()),
+  reminderMonths: number = PICKERL_REMINDER_MONTHS
 ): PickerlStatus | null {
   if (!dueDate) return null;
 
-  const remindFrom = addMonthsIso(dueDate, -PICKERL_REMINDER_MONTHS);
+  const remindFrom = addMonthsIso(dueDate, -reminderMonths);
   // Beide Daten auf lokale Mitternacht: so ergibt die Differenz ganze Tage,
   // auch über die Sommerzeitumstellung hinweg (Math.round fängt die Stunde ab).
   const daysRemaining = Math.round(

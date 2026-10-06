@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   assignOrder,
@@ -104,7 +105,7 @@ export default function NewExternalOrderScreen() {
     <View>
       <Text style={styles.sectionTitle}>{t('externalAccess', 'sectionTitle')}</Text>
       <FluidPressable style={styles.checkboxRow} onPress={() => setAssignAccess((prev) => !prev)}>
-        <Text style={styles.checkbox}>{assignAccess ? '☑' : '☐'}</Text>
+        <MaterialIcons name={assignAccess ? 'check-box' : 'check-box-outline-blank'} style={styles.checkbox} />
         <Text style={styles.checkboxText}>{t('externalAccess', 'assignCheckbox')}</Text>
       </FluidPressable>
 

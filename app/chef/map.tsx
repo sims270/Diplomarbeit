@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Header } from "@/components/header";
 import { Spacing, Typography } from "@/constants/theme";
 import { type AppTheme, useThemedStyles } from "@/hooks/use-app-theme";
@@ -13,7 +14,9 @@ export default function MapScreen() {
     <View style={styles.container}>
       <Header title="TRANSLOG PRO" subtitle={t("chefMap", "headerSubtitle")} code="CH" />
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>{t("chefMap", "placeholderTitle")}</Text>
+        <Text style={styles.placeholderText}>
+          <MaterialIcons name="map" size={22} /> {t("chefMap", "placeholderTitle")}
+        </Text>
         <Text style={styles.placeholderSubtext}>
           {t("chefMap", "placeholderSubtext")}
         </Text>

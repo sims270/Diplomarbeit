@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   createTankEntry,
@@ -381,7 +382,7 @@ export default function DriverTankListeScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('tankliste', 'fieldLicensePlate')}</Text>
               <FluidPressable onPress={() => setIsPlatePickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             <FlatList
@@ -425,7 +426,7 @@ export default function DriverTankListeScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('tankliste', 'fieldFuelStation')}</Text>
               <FluidPressable onPress={() => setIsStationPickerOpen(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <MaterialIcons name="close" style={styles.closeButton} />
               </FluidPressable>
             </View>
             <FlatList
