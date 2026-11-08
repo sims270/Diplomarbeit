@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ExternalAccess } from '@/app/services/externalDriverAccessService';
+import { checkNewAccess, type ExternalAccess } from '@/app/services/externalDriverAccessService';
 import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -20,8 +20,12 @@ interface ExternalAccessChooserProps {
   /** NEW_ACCESS, eine user_id oder '' (noch nichts gewählt) */
   choice: string;
   onChoiceChange: (choice: string) => void;
+  /** Alle Zugänge, auch abgelaufene — gegen sie wird der neue geprüft. */
+  existingAccesses: ExternalAccess[];
   label: string;
   onLabelChange: (label: string) => void;
+  username: string;
+  onUsernameChange: (username: string) => void;
   expiresOn: string;
   onExpiresOnChange: (expiresOn: string) => void;
 }
@@ -33,8 +37,14 @@ export function formatAccess(access: ExternalAccess, validUntil: string): string
 /**
  * Bestehenden Zugang wählen oder einen neuen anlegen lassen — beim Anlegen
  * eines Fremdauftrags (app/chef/external-order/new.tsx) und auf der
- * Detailseite (components/ExternalAccessPanel.tsx). Angelegt wird hier
+ * Detailseite (components/ExternalAccessPanel.tsx), außerdem in der
+ * Fahrerverwaltung (components/ExternalAccessList.tsx). Angelegt wird hier
  * nichts; das entscheidet der Bildschirm beim Speichern.
+ *
+ * Der Benutzername folgt dem Firmennamen, bis der Chef ihn selbst ändert
+ * (das steuert der Bildschirm). Gleiche Namen bzw. Benutzernamen wie bei
+ * bestehenden Zugängen werden angemerkt, damit sich z. B. zwei
+ * voestalpine-Standorte nicht verwechseln lassen.
  *
  * Gibt es noch keinen gültigen Zugang, entfällt die Auswahl und es bleiben
  * nur die Felder für den neuen.
@@ -43,8 +53,11 @@ export function ExternalAccessChooser({
   accesses,
   choice,
   onChoiceChange,
+  existingAccesses,
   label,
   onLabelChange,
+  username,
+  onUsernameChange,
   expiresOn,
   onExpiresOnChange,
 }: ExternalAccessChooserProps) {
@@ -57,6 +70,7 @@ export function ExternalAccessChooser({
   const isNew = !hasAccesses || choice === NEW_ACCESS;
   const selected = accesses.find((access) => access.userId === choice);
   const validUntil = t('externalAccess', 'validUntil');
+  const check = checkNewAccess(label, username, existingAccesses);
 
   const pick = (value: string) => {
     onChoiceChange(value);
@@ -88,6 +102,31 @@ export function ExternalAccessChooser({
             value={label}
             onChangeText={onLabelChange}
           />
+          {check.sameLabel ? (
+            <Text style={styles.warning}>
+              {t('externalAccess', 'labelDuplicateWarning')
+                .replace('{label}', check.sameLabel.label)
+                .replace('{username}', check.sameLabel.username)}
+            </Text>
+          ) : null}
+          <Text style={styles.fieldLabel}>{t('externalAccess', 'usernameLabel')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('externalAccess', 'usernamePlaceholder')}
+            value={username}
+            onChangeText={onUsernameChange}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {username.trim() && check.usernameProblem ? (
+            <Text style={styles.problem}>
+              {check.usernameProblem === 'taken'
+                ? t('externalAccess', 'usernameTaken').replace('{username}', username.trim().toLowerCase())
+                : t('externalAccess', 'usernameInvalid')}
+            </Text>
+          ) : null}
           <Text style={styles.fieldLabel}>{t('externalAccess', 'expiresLabel')}</Text>
           <DateField
             value={expiresOn}
@@ -150,6 +189,17 @@ const createStyles = (theme: AppTheme) => {
     selectPlaceholder: { ...u.fieldPlaceholder, flexShrink: 1 },
     selectChevron: u.chevron,
     input: u.input,
+    warning: {
+      ...u.hint,
+      color: c.text,
+      fontWeight: '600',
+      paddingHorizontal: Spacing.xxs,
+    },
+    problem: {
+      ...u.hint,
+      color: c.danger,
+      paddingHorizontal: Spacing.xxs,
+    },
     fieldLabel: {
       ...u.hint,
       color: c.textSecondary,

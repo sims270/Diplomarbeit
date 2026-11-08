@@ -1,13 +1,15 @@
 import {
   assignOrder,
+  checkNewAccess,
   createAccess,
   deleteAccess,
   extendAccess,
   type ExternalAccess,
   getAccesses,
-  getAccessPassword,
   getAssignedAccessId,
+  resetAccessPassword,
   suggestExpiresOn,
+  suggestUsername,
   todayIso,
 } from '@/app/services/externalDriverAccessService';
 import { type AccessCredentials, AccessCredentialsModal } from '@/components/AccessCredentialsModal';
@@ -36,7 +38,7 @@ interface ExternalAccessPanelProps {
 /**
  * Der Abschnitt "Fahrer-Zugang" im Fremdauftrag des Chefs
  * (app/chef/external-order/[id].tsx): welcher Zugang dem Auftrag
- * zugewiesen ist, Passwort erneut anzeigen, verlängern, Zuweisung aufheben,
+ * zugewiesen ist, neues Passwort erstellen, verlängern, Zuweisung aufheben,
  * Zugang löschen — oder, solange keiner zugewiesen ist, einen wählen bzw.
  * neu anlegen. Jede Aktion wirkt sofort, unabhängig vom Formular darüber.
  */
@@ -58,6 +60,8 @@ export function ExternalAccessPanel({
 
   const [choice, setChoice] = useState('');
   const [label, setLabel] = useState<string | null>(null);
+  // null = folgt dem Namen des Zugangs; sobald der Chef tippt, sein Wert.
+  const [username, setUsername] = useState<string | null>(null);
   const [expiresOn, setExpiresOn] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -80,6 +84,7 @@ export function ExternalAccessPanel({
   const assigned = (accesses ?? []).find((access) => access.userId === assignedId);
   const effectiveChoice = activeAccesses.length === 0 ? NEW_ACCESS : choice;
   const effectiveLabel = label ?? recipientCompany;
+  const effectiveUsername = username ?? suggestUsername(effectiveLabel);
   const effectiveExpiresOn = expiresOn ?? suggestExpiresOn(unloadingDate);
 
   // Führt eine Aktion aus, lädt danach neu und meldet Fehler — damit nicht
@@ -114,26 +119,50 @@ export function ExternalAccessPanel({
       showAlert(t('common', 'error'), t('externalAccess', 'alertLabelRequired'));
       return;
     }
+    const trimmedUsername = effectiveUsername.trim();
+    const { usernameProblem } = checkNewAccess(trimmedLabel, trimmedUsername, accesses ?? []);
+    if (usernameProblem) {
+      showAlert(
+        t('common', 'error'),
+        usernameProblem === 'taken'
+          ? t('externalAccess', 'usernameTaken').replace('{username}', trimmedUsername.toLowerCase())
+          : t('externalAccess', 'usernameInvalid')
+      );
+      return;
+    }
     if (effectiveExpiresOn < todayIso()) {
       showAlert(t('common', 'error'), t('externalAccess', 'alertExpiresInPast'));
       return;
     }
 
     run(async () => {
-      const created = await createAccess(trimmedLabel, effectiveExpiresOn);
+      const created = await createAccess(trimmedLabel, trimmedUsername, effectiveExpiresOn);
       await assignOrder(orderId, created.userId);
       setChoice('');
       setLabel(null);
+      setUsername(null);
       setExpiresOn(null);
       setCredentials(created);
     });
   };
 
-  const handleShowPassword = (access: ExternalAccess) =>
-    run(async () => {
-      const password = await getAccessPassword(access.userId);
-      setCredentials({ username: access.username, password, expiresOn: access.expiresOn });
-    });
+  const handleResetPassword = (access: ExternalAccess) => {
+    showConfirm(
+      t('externalAccess', 'resetPasswordConfirmTitle'),
+      t('externalAccess', 'resetPasswordConfirmMessage')
+        .replace('{label}', access.label)
+        .replace('{username}', access.username),
+      () =>
+        run(async () => {
+          const password = await resetAccessPassword(access.userId);
+          setCredentials({ username: access.username, password, expiresOn: access.expiresOn });
+        }),
+      {
+        confirmText: t('externalAccess', 'resetPasswordConfirmButton'),
+        cancelText: t('common', 'cancel'),
+      }
+    );
+  };
 
   const handleExtend = (access: ExternalAccess, days: number) =>
     run(async () => {
@@ -196,10 +225,10 @@ export function ExternalAccessPanel({
           <View style={styles.buttonRow}>
             <FluidPressable
               style={styles.button}
-              onPress={() => handleShowPassword(assigned)}
+              onPress={() => handleResetPassword(assigned)}
               disabled={isBusy}
             >
-              <Text style={styles.buttonText}>{t('externalAccess', 'showPasswordButton')}</Text>
+              <Text style={styles.buttonText}>{t('externalAccess', 'resetPasswordButton')}</Text>
             </FluidPressable>
             <FluidPressable
               style={styles.button}
@@ -244,8 +273,11 @@ export function ExternalAccessPanel({
             accesses={activeAccesses}
             choice={effectiveChoice}
             onChoiceChange={setChoice}
+            existingAccesses={accesses ?? []}
             label={effectiveLabel}
             onLabelChange={setLabel}
+            username={effectiveUsername}
+            onUsernameChange={setUsername}
             expiresOn={effectiveExpiresOn}
             onExpiresOnChange={setExpiresOn}
           />

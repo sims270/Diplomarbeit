@@ -23,8 +23,9 @@ interface AccessCredentialsModalProps {
 
 /**
  * Zeigt Benutzername und Passwort eines Fremdfahrer-Zugangs zum
- * Weitergeben — direkt nach dem Anlegen und später über "Passwort
- * anzeigen" beim Auftrag.
+ * Weitergeben — direkt nach dem Anlegen und nach "Neues Passwort". Das
+ * Passwort wird nicht gespeichert; nach dem Schließen ist es nicht mehr
+ * abrufbar.
  */
 export function AccessCredentialsModal({ credentials, onClose }: AccessCredentialsModalProps) {
   const styles = useThemedStyles(createStyles);

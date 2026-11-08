@@ -417,6 +417,8 @@ export const translations = {
       emptyStateSub: 'Lege den ersten Fahrer über den Button oben an',
       editButton: 'Bearbeiten',
       loadFailed: 'Fahrer konnten nicht geladen werden',
+      tabOwn: 'Eigene Fahrer',
+      tabExternal: 'Fremdfahrer',
     },
     vehicles: {
       headerSubtitle: 'LKW VERWALTEN',
@@ -724,14 +726,18 @@ export const translations = {
       orderCountMany: 'Aufträge',
       credentialsTitle: 'Zugangsdaten',
       credentialsHint:
-        'Diese Daten an den fremden Fahrer weitergeben. Das Passwort lässt sich beim Auftrag jederzeit erneut anzeigen.',
+        'Diese Daten jetzt an den fremden Fahrer weitergeben. Das Passwort wird nicht gespeichert und lässt sich später nicht mehr anzeigen — bei Bedarf ein neues erstellen.',
       usernameLabel: 'Benutzername',
       passwordLabel: 'Passwort',
       shareButton: 'Teilen',
       doneButton: 'Fertig',
       shareMessage:
         'Zugang zur TRANSLOG PRO App\nBenutzername: {username}\nPasswort: {password}\nGültig bis: {expiresOn}',
-      showPasswordButton: 'Passwort anzeigen',
+      resetPasswordButton: 'Neues Passwort',
+      resetPasswordConfirmTitle: 'Neues Passwort erstellen?',
+      resetPasswordConfirmMessage:
+        'Für den Zugang „{label}“ ({username}) wird ein neues Passwort erstellt. Das bisherige Passwort gilt ab sofort nicht mehr.',
+      resetPasswordConfirmButton: 'Neues Passwort erstellen',
       extendButton: 'Verlängern',
       extendTitle: 'Zugang verlängern',
       extendDays: '+{days} Tage',
@@ -759,6 +765,21 @@ export const translations = {
       expiredCardHint:
         'Diese Zugänge sind gesperrt. Löschen oder verlängern — bei Stammpartnern ist Verlängern meist richtig.',
       expiredOn: 'abgelaufen am',
+      listHint:
+        'Zugänge hier oder beim Fremdauftrag anlegen; zugewiesen werden sie beim Fremdauftrag. Passwörter werden nicht gespeichert — hat ein Fahrer seines vergessen, ein neues erstellen.',
+      listEmpty: 'Noch keine Fremdfahrer-Zugänge',
+      listEmptySub: 'Lege den ersten Zugang über den Button oben an',
+      createButton: '+ Zugang erstellen',
+      createTitle: 'Neuer Zugang',
+      createSubmit: 'Zugang erstellen',
+      usernamePlaceholder: 'Benutzername, z. B. voestalpine-stahl-linz',
+      usernameInvalid: 'Benutzername: 3–32 Zeichen, nur Buchstaben, Ziffern, . _ -',
+      usernameTaken: 'Der Benutzername „{username}“ ist schon vergeben.',
+      labelDuplicateWarning:
+        'Es gibt schon einen Zugang „{label}“ ({username}). Damit nichts vertauscht wird, den Namen genauer angeben, z. B. mit Standort.',
+      renameButton: 'Benutzername ändern',
+      renameSave: 'Speichern',
+      renamed: 'Der Benutzername wurde geändert. Der Fahrer meldet sich ab jetzt mit „{username}“ an.',
     },
     externalDriver: {
       headerSubtitle: 'FREMDFAHRER',
@@ -1326,6 +1347,8 @@ export const translations = {
       emptyStateSub: 'Create the first driver using the button above',
       editButton: 'Edit',
       loadFailed: 'Could not load drivers',
+      tabOwn: 'Own drivers',
+      tabExternal: 'External drivers',
     },
     vehicles: {
       headerSubtitle: 'MANAGE TRUCKS',
@@ -1633,14 +1656,18 @@ export const translations = {
       orderCountMany: 'orders',
       credentialsTitle: 'Login details',
       credentialsHint:
-        'Pass these details on to the external driver. The password can be shown again on the order at any time.',
+        'Pass these details on to the external driver now. The password is not stored and cannot be shown again later — create a new one if needed.',
       usernameLabel: 'Username',
       passwordLabel: 'Password',
       shareButton: 'Share',
       doneButton: 'Done',
       shareMessage:
         'Access to the TRANSLOG PRO app\nUsername: {username}\nPassword: {password}\nValid until: {expiresOn}',
-      showPasswordButton: 'Show password',
+      resetPasswordButton: 'New password',
+      resetPasswordConfirmTitle: 'Create a new password?',
+      resetPasswordConfirmMessage:
+        'A new password will be created for the access "{label}" ({username}). The previous password stops working immediately.',
+      resetPasswordConfirmButton: 'Create new password',
       extendButton: 'Extend',
       extendTitle: 'Extend access',
       extendDays: '+{days} days',
@@ -1668,6 +1695,21 @@ export const translations = {
       expiredCardHint:
         'These accesses are blocked. Delete or extend them — for regular partners, extending is usually right.',
       expiredOn: 'expired on',
+      listHint:
+        'Create accesses here or on the external order; they are assigned on the external order. Passwords are not stored — if a driver forgot theirs, create a new one.',
+      listEmpty: 'No external driver accesses yet',
+      listEmptySub: 'Create the first access using the button above',
+      createButton: '+ Create access',
+      createTitle: 'New access',
+      createSubmit: 'Create access',
+      usernamePlaceholder: 'Username, e.g. voestalpine-stahl-linz',
+      usernameInvalid: 'Username: 3–32 characters, only letters, digits, . _ -',
+      usernameTaken: 'The username "{username}" is already taken.',
+      labelDuplicateWarning:
+        'An access "{label}" ({username}) already exists. To avoid mix-ups, make the name more specific, e.g. add the location.',
+      renameButton: 'Change username',
+      renameSave: 'Save',
+      renamed: 'The username was changed. The driver now logs in with "{username}".',
     },
     externalDriver: {
       headerSubtitle: 'EXTERNAL DRIVER',

@@ -1,3 +1,4 @@
+import { ExternalAccessList } from '@/components/ExternalAccessList';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { shadow, Spacing, Typography } from '@/constants/theme';
@@ -34,6 +35,8 @@ export default function DriversListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  // Eigene Fahrer oder die Zugänge fremder Fahrer (components/ExternalAccessList.tsx)
+  const [activeTab, setActiveTab] = useState<'own' | 'external'>('own');
 
   const loadDrivers = useCallback(async () => {
     setLoadError(false);
@@ -87,68 +90,97 @@ export default function DriversListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {t('driversList', 'title')} ({drivers.length})
-          </Text>
-          {!isOfflineMode && (
-            <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/drivers/new')}>
-              <Text style={styles.addButtonText}>{t('driversList', 'addButton')}</Text>
-            </FluidPressable>
-          )}
+        <View style={styles.tabsContainer}>
+          <FluidPressable
+            style={[styles.tab, activeTab === 'own' && styles.tabActive]}
+            onPress={() => setActiveTab('own')}
+          >
+            <Text style={[styles.tabText, activeTab === 'own' && styles.tabTextActive]}>
+              {t('driversList', 'tabOwn')}
+            </Text>
+          </FluidPressable>
+          <FluidPressable
+            style={[styles.tab, activeTab === 'external' && styles.tabActive]}
+            onPress={() => setActiveTab('external')}
+          >
+            <Text style={[styles.tabText, activeTab === 'external' && styles.tabTextActive]}>
+              {t('driversList', 'tabExternal')}
+            </Text>
+          </FluidPressable>
         </View>
 
-        {isOfflineMode ? (
-          <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
-        ) : isLoading ? (
-          <ActivityIndicator style={styles.loading} color={c.tint} />
-        ) : loadError ? (
-          <Text style={styles.errorText}>{t('driversList', 'loadFailed')}</Text>
-        ) : drivers.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>{t('driversList', 'emptyState')}</Text>
-            <Text style={styles.emptyStateSubtext}>{t('driversList', 'emptyStateSub')}</Text>
-          </View>
+        {activeTab === 'external' ? (
+          isOfflineMode ? (
+            <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
+          ) : (
+            <ExternalAccessList />
+          )
         ) : (
-          <FlatList
-            // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
-            key={`grid-${columns}`}
-            numColumns={columns}
-            columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
-            data={drivers}
-            keyExtractor={(item) => item.id}
-            refreshControl={
-              <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-            }
-            renderItem={({ item }) => (
-              <FluidPressable
-                style={styles.driverCard}
-                onPress={() =>
-                  router.push({
-                    pathname: '/chef/drivers/[id]',
-                    params: {
-                      id: item.id,
-                      username: item.username,
-                      licensePlate: item.licensePlate ?? '',
-                    },
-                  })
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {t('driversList', 'title')} ({drivers.length})
+              </Text>
+              {!isOfflineMode && (
+                <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/drivers/new')}>
+                  <Text style={styles.addButtonText}>{t('driversList', 'addButton')}</Text>
+                </FluidPressable>
+              )}
+            </View>
+
+            {isOfflineMode ? (
+              <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
+            ) : isLoading ? (
+              <ActivityIndicator style={styles.loading} color={c.tint} />
+            ) : loadError ? (
+              <Text style={styles.errorText}>{t('driversList', 'loadFailed')}</Text>
+            ) : drivers.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>{t('driversList', 'emptyState')}</Text>
+                <Text style={styles.emptyStateSubtext}>{t('driversList', 'emptyStateSub')}</Text>
+              </View>
+            ) : (
+              <FlatList
+                // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+                key={`grid-${columns}`}
+                numColumns={columns}
+                columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
+                data={drivers}
+                keyExtractor={(item) => item.id}
+                refreshControl={
+                  <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
                 }
-              >
-                <View style={styles.driverAvatar}>
-                  <Text style={styles.driverAvatarText}>
-                    {item.username.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.driverInfo}>
-                  <Text style={styles.driverUsername}>{item.username}</Text>
-                  {!!item.licensePlate && (
-                    <Text style={styles.driverPlate}>{item.licensePlate}</Text>
-                  )}
-                </View>
-                <Text style={styles.editLabel}>{t('driversList', 'editButton')} ›</Text>
-              </FluidPressable>
+                renderItem={({ item }) => (
+                  <FluidPressable
+                    style={styles.driverCard}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/chef/drivers/[id]',
+                        params: {
+                          id: item.id,
+                          username: item.username,
+                          licensePlate: item.licensePlate ?? '',
+                        },
+                      })
+                    }
+                  >
+                    <View style={styles.driverAvatar}>
+                      <Text style={styles.driverAvatarText}>
+                        {item.username.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.driverInfo}>
+                      <Text style={styles.driverUsername}>{item.username}</Text>
+                      {!!item.licensePlate && (
+                        <Text style={styles.driverPlate}>{item.licensePlate}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.editLabel}>{t('driversList', 'editButton')} ›</Text>
+                  </FluidPressable>
+                )}
+              />
             )}
-          />
+          </>
         )}
       </View>
     </View>
@@ -166,6 +198,17 @@ const createStyles = (theme: AppTheme) => {
     },
     backButton: u.backButton,
     backButtonText: u.backButtonText,
+    tabsContainer: {
+      ...u.segmented,
+      // Die Spalte (u.column) hat das seitliche Padding schon.
+      marginHorizontal: 0,
+      marginTop: 0,
+      marginBottom: Spacing.md,
+    },
+    tab: u.segment,
+    tabActive: u.segmentActive,
+    tabText: u.segmentText,
+    tabTextActive: u.segmentTextActive,
     sectionHeader: {
       flexDirection: 'row',
       flexWrap: 'wrap',

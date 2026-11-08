@@ -2,10 +2,12 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   assignOrder,
+  checkNewAccess,
   createAccess,
   type ExternalAccess,
   getAccesses,
   suggestExpiresOn,
+  suggestUsername,
   todayIso,
 } from '@/app/services/externalDriverAccessService';
 import { addExternalOrder, type ExternalOrderFields } from '@/app/services/externalOrderService';
@@ -33,23 +35,29 @@ export default function NewExternalOrderScreen() {
   // Fahrer-Zugang: nur mit Häkchen. Ohne Häkchen entsteht kein Konto und
   // der Auftrag wird niemandem zugewiesen — genau wie bisher.
   const [assignAccess, setAssignAccess] = useState(false);
-  const [activeAccesses, setActiveAccesses] = useState<ExternalAccess[]>([]);
+  const [allAccesses, setAllAccesses] = useState<ExternalAccess[]>([]);
   const [choice, setChoice] = useState('');
   // null = noch nicht angefasst: dann folgt der Name "An Firma" und das
   // Datum dem Entladedatum, auch wenn beide erst später eingetragen werden.
   const [label, setLabel] = useState<string | null>(null);
+  // null = folgt dem Namen des Zugangs; sobald der Chef tippt, sein Wert.
+  const [username, setUsername] = useState<string | null>(null);
   const [expiresOn, setExpiresOn] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<AccessCredentials | null>(null);
 
   useEffect(() => {
     getAccesses()
-      .then((accesses) => setActiveAccesses(accesses.filter((access) => access.isActive)))
-      .catch(() => setActiveAccesses([]));
+      .then(setAllAccesses)
+      .catch(() => setAllAccesses([]));
   }, []);
+
+  const activeAccesses = allAccesses.filter((access) => access.isActive);
 
   // Gibt es noch keinen gültigen Zugang, wird beim Speichern einer angelegt.
   const effectiveChoice = activeAccesses.length === 0 ? NEW_ACCESS : choice;
   const effectiveLabel = (fields: ExternalOrderFields) => label ?? fields.recipientCompany;
+  const effectiveUsername = (fields: ExternalOrderFields) =>
+    username ?? suggestUsername(effectiveLabel(fields));
   const effectiveExpiresOn = (fields: ExternalOrderFields) =>
     expiresOn ?? suggestExpiresOn(fields.unloadingDate);
 
@@ -57,6 +65,7 @@ export default function NewExternalOrderScreen() {
     // Alles, was den Zugang betrifft, vorher prüfen — ohne await, damit der
     // Klick für das PDF-Popup unten noch gilt.
     const accessLabel = effectiveLabel(fields).trim();
+    const accessUsername = effectiveUsername(fields).trim();
     const accessExpiresOn = effectiveExpiresOn(fields);
     if (assignAccess) {
       if (!effectiveChoice) {
@@ -64,6 +73,13 @@ export default function NewExternalOrderScreen() {
       }
       if (effectiveChoice === NEW_ACCESS) {
         if (!accessLabel) throw new Error(t('externalAccess', 'alertLabelRequired'));
+        const { usernameProblem } = checkNewAccess(accessLabel, accessUsername, allAccesses);
+        if (usernameProblem === 'invalid') throw new Error(t('externalAccess', 'usernameInvalid'));
+        if (usernameProblem === 'taken') {
+          throw new Error(
+            t('externalAccess', 'usernameTaken').replace('{username}', accessUsername.toLowerCase())
+          );
+        }
         if (!accessExpiresOn) throw new Error(t('externalAccess', 'alertExpiresRequired'));
         if (accessExpiresOn < todayIso()) throw new Error(t('externalAccess', 'alertExpiresInPast'));
       }
@@ -83,7 +99,7 @@ export default function NewExternalOrderScreen() {
     if (assignAccess) {
       try {
         if (effectiveChoice === NEW_ACCESS) {
-          const created = await createAccess(accessLabel, accessExpiresOn);
+          const created = await createAccess(accessLabel, accessUsername, accessExpiresOn);
           await assignOrder(order.id, created.userId);
           // Zurück geht es erst, wenn der Chef die Zugangsdaten gesehen hat.
           setCredentials(created);
@@ -120,8 +136,11 @@ export default function NewExternalOrderScreen() {
             accesses={activeAccesses}
             choice={effectiveChoice}
             onChoiceChange={setChoice}
+            existingAccesses={allAccesses}
             label={effectiveLabel(fields)}
             onLabelChange={setLabel}
+            username={effectiveUsername(fields)}
+            onUsernameChange={setUsername}
             expiresOn={effectiveExpiresOn(fields)}
             onExpiresOnChange={setExpiresOn}
           />

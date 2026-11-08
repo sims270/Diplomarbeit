@@ -6,8 +6,7 @@
 // nicht direkt bearbeiten. Aenderungen gehoeren in die Repo-Fassung; diese
 // Datei wird daraus neu gebaut.
 //
-// Unterschied: die Helfer aus _shared/cors.ts, _shared/email.ts und
-// _shared/verify-boss.ts stehen hier inline. Der
+// Unterschied: die Helfer aus _shared/cors.ts, _shared/email.ts, _shared/password.ts, _shared/verify-boss.ts stehen hier inline. Der
 // Dashboard-Editor legt die eingefuegte Datei allein unter
 // /tmp/.../source/index.ts ab, relative Imports laufen dort ins Leere.
 //
@@ -18,14 +17,15 @@
 // Supabase Edge Function: create-external-driver
 //
 // Lets an authenticated "boss" account create a time-limited account for a
-// subcontractor's driver ("fremder Fahrer"). Der Chef gibt nur den
-// Firmennamen und das Ablaufdatum an; Benutzername und Passwort entstehen
-// hier. Welche Fremdaufträge der Zugang sieht, weist die App danach
-// getrennt zu (external_orders.assigned_external_user_id).
+// subcontractor's driver ("fremder Fahrer"). Der Chef gibt Firmennamen,
+// Benutzername und Ablaufdatum an; das Passwort entsteht hier. Fehlt der
+// Benutzername, wird er wie früher aus dem Firmennamen gebildet. Welche
+// Fremdaufträge der Zugang sieht, weist die App danach getrennt zu
+// (external_orders.assigned_external_user_id).
 //
-// Das Passwort wird in public.external_driver_accounts gespeichert, damit
-// der Chef es später erneut anzeigen kann (siehe
-// supabase/migrations/20260915130000_external_driver_access.sql).
+// Das Passwort wird nirgends gespeichert: Der Chef sieht es genau einmal,
+// in der Antwort dieser Function. Hat der fremde Fahrer es vergessen, lässt
+// der Chef ein neues erstellen (reset-external-driver-password).
 //
 // Deploy: supabase functions deploy create-external-driver
 
@@ -68,6 +68,32 @@ function usernameToEmail(username: string): string {
 
 function emailToUsername(email: string): string {
   return email.split("@")[0];
+}
+
+// ------------------------------------------------------------ _shared/password
+// Zufallspasswörter für die Zugänge fremder Fahrer — beim Anlegen
+// (create-external-driver) und beim Neu-Erstellen
+// (reset-external-driver-password).
+
+// Ohne Zeichen, die sich beim Abtippen verwechseln lassen (0/O, 1/l/I).
+const PASSWORD_ALPHABET =
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+const PASSWORD_LENGTH = 12;
+
+function randomPassword(): string {
+  // Nur Bytes unterhalb des größten Vielfachen der Alphabetlänge verwenden,
+  // sonst kämen die ersten Zeichen des Alphabets häufiger vor.
+  const limit = 256 - (256 % PASSWORD_ALPHABET.length);
+  let password = "";
+  while (password.length < PASSWORD_LENGTH) {
+    const bytes = crypto.getRandomValues(new Uint8Array(PASSWORD_LENGTH * 2));
+    for (const byte of bytes) {
+      if (byte < limit && password.length < PASSWORD_LENGTH) {
+        password += PASSWORD_ALPHABET[byte % PASSWORD_ALPHABET.length];
+      }
+    }
+  }
+  return password;
 }
 
 // --------------------------------------------------------- _shared/verify-boss
@@ -138,28 +164,7 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   return { caller, adminClient };
 }
 
-// ----------------------------------------------------------------- die Function
-// Ohne Zeichen, die sich beim Abtippen verwechseln lassen (0/O, 1/l/I).
-const PASSWORD_ALPHABET =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-const PASSWORD_LENGTH = 12;
-
-function randomPassword(): string {
-  // Nur Bytes unterhalb des größten Vielfachen der Alphabetlänge verwenden,
-  // sonst kämen die ersten Zeichen des Alphabets häufiger vor.
-  const limit = 256 - (256 % PASSWORD_ALPHABET.length);
-  let password = "";
-  while (password.length < PASSWORD_LENGTH) {
-    const bytes = crypto.getRandomValues(new Uint8Array(PASSWORD_LENGTH * 2));
-    for (const byte of bytes) {
-      if (byte < limit && password.length < PASSWORD_LENGTH) {
-        password += PASSWORD_ALPHABET[byte % PASSWORD_ALPHABET.length];
-      }
-    }
-  }
-  return password;
-}
-
+// ---------------------------------------------------------------- die Function
 function randomSuffix(): string {
   const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(6));
@@ -189,14 +194,20 @@ function viennaToday(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna" }).format(new Date());
 }
 
-// Legt das Auth-Konto an. Ist der Benutzername schon vergeben, wird
-// durchnummeriert: fremd-honisch, fremd-honisch-2, fremd-honisch-3, …
+class UsernameTakenError extends Error {}
+
+// Legt das Auth-Konto an. Beim selbst gebildeten Namen wird bei Bedarf
+// durchnummeriert: fremd-honisch, fremd-honisch-2, fremd-honisch-3, … Hat
+// der Chef den Namen gewählt, bleibt es bei genau diesem — sonst hießen
+// zwei Zugänge fast gleich und ließen sich verwechseln.
 async function createAuthUser(
   adminClient: SupabaseClient,
   base: string,
-  password: string
+  password: string,
+  allowNumbering: boolean
 ): Promise<{ userId: string; username: string }> {
-  for (let attempt = 1; attempt <= 20; attempt++) {
+  const maxAttempts = allowNumbering ? 20 : 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const username = attempt === 1 ? base : `${base}-${attempt}`;
     const { data, error } = await adminClient.auth.admin.createUser({
       email: usernameToEmail(username),
@@ -211,7 +222,11 @@ async function createAuthUser(
       throw new Error(error?.message ?? "Could not create user");
     }
   }
-  throw new Error("Kein freier Benutzername gefunden");
+  throw new UsernameTakenError(
+    allowNumbering
+      ? "Kein freier Benutzername gefunden"
+      : `Der Benutzername „${base}“ ist schon vergeben`
+  );
 }
 
 Deno.serve(async (req) => {
@@ -227,7 +242,7 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  let body: { label?: string; expiresOn?: string };
+  let body: { label?: string; username?: string; expiresOn?: string };
   try {
     body = await req.json();
   } catch {
@@ -236,12 +251,20 @@ Deno.serve(async (req) => {
 
   const label = body.label?.trim() ?? "";
   const expiresOn = body.expiresOn?.trim() ?? "";
+  const username =
+    typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
 
   if (!label) {
     return json({ error: "Bitte einen Namen für den Zugang angeben" }, 400);
   }
   if (label.length > 100) {
     return json({ error: "Der Name darf höchstens 100 Zeichen lang sein" }, 400);
+  }
+  if (username && !isValidUsername(username)) {
+    return json(
+      { error: "Benutzername: 3–32 Zeichen, nur Buchstaben, Ziffern, . _ -" },
+      400
+    );
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresOn) || Number.isNaN(Date.parse(expiresOn))) {
     return json({ error: "Ungültiges Ablaufdatum" }, 400);
@@ -254,9 +277,12 @@ Deno.serve(async (req) => {
 
   let created: { userId: string; username: string };
   try {
-    created = await createAuthUser(adminClient, baseUsername(label), password);
+    created = username
+      ? await createAuthUser(adminClient, username, password, false)
+      : await createAuthUser(adminClient, baseUsername(label), password, true);
   } catch (createError) {
-    return json({ error: (createError as Error).message }, 400);
+    const taken = createError instanceof UsernameTakenError;
+    return json({ error: (createError as Error).message }, taken ? 409 : 400);
   }
 
   // Rolle und Zugang. Scheitert einer der beiden Schritte, das Konto wieder
@@ -272,7 +298,6 @@ Deno.serve(async (req) => {
     : await adminClient.from("external_driver_accounts").insert({
         user_id: created.userId,
         username: created.username,
-        password,
         label,
         expires_on: expiresOn,
         created_by: caller.id,
