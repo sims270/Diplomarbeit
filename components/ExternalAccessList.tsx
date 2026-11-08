@@ -13,7 +13,7 @@ import {
 } from '@/app/services/externalDriverAccessService';
 import { type AccessCredentials, AccessCredentialsModal } from '@/components/AccessCredentialsModal';
 import { ExternalAccessChooser, NEW_ACCESS } from '@/components/ExternalAccessChooser';
-import { EXTEND_DAY_OPTIONS } from '@/components/ExternalAccessPanel';
+import { ExtendAccessOptions } from '@/components/ExtendAccessOptions';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { shadow, Spacing, Typography } from '@/constants/theme';
 import { uiStyles } from '@/constants/ui-styles';
@@ -412,20 +412,10 @@ export function ExternalAccessList() {
               </View>
 
               {extendAccessId === item.userId ? (
-                <View style={styles.buttons}>
-                  {EXTEND_DAY_OPTIONS.map((days) => (
-                    <FluidPressable
-                      key={days}
-                      style={styles.button}
-                      onPress={() => handleExtend(item, days)}
-                      disabled={isBusy}
-                    >
-                      <Text style={styles.buttonText}>
-                        {t('externalAccess', 'extendDays').replace('{days}', String(days))}
-                      </Text>
-                    </FluidPressable>
-                  ))}
-                </View>
+                <ExtendAccessOptions
+                  onExtend={(days) => handleExtend(item, days)}
+                  disabled={isBusy}
+                />
               ) : null}
             </View>
           );

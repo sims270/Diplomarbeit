@@ -1,10 +1,13 @@
 import {
   type ExternalOrder,
   type ExternalOrderFields,
+  deleteExternalOrder,
   getExternalOrderById,
   markExternalOrderCompleted,
   updateExternalOrder,
 } from '@/app/services/externalOrderService';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { DeleteOrderModal } from '@/components/DeleteOrderModal';
 import { ExternalAccessPanel } from '@/components/ExternalAccessPanel';
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
 import { billingCompanyOf } from '@/app/services/invoiceService';
@@ -32,6 +35,7 @@ export default function EditExternalOrderScreen() {
 
   const [order, setOrder] = useState<ExternalOrder | undefined | null>(undefined);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -76,6 +80,14 @@ export default function EditExternalOrderScreen() {
     );
   };
 
+  const handleDelete = async () => {
+    if (!order) return;
+    await deleteExternalOrder(order.id);
+    setShowDelete(false);
+    showAlert(t('common', 'success'), t('deleteOrder', 'deleted'));
+    router.back();
+  };
+
   if (order === undefined) {
     return (
       <View style={styles.container}>
@@ -104,9 +116,15 @@ export default function EditExternalOrderScreen() {
       <Header title="TRANSLOG PRO" subtitle={t('chefExternalOrder', 'editHeaderSubtitle')} code="CH" />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        <FluidPressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
-        </FluidPressable>
+        <View style={styles.topRow}>
+          <FluidPressable onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
+          </FluidPressable>
+          <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
+            <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
+            <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
+          </FluidPressable>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'statusSection')}</Text>
@@ -172,6 +190,13 @@ export default function EditExternalOrderScreen() {
 
         <OrderDocuments orderId={order.id} note={t('externalAccess', 'documentsNote')} />
       </ScrollView>
+
+      <DeleteOrderModal
+        visible={showDelete}
+        orderNr={order.orderNr}
+        onClose={() => setShowDelete(false)}
+        onDelete={handleDelete}
+      />
     </View>
   );
 }
@@ -233,6 +258,24 @@ const createStyles = (theme: AppTheme) => {
     },
     backButton: u.backButton,
     backButtonText: u.backButtonText,
+    topRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    // Bewusst unauffällig: grau, ohne Fläche — Löschen ist die Ausnahme.
+    deleteLink: {
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xxs,
+      paddingLeft: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    deleteLinkText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
     loading: {
       marginTop: Spacing.xl,
     },

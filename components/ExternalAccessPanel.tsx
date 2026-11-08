@@ -13,6 +13,7 @@ import {
   todayIso,
 } from '@/app/services/externalDriverAccessService';
 import { type AccessCredentials, AccessCredentialsModal } from '@/components/AccessCredentialsModal';
+import { ExtendAccessOptions } from '@/components/ExtendAccessOptions';
 import { ExternalAccessChooser, NEW_ACCESS } from '@/components/ExternalAccessChooser';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
@@ -23,9 +24,6 @@ import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-
-/** Die Schnellwahl beim Verlängern — bei Stammpartnern der Normalfall. */
-export const EXTEND_DAY_OPTIONS = [3, 7, 14];
 
 interface ExternalAccessPanelProps {
   orderId: string;
@@ -250,20 +248,10 @@ export function ExternalAccessPanel({
           </View>
 
           {showExtend ? (
-            <View style={styles.buttonRow}>
-              {EXTEND_DAY_OPTIONS.map((days) => (
-                <FluidPressable
-                  key={days}
-                  style={styles.extendButton}
-                  onPress={() => handleExtend(assigned, days)}
-                  disabled={isBusy}
-                >
-                  <Text style={styles.extendButtonText}>
-                    {t('externalAccess', 'extendDays').replace('{days}', String(days))}
-                  </Text>
-                </FluidPressable>
-              ))}
-            </View>
+            <ExtendAccessOptions
+              onExtend={(days) => handleExtend(assigned, days)}
+              disabled={isBusy}
+            />
           ) : null}
         </>
       ) : (
@@ -369,8 +357,6 @@ const createStyles = (theme: AppTheme) => {
       fontWeight: '600',
       color: c.danger,
     },
-    extendButton: u.smallButton,
-    extendButtonText: u.smallButtonText,
     assignButton: {
       ...u.primaryButton,
       marginTop: Spacing.sm,

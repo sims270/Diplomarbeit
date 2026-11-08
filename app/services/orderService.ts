@@ -223,6 +223,18 @@ export async function updateOrder(id: string, data: OrderFields): Promise<Order>
   return rowToOrder(row);
 }
 
+// Braucht die Policy aus 20261108100000_boss_delete_orders.sql. Ohne sie
+// verwirft RLS das DELETE still — darum die gelöschten Zeilen zurückholen
+// und prüfen, dass wirklich eine weg ist.
+export async function deleteOrder(id: string): Promise<void> {
+  const { data, error } = await supabase.from('orders').delete().eq('id', id).select('id');
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('Der Auftrag konnte nicht gelöscht werden.');
+  }
+}
+
 export async function assignOrderToDriver(orderId: string, driverId: string): Promise<void> {
   const { error } = await supabase
     .from('orders')

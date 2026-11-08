@@ -249,3 +249,18 @@ export async function updateExternalOrder(
   if (error) throw toFriendlyError(error);
   return rowToOrder(row);
 }
+
+// Wie deleteOrder in orderService: Policy aus
+// 20261108100000_boss_delete_orders.sql, und ohne gelöschte Zeile ein Fehler.
+export async function deleteExternalOrder(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('external_orders')
+    .delete()
+    .eq('id', id)
+    .select('id');
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('Der Auftrag konnte nicht gelöscht werden.');
+  }
+}

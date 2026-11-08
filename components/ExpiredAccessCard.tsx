@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
-import { EXTEND_DAY_OPTIONS } from '@/components/ExternalAccessPanel';
+import { ExtendAccessOptions } from '@/components/ExtendAccessOptions';
 import { shadow, Spacing, Typography } from '@/constants/theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
@@ -86,19 +86,11 @@ export function ExpiredAccessCard({ accesses, onChanged }: ExpiredAccessCardProp
                 : `${access.orderCount} ${t('externalAccess', 'orderCountMany')}`
             }`}
           </Text>
+          <ExtendAccessOptions
+            onExtend={(days) => handleExtendAccess(access, days)}
+            disabled={busyAccessId === access.userId}
+          />
           <View style={styles.buttons}>
-            {EXTEND_DAY_OPTIONS.map((days) => (
-              <FluidPressable
-                key={days}
-                style={styles.button}
-                onPress={() => handleExtendAccess(access, days)}
-                disabled={busyAccessId === access.userId}
-              >
-                <Text style={styles.buttonText}>
-                  {t('externalAccess', 'extendDays').replace('{days}', String(days))}
-                </Text>
-              </FluidPressable>
-            ))}
             <FluidPressable
               style={styles.deleteButton}
               onPress={() => handleDeleteAccess(access)}
@@ -157,8 +149,6 @@ const createStyles = (theme: AppTheme) => {
       gap: Spacing.xs,
       marginTop: Spacing.sm,
     },
-    button: u.smallButton,
-    buttonText: u.smallButtonText,
     deleteButton: {
       ...u.smallButton,
       backgroundColor: c.dangerSoft,

@@ -2,12 +2,15 @@ import { useAuth } from '@/app/context/AuthContext';
 import { Driver, getDrivers } from '@/app/services/driverService';
 import {
   assignOrderToDriver,
+  deleteOrder,
   getOrderById,
   updateOrder,
   type Order,
   type OrderFields,
 } from '@/app/services/orderService';
 import { billingCompanyOf } from '@/app/services/invoiceService';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { DeleteOrderModal } from '@/components/DeleteOrderModal';
 import { InvoiceForm } from '@/components/InvoiceForm';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
@@ -35,6 +38,7 @@ export default function ChefOrderDetailScreen() {
   const [order, setOrder] = useState<Order | undefined | null>(undefined);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     loadOrder();
@@ -116,6 +120,14 @@ export default function ChefOrderDetailScreen() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!order) return;
+    await deleteOrder(order.id);
+    setShowDelete(false);
+    showAlert(t('common', 'success'), t('deleteOrder', 'deleted'));
+    router.back();
+  };
+
   if (order === undefined) {
     return (
       <View style={styles.container}>
@@ -143,9 +155,15 @@ export default function ChefOrderDetailScreen() {
       <Header title="TRANSLOG PRO" subtitle={t('chefOwnOrder', 'editHeaderSubtitle')} code="CH" />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        <FluidPressable style={styles.backLink} onPress={() => router.back()}>
-          <Text style={styles.backLinkText}>← {t('chefOrderDetail', 'back')}</Text>
-        </FluidPressable>
+        <View style={styles.topRow}>
+          <FluidPressable style={styles.backLink} onPress={() => router.back()}>
+            <Text style={styles.backLinkText}>← {t('chefOrderDetail', 'back')}</Text>
+          </FluidPressable>
+          <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
+            <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
+            <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
+          </FluidPressable>
+        </View>
 
         <View style={styles.orderHeaderCard}>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
@@ -287,6 +305,13 @@ export default function ChefOrderDetailScreen() {
           onSubmit={handleUpdate}
         />
       </ScrollView>
+
+      <DeleteOrderModal
+        visible={showDelete}
+        orderNr={order.orderNr}
+        onClose={() => setShowDelete(false)}
+        onDelete={handleDelete}
+      />
     </View>
   );
 }
@@ -304,6 +329,24 @@ const createStyles = (theme: AppTheme) => {
     contentInner: u.formColumn,
     backLink: u.backButton,
     backLinkText: u.backButtonText,
+    topRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    // Bewusst unauffällig: grau, ohne Fläche — Löschen ist die Ausnahme.
+    deleteLink: {
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xxs,
+      paddingLeft: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    deleteLinkText: {
+      ...Typography.subhead,
+      color: c.textSecondary,
+    },
     loading: {
       marginTop: Spacing.xl,
     },
