@@ -69,6 +69,11 @@ export default function EditDriverScreen() {
       return;
     }
 
+    if (newPassword.trim() && newPassword.trim().length < 8) {
+      showAlert(t('common', 'error'), t('editDriver', 'alertPasswordTooShort'));
+      return;
+    }
+
     setIsSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke('update-driver', {

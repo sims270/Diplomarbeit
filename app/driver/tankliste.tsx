@@ -174,10 +174,15 @@ export default function DriverTankListeScreen() {
       await loadEntries();
       showAlert(t('common', 'success'), t('tankliste', 'saveSuccess'));
     } catch (error) {
-      showAlert(
-        t('common', 'error'),
-        error instanceof Error ? error.message : t('tankliste', 'saveError')
-      );
+      // Die Datenbank meldet Plausibilitätsfehler als feste Kennung
+      // (20261119120000_tank_entry_plausibility.sql).
+      const message = error instanceof Error ? error.message : '';
+      const known: Record<string, string> = {
+        TANK_UNKNOWN_PLATE: t('tankliste', 'errorUnknownPlate'),
+        TANK_KM_JUMP: t('tankliste', 'errorKmJump'),
+        TANK_FUTURE_DATE: t('tankliste', 'errorFutureDate'),
+      };
+      showAlert(t('common', 'error'), known[message] ?? (message || t('tankliste', 'saveError')));
     } finally {
       setIsSaving(false);
     }

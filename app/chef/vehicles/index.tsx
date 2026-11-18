@@ -1,11 +1,9 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
-  addVehicle,
   getPickerlStatus,
   getServiceStatus,
   getVehicles,
-  MAX_YEAR_BUILT,
-  MIN_YEAR_BUILT,
   type Vehicle,
 } from '@/app/services/licensePlateService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -14,47 +12,36 @@ import { shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
-import { showAlert } from '@/lib/alert';
-import { isoToGerman } from '@/lib/dateFormat';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 /**
- * Die LKW-Übersicht des Chefs — Fahrzeugstamm und Kilometerstände an einem
- * Ort. Eintragen kann er hier, ändern nicht: Das Kennzeichen ist der
- * Schlüssel, über den die Tankungen der Fahrer dem Fahrzeug zugeordnet
- * werden (siehe die Migration), und ein nachträglich geändertes
- * Kennzeichen risse diese Zuordnung auseinander.
+ * Die LKW-Übersicht des Chefs, aufgebaut wie die Fahrerverwaltung
+ * (app/chef/drivers/index.tsx). Eingetragen wird auf einer eigenen Seite
+ * (new.tsx), das Kennzeichen lässt sich danach nicht mehr ändern: Darüber
+ * werden die Tankungen der Fahrer dem Fahrzeug zugeordnet.
  *
  * Der Kilometerstand wird bewusst NICHT eingetippt. Er kommt aus der
- * Tankliste und wird von einem Trigger nachgezogen, sobald ein Fahrer
- * tankt. Deshalb gibt es hier kein km-Feld — nur die Anzeige.
+ * Tankliste und wird von einem Trigger nachgezogen, sobald ein Fahrer tankt.
  */
 export default function ChefVehiclesScreen() {
   const styles = useThemedStyles(createStyles);
-  const { c, scheme, columns } = useAppTheme();
+  const { c, columns } = useAppTheme();
   const router = useRouter();
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [newPlate, setNewPlate] = useState('');
-  const [newModel, setNewModel] = useState('');
-  const [newYear, setNewYear] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
   // Nicht nur ein Flag, sondern die Meldung von Supabase: Eine fehlende
   // Spalte und eine abgelehnte RLS-Policy sehen sonst gleich aus, und
   // "konnte nicht geladen werden" sagt dann nichts.
@@ -92,55 +79,6 @@ export default function ChefVehiclesScreen() {
     }, [loadVehicles])
   );
 
-  const handleAdd = async () => {
-    const plate = newPlate.trim().toUpperCase();
-    if (!plate) {
-      showAlert(t('common', 'error'), t('vehicles', 'alertEmptyPlate'));
-      return;
-    }
-
-    if (vehicles.some((vehicle) => vehicle.plate.toUpperCase() === plate)) {
-      showAlert(t('common', 'error'), `"${plate}" ${t('vehicles', 'alertDuplicate')}`);
-      return;
-    }
-
-    // Das Baujahr ist optional — ein leeres Feld heißt "weiß ich gerade
-    // nicht", und der Chef soll den LKW trotzdem eintragen können. Steht
-    // aber etwas drin, muss es eine plausible Jahreszahl sein: Ein
-    // Vertipper wie 20019 ginge sonst als Baujahr durch.
-    const year = newYear.trim();
-    let yearBuilt: number | null = null;
-    if (year) {
-      const parsed = Number(year);
-      if (
-        !Number.isInteger(parsed) ||
-        parsed < MIN_YEAR_BUILT ||
-        parsed > MAX_YEAR_BUILT
-      ) {
-        showAlert(t('common', 'error'), t('vehicles', 'alertInvalidYear'));
-        return;
-      }
-      yearBuilt = parsed;
-    }
-
-    setIsAdding(true);
-    try {
-      await addVehicle({ plate, model: newModel, yearBuilt });
-      setNewPlate('');
-      setNewModel('');
-      setNewYear('');
-      await loadVehicles();
-      showAlert(t('common', 'success'), `"${plate}" ${t('vehicles', 'alertAdded')}`);
-    } catch (error) {
-      showAlert(
-        t('common', 'error'),
-        error instanceof Error ? error.message : t('vehicles', 'alertAddFailed')
-      );
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadVehicles();
@@ -150,103 +88,54 @@ export default function ChefVehiclesScreen() {
     <View style={styles.container}>
       <Header title="TRANSLOG PRO" subtitle={t('vehicles', 'headerSubtitle')} code="CH" />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.content}>
-          <FluidPressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
-          </FluidPressable>
+      <View style={styles.content}>
+        <FluidPressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
+        </FluidPressable>
 
-          {!isOfflineMode && (
-            <View style={styles.addCard}>
-              <Text style={styles.addTitle}>{t('vehicles', 'addSectionTitle')}</Text>
-              <TextInput
-                placeholderTextColor={c.placeholder}
-                keyboardAppearance={scheme}
-                style={styles.input}
-                value={newPlate}
-                onChangeText={setNewPlate}
-                placeholder={t('vehicles', 'addPlaceholder')}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                editable={!isAdding}
-              />
-              <TextInput
-                placeholderTextColor={c.placeholder}
-                keyboardAppearance={scheme}
-                style={[styles.input, styles.inputSpaced]}
-                value={newModel}
-                onChangeText={setNewModel}
-                placeholder={t('vehicles', 'modelPlaceholder')}
-                editable={!isAdding}
-              />
-              <View style={styles.addRow}>
-                <TextInput
-                  placeholderTextColor={c.placeholder}
-                  keyboardAppearance={scheme}
-                  style={[styles.input, styles.inputSpaced, styles.addInput]}
-                  value={newYear}
-                  onChangeText={setNewYear}
-                  placeholder={t('vehicles', 'yearPlaceholder')}
-                  keyboardType="numeric"
-                  maxLength={4}
-                  editable={!isAdding}
-                  onSubmitEditing={handleAdd}
-                />
-                <FluidPressable
-                  style={[styles.addButton, isAdding && styles.buttonDisabled]}
-                  onPress={handleAdd}
-                  disabled={isAdding}
-                >
-                  {isAdding ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.addButtonText}>{t('vehicles', 'addButton')}</Text>
-                  )}
-                </FluidPressable>
-              </View>
-              <Text style={styles.hint}>{t('vehicles', 'hint')}</Text>
-            </View>
-          )}
-
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             {t('vehicles', 'title')} ({vehicles.length})
           </Text>
+          {!isOfflineMode && (
+            <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/vehicles/new')}>
+              <Text style={styles.addButtonText}>{t('vehicles', 'newButton')}</Text>
+            </FluidPressable>
+          )}
+        </View>
 
-          {isOfflineMode ? (
-            <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
-          ) : isLoading ? (
-            <ActivityIndicator style={styles.loading} color={c.tint} />
-          ) : loadError !== null ? (
-            <>
-              <Text style={styles.errorText}>{t('vehicles', 'loadFailed')}</Text>
-              {!!loadError && <Text style={styles.errorDetail}>{loadError}</Text>}
-            </>
-          ) : vehicles.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>{t('vehicles', 'emptyState')}</Text>
-              <Text style={styles.emptyStateSub}>{t('vehicles', 'emptyStateSub')}</Text>
-            </View>
-          ) : (
-            <FlatList
-              // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
-              key={`grid-${columns}`}
-              numColumns={columns}
-              columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
-              data={vehicles}
-              keyExtractor={(item) => item.plate}
-              keyboardShouldPersistTaps="handled"
-              refreshControl={
-                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-              }
-              renderItem={({ item }) => (
+        {isOfflineMode ? (
+          <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
+        ) : isLoading ? (
+          <ActivityIndicator style={styles.loading} color={c.tint} />
+        ) : loadError !== null ? (
+          <>
+            <Text style={styles.errorText}>{t('vehicles', 'loadFailed')}</Text>
+            {!!loadError && <Text style={styles.errorDetail}>{loadError}</Text>}
+          </>
+        ) : vehicles.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>{t('vehicles', 'emptyState')}</Text>
+            <Text style={styles.emptyStateSub}>{t('vehicles', 'emptyStateSub')}</Text>
+          </View>
+        ) : (
+          <FlatList
+            // Auf Laptop/Desktop als Kartenraster; key erzwingt Neuaufbau beim Spaltenwechsel
+            key={`grid-${columns}`}
+            numColumns={columns}
+            columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
+            data={vehicles}
+            keyExtractor={(item) => item.plate}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+            }
+            renderItem={({ item }) => {
+              const isRetired = item.retiredAt !== null;
+              const km =
+                item.kmStand === null ? '—' : `${item.kmStand.toLocaleString('de-DE')} km`;
+              return (
                 <FluidPressable
-                  style={[
-                    styles.vehicleCard,
-                    item.retiredAt !== null && styles.vehicleCardRetired,
-                  ]}
+                  style={styles.vehicleCard}
                   onPress={() =>
                     router.push({
                       pathname: '/chef/vehicles/[id]',
@@ -266,10 +155,17 @@ export default function ChefVehiclesScreen() {
                     })
                   }
                 >
-                  <View style={styles.vehicleHeader}>
-                    <View style={styles.vehicleTitle}>
-                      <Text style={styles.vehiclePlate}>{item.plate}</Text>
-                      {item.retiredAt !== null && (
+                  <View style={[styles.avatar, isRetired && styles.avatarRetired]}>
+                    <MaterialIcons
+                      name="local-shipping"
+                      size={22}
+                      color={isRetired ? c.textSecondary : c.onTint}
+                    />
+                  </View>
+                  <View style={styles.info}>
+                    <View style={styles.titleRow}>
+                      <Text style={styles.plate}>{item.plate}</Text>
+                      {isRetired && (
                         <View style={styles.retiredBadge}>
                           <Text style={styles.retiredBadgeText}>
                             {t('vehicles', 'retiredBadge')}
@@ -278,58 +174,32 @@ export default function ChefVehiclesScreen() {
                       )}
                       {/* Am ausgeflotteten LKW wäre die Meldung sinnlos —
                           der fährt nicht mehr. */}
-                      {item.retiredAt === null && getServiceStatus(item)?.isDue && (
-                        <View style={styles.serviceBadge}>
-                          <Text style={styles.serviceBadgeText}>
+                      {!isRetired && getServiceStatus(item)?.isDue && (
+                        <View style={styles.dueBadge}>
+                          <Text style={styles.dueBadgeText}>
                             {t('vehicles', 'serviceDueBadge')}
                           </Text>
                         </View>
                       )}
-                      {item.retiredAt === null && getPickerlStatus(item.pickerlDueDate)?.isDue && (
-                        <View style={styles.serviceBadge}>
-                          <Text style={styles.serviceBadgeText}>
+                      {!isRetired && getPickerlStatus(item.pickerlDueDate)?.isDue && (
+                        <View style={styles.dueBadge}>
+                          <Text style={styles.dueBadgeText}>
                             {t('vehicles', 'pickerlDueBadge')}
                           </Text>
                         </View>
                       )}
                     </View>
-                    <Text style={styles.editLabel}>{t('vehicles', 'editButton')} ›</Text>
-                  </View>
-
-                  <View style={styles.vehicleRow}>
-                    <Text style={styles.vehicleLabel}>{t('vehicles', 'modelLabel')}</Text>
-                    <Text style={styles.vehicleText}>
-                      {item.model || t('vehicles', 'notSet')}
+                    <Text style={styles.infoLine} numberOfLines={1}>
+                      {`${item.model || t('vehicles', 'notSet')} · ${km}`}
                     </Text>
                   </View>
-
-                  <View style={styles.vehicleRow}>
-                    <Text style={styles.vehicleLabel}>{t('vehicles', 'yearLabel')}</Text>
-                    <Text style={styles.vehicleText}>
-                      {item.yearBuilt ?? t('vehicles', 'notSet')}
-                    </Text>
-                  </View>
-
-                  <View style={styles.vehicleRow}>
-                    <Text style={styles.vehicleLabel}>{t('vehicles', 'kmLabel')}</Text>
-                    <Text style={styles.vehicleValue}>
-                      {item.kmStand === null
-                        ? '—'
-                        : `${item.kmStand.toLocaleString('de-DE')} km`}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.vehicleMeta}>
-                    {item.kmEntryDate
-                      ? `${t('vehicles', 'kmFrom')} ${isoToGerman(item.kmEntryDate)}`
-                      : t('vehicles', 'kmNone')}
-                  </Text>
+                  <Text style={styles.editLabel}>{t('vehicles', 'editButton')} ›</Text>
                 </FluidPressable>
-              )}
-            />
-          )}
-        </View>
-      </KeyboardAvoidingView>
+              );
+            }}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -339,64 +209,31 @@ const createStyles = (theme: AppTheme) => {
   const u = uiStyles(theme);
   return StyleSheet.create({
     container: u.screen,
-    flex: {
-      flex: 1,
-    },
     content: {
       ...u.column,
       flex: 1,
     },
     backButton: u.backButton,
     backButtonText: u.backButtonText,
-    addCard: {
-      ...u.card,
-      marginBottom: Spacing.lg,
-    },
-    addTitle: {
-      ...u.sectionTitle,
-      marginTop: 0,
-      paddingHorizontal: 0,
-    },
-    addRow: {
+    sectionHeader: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
-      gap: Spacing.xs,
-    },
-    input: {
-      ...u.input,
-      marginBottom: 0,
-      backgroundColor: c.surfaceSecondary,
-      borderColor: 'transparent',
-    },
-    inputSpaced: {
-      marginTop: Spacing.xs,
-    },
-    addInput: {
-      flex: 1,
-    },
-    addButton: {
-      ...u.primaryButton,
-      minHeight: 48,
-      paddingHorizontal: Spacing.md + 2,
-    },
-    addButtonText: u.primaryButtonText,
-    buttonDisabled: u.disabled,
-    hint: {
-      ...u.hint,
-      marginTop: Spacing.sm,
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
     },
     sectionTitle: {
       ...Typography.title2,
       color: c.text,
-      marginBottom: Spacing.sm,
+      flexShrink: 1,
     },
+    addButton: u.smallButton,
+    addButtonText: u.smallButtonText,
     loading: {
-      marginTop: Spacing.lg,
+      marginTop: Spacing.xl,
     },
-    errorText: {
-      ...Typography.subhead,
-      color: c.textSecondary,
-    },
+    errorText: u.errorText,
     errorDetail: {
       ...Typography.footnote,
       color: c.textSecondary,
@@ -410,33 +247,49 @@ const createStyles = (theme: AppTheme) => {
     vehicleCard: {
       ...u.gridItem,
       ...u.card,
-      marginBottom: Spacing.sm,
-      borderLeftWidth: 4,
-      borderLeftColor: c.tintFill,
+      minHeight: 64,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.xs,
       ...shadow(1, scheme),
     },
-    vehicleCardRetired: {
-      borderLeftColor: c.textTertiary,
-    },
-    vehicleHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.tintFill,
+      justifyContent: 'center',
       alignItems: 'center',
-      gap: Spacing.xs,
-      marginBottom: Spacing.xs,
+      marginRight: Spacing.sm,
     },
-    vehicleTitle: {
+    avatarRetired: {
+      backgroundColor: c.surfaceTertiary,
+    },
+    info: {
+      flex: 1,
+    },
+    titleRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
       gap: Spacing.xs,
-      flex: 1,
     },
-    serviceBadge: {
+    plate: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    infoLine: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+    dueBadge: {
       ...u.badge,
       backgroundColor: c.tintFill,
     },
-    serviceBadgeText: u.badgeText,
+    dueBadgeText: u.badgeText,
     retiredBadge: {
       ...u.badge,
       backgroundColor: c.surfaceTertiary,
@@ -445,40 +298,11 @@ const createStyles = (theme: AppTheme) => {
       ...u.badgeText,
       color: c.textSecondary,
     },
-    vehiclePlate: {
-      ...Typography.headline,
-      color: c.text,
-    },
     editLabel: {
       ...Typography.subhead,
-      fontWeight: '600',
       color: c.tint,
-    },
-    vehicleText: {
-      ...Typography.subhead,
       fontWeight: '600',
-      color: c.text,
-    },
-    vehicleRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: Spacing.md,
-      paddingVertical: 2,
-    },
-    vehicleLabel: {
-      ...Typography.subhead,
-      color: c.textSecondary,
-    },
-    vehicleValue: {
-      ...Typography.headline,
-      color: c.text,
-      fontVariant: ['tabular-nums'],
-    },
-    vehicleMeta: {
-      ...Typography.footnote,
-      color: c.textSecondary,
-      marginTop: Spacing.xxs,
+      paddingLeft: Spacing.xs,
     },
   });
 };

@@ -7,6 +7,7 @@ export default function TrailersLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, ...stackOptions }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="new" />
       <Stack.Screen name="[id]" />
     </Stack>
   );

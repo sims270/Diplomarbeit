@@ -184,11 +184,16 @@ export default function DriverOrderDetailScreen() {
           setOrder(await completeOrder(order.id, odometer));
           showAlert(t('common', 'success'), t('driverOrderDetail', 'alertCompleted'));
         } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : t('driverOrderDetail', 'alertCompleteFailed');
-          showAlert(t('common', 'error'), message);
+          // Feste Kennungen aus 20261119130000_complete_order_once.sql.
+          const message = error instanceof Error ? error.message : '';
+          const known: Record<string, string> = {
+            ORDER_ALREADY_COMPLETED: t('driverOrderDetail', 'alertAlreadyCompleted'),
+            ORDER_KM_TOO_HIGH: t('driverOrderDetail', 'alertKmTooHigh'),
+          };
+          showAlert(
+            t('common', 'error'),
+            known[message] ?? (message || t('driverOrderDetail', 'alertCompleteFailed'))
+          );
         } finally {
           setIsCompleting(false);
         }

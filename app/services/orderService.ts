@@ -1,3 +1,5 @@
+import { deleteOrderWithDocuments } from '@/app/services/orderDeletionService';
+import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -169,13 +171,16 @@ function toFriendlyError(error: { code?: string; message: string }): Error {
 }
 
 export async function getAllOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const rows = await fetchAll<unknown>((from, to) =>
+    supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
 
-  if (error) throw new Error(error.message);
-  return data.map(rowToOrder);
+  return rows.map(rowToOrder);
 }
 
 export async function getOrderById(id: string): Promise<Order | undefined> {
@@ -223,16 +228,8 @@ export async function updateOrder(id: string, data: OrderFields): Promise<Order>
   return rowToOrder(row);
 }
 
-// Braucht die Policy aus 20261108100000_boss_delete_orders.sql. Ohne sie
-// verwirft RLS das DELETE still — darum die gelöschten Zeilen zurückholen
-// und prüfen, dass wirklich eine weg ist.
 export async function deleteOrder(id: string): Promise<void> {
-  const { data, error } = await supabase.from('orders').delete().eq('id', id).select('id');
-
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
-    throw new Error('Der Auftrag konnte nicht gelöscht werden.');
-  }
+  await deleteOrderWithDocuments(id, false);
 }
 
 export async function assignOrderToDriver(orderId: string, driverId: string): Promise<void> {

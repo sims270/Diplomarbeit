@@ -14,6 +14,7 @@
 // Deploy: supabase functions deploy delete-boss
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
 Deno.serve(async (req) => {
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     .eq("role", "boss");
 
   if (countError) {
-    return json({ error: countError.message }, 400);
+    return internalError("delete-boss", countError);
   }
   if ((count ?? 0) <= 1) {
     return json({ error: "CANNOT_DELETE_LAST_BOSS" }, 400);
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return json({ error: deleteError.message }, 400);
+    return internalError("delete-boss", deleteError);
   }
 
   return json({ success: true });

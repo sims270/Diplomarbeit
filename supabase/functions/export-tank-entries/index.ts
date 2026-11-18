@@ -19,6 +19,8 @@
 
 import ExcelJS from "npm:exceljs@4.4.0";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
+import { fetchAll } from "../_shared/fetch-all.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
 interface TankEntryRow {
@@ -361,22 +363,26 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  const { data, error: queryError } = await adminClient
-    .from("tank_entries")
-    .select(
-      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_adblue_per_liter, price_per_liter, price_total",
-    )
-    .order("license_plate_key", { ascending: true })
-    .order("entry_date", { ascending: true })
-    // Zwei Tankungen am selben Tag: der km-Stand legt fest, welche die
-    // erste ist — die Auswertung rechnet ab der ersten Volltankung.
-    .order("km_stand", { ascending: true });
-
-  if (queryError) {
-    return json({ error: queryError.message }, 400);
+  let rows: TankEntryRow[];
+  try {
+    rows = await fetchAll<TankEntryRow>((from, to) =>
+      adminClient
+        .from("tank_entries")
+        .select(
+          "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_adblue_per_liter, price_per_liter, price_total",
+        )
+        .order("license_plate_key", { ascending: true })
+        .order("entry_date", { ascending: true })
+        // Zwei Tankungen am selben Tag: der km-Stand legt fest, welche die
+        // erste ist — die Auswertung rechnet ab der ersten Volltankung.
+        .order("km_stand", { ascending: true })
+        // Eindeutig, damit beim Blättern keine Zeile verrutscht.
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+  } catch (queryError) {
+    return internalError("export-tank-entries", queryError);
   }
-
-  const rows = (data ?? []) as TankEntryRow[];
 
   // Gruppiert wird über den normalisierten Schlüssel, damit "GR400FX" und
   // "gr 400 fx" auf demselben Blatt landen.

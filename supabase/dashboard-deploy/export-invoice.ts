@@ -82,6 +82,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --- aus _shared/verify-boss.ts ---------------------------------------------
 interface VerifyBossResult {
   caller?: User;
@@ -128,7 +138,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -503,8 +514,8 @@ async function fetchOrders(adminClient: SupabaseClient, orderIds: string[]): Pro
     adminClient.from("external_orders").select(ORDER_COLUMNS).in("id", orderIds),
   ]);
 
-  if (own.error) throw new HttpError(own.error.message, 400);
-  if (external.error) throw new HttpError(external.error.message, 400);
+  if (own.error) throw dbFailure(own.error);
+  if (external.error) throw dbFailure(external.error);
 
   return [
     ...((own.data ?? []) as unknown as Omit<OrderRow, "external">[]).map((o) => ({ ...o, external: false })),
@@ -591,8 +602,8 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
     adminClient.from("order_prices").select("order_id, preis").in("order_id", emptyItemIds),
     adminClient.from("external_orders").select("id, customer_price").in("id", emptyItemIds),
   ]);
-  if (ownPrices.error) throw new HttpError(ownPrices.error.message, 400);
-  if (externalPrices.error) throw new HttpError(externalPrices.error.message, 400);
+  if (ownPrices.error) throw dbFailure(ownPrices.error);
+  if (externalPrices.error) throw dbFailure(externalPrices.error);
   const prices = new Map<string, string | number | null>([
     ...((ownPrices.data ?? []) as { order_id: string; preis: string | number | null }[])
       .map((row): [string, string | number | null] => [row.order_id, row.preis]),
@@ -607,7 +618,7 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
       .from("invoice_items")
       .update(itemPrefill(order, prices.get(item.order_id) ?? null))
       .eq("id", item.id);
-    if (itemError) throw new HttpError(itemError.message, 400);
+    if (itemError) throw dbFailure(itemError);
   }
 
   const firstOrder = items[0] ? orders.get(items[0].order_id) : undefined;
@@ -638,7 +649,7 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
         zahlungsziel: invoice.zahlungsziel ?? ZAHLUNGSZIEL,
       })
       .eq("id", invoiceId);
-    if (headerError) throw new HttpError(headerError.message, 400);
+    if (headerError) throw dbFailure(headerError);
   }
 }
 
@@ -655,8 +666,8 @@ async function loadInvoiceById(
       .order("reihenfolge", { ascending: true }),
   ]);
 
-  if (invoiceResult.error) throw new HttpError(invoiceResult.error.message, 400);
-  if (itemsResult.error) throw new HttpError(itemsResult.error.message, 400);
+  if (invoiceResult.error) throw dbFailure(invoiceResult.error);
+  if (itemsResult.error) throw dbFailure(itemsResult.error);
   if (!invoiceResult.data) throw new HttpError("Rechnung nicht gefunden.", 404);
 
   // Die eingebettete Auftragsnummer flach machen — der Client soll nicht
@@ -707,7 +718,7 @@ async function handleLoad(adminClient: SupabaseClient, orderId: string) {
     .or(`order_id.eq.${orderId},external_order_id.eq.${orderId}`)
     .maybeSingle();
 
-  if (error) throw new HttpError(error.message, 400);
+  if (error) throw dbFailure(error);
   if (!data) return { invoice: null, items: [] };
 
   const invoiceId = (data as { invoice_id: string }).invoice_id;
@@ -715,6 +726,12 @@ async function handleLoad(adminClient: SupabaseClient, orderId: string) {
   // unbefüllte Felder haben — beim Öffnen nachholen.
   await prefillInvoice(adminClient, invoiceId);
   return await loadInvoiceById(adminClient, invoiceId);
+}
+
+// Datenbankfehler nur ins Log, der Client bekommt eine allgemeine Meldung.
+function dbFailure(cause: unknown): HttpError {
+  console.error("[export-invoice]", cause);
+  return new HttpError(INTERNAL_ERROR_MESSAGE, 500);
 }
 
 async function handleCreate(adminClient: SupabaseClient, orderIds: string[]) {
@@ -732,7 +749,7 @@ async function handleCreate(adminClient: SupabaseClient, orderIds: string[]) {
     throw new HttpError(
       alreadyBilled(error.message)
         ? "Mindestens einer der Aufträge steht bereits auf einer Rechnung."
-        : `Rechnung konnte nicht angelegt werden: ${error.message}`,
+        : dbFailure(error).message,
       409,
     );
   }
@@ -765,7 +782,7 @@ async function handleAddItems(
     throw new HttpError(
       alreadyBilled(error.message)
         ? "Mindestens einer der Aufträge steht bereits auf einer Rechnung."
-        : error.message,
+        : dbFailure(error).message,
       409,
     );
   }
@@ -790,7 +807,7 @@ async function handleRemoveItem(
   }
 
   const { error } = await adminClient.from("invoice_items").delete().eq("id", itemId);
-  if (error) throw new HttpError(error.message, 400);
+  if (error) throw dbFailure(error);
 
   return await loadInvoiceById(adminClient, invoiceId);
 }
@@ -1070,6 +1087,6 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     if (e instanceof HttpError) return json({ error: e.message }, e.status);
-    return json({ error: e instanceof Error ? e.message : "Rechnung konnte nicht verarbeitet werden." }, 400);
+    return internalError("export-invoice", e);
   }
 });

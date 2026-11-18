@@ -15,42 +15,44 @@ import {
   externalOrderTileStatus,
   getAllExternalOrders,
 } from '../../services/externalOrderService';
-import { currentMonth, isInMonth } from '@/lib/month';
-import { MonthPicker } from '@/components/MonthPicker';
+import {
+  ALL_PERIOD,
+  formatPeriod,
+  isOrderInPeriod,
+  TODAY_PERIOD,
+} from '@/lib/orderPeriod';
+import { DashboardOrders } from '@/components/DashboardOrders';
+import { OrderPeriodFilter } from '@/components/OrderPeriodFilter';
 import { ReminderGroups } from '@/components/ReminderGroups';
-import { TodayOrders } from '@/components/TodayOrders';
 import { type Driver, getDrivers } from '../../services/driverService';
 import { refreshReminders, useReminders } from '@/hooks/use-reminders';
 
 export default function ChefDashboardScreen() {
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
   const { isLoading, isAuthenticated, isOfflineMode } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [externalOrders, setExternalOrders] = useState<ExternalOrder[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
-  // Die Kacheln zählen nur Aufträge des gewählten Monats — standardmäßig des
-  // laufenden. Monat eines Auftrags: Ladedatum, sonst Entladedatum, wie beim
-  // Fahrer und in der Auftragsliste.
-  const [month, setMonth] = useState(currentMonth);
+  // Kacheln und Auftragsliste zeigen denselben Zeitraum, beim Öffnen den
+  // heutigen Tag (siehe lib/orderPeriod.ts).
+  const [period, setPeriod] = useState(TODAY_PERIOD);
   const stats = useMemo(() => {
-    const inMonth = orders.filter((o) => isInMonth(o.loadingDate || o.unloadingDate, month));
+    const own = orders.filter((o) => isOrderInPeriod(o, period));
     // Fremdaufträge zählen in denselben Kacheln wie die eigenen.
-    const externalInMonth = externalOrders.filter((o) =>
-      isInMonth(o.loadingDate || o.unloadingDate, month)
-    );
+    const external = externalOrders.filter((o) => isOrderInPeriod(o, period));
     const count = (status: 'pending' | 'assigned' | 'completed') =>
-      inMonth.filter((o) => o.status === status).length +
-      externalInMonth.filter((o) => externalOrderTileStatus(o) === status).length;
+      own.filter((o) => o.status === status).length +
+      external.filter((o) => externalOrderTileStatus(o) === status).length;
     return {
       pending: count('pending'),
       assigned: count('assigned'),
       completed: count('completed'),
     };
-  }, [orders, externalOrders, month]);
+  }, [orders, externalOrders, period]);
   // Tankliste und Umsatzliste haben einen eigenen Tab (app/chef/(tabs)/tank.tsx).
 
   // Erinnerungen (Service, Pickerl, Genehmigungen, abgelaufene Zugänge)
@@ -97,9 +99,16 @@ export default function ChefDashboardScreen() {
     }, [isAuthenticated, loadDrivers])
   );
   // Tippen auf eine Kachel öffnet die Auftragsliste mit genau diesen
-  // Aufträgen: derselbe Status, derselbe Monat.
+  // Aufträgen: derselbe Status, derselbe Zeitraum.
   const openOrders = (status: 'pending' | 'assigned' | 'completed') =>
-    router.push({ pathname: '/chef/order', params: { status, month } });
+    router.push({ pathname: '/chef/order', params: { status, period } });
+
+  const ordersTitle =
+    period === TODAY_PERIOD
+      ? t('chefDashboard', 'ordersToday')
+      : period === ALL_PERIOD
+        ? t('chefDashboard', 'ordersAll')
+        : `${t('chefDashboard', 'ordersInPeriod')} · ${formatPeriod(period, language).toUpperCase()}`;
 
   const loadStats = async () => {
     try {
@@ -135,7 +144,7 @@ export default function ChefDashboardScreen() {
         {/* Die Fahrerverwaltung erreicht der Chef über den 👤-Button im
             Header (components/header.tsx) — hier stand sie doppelt. */}
         <View style={styles.monthBar}>
-          <MonthPicker month={month} onChange={setMonth} />
+          <OrderPeriodFilter period={period} onChange={setPeriod} />
         </View>
 
         <View style={styles.statusContainer}>
@@ -161,7 +170,7 @@ export default function ChefDashboardScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('chefDashboard', 'ordersToday')}</Text>
+            <Text style={styles.sectionTitle}>{ordersTitle}</Text>
             <View style={styles.sectionHeaderButtons}>
               <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/order')}>
                 <Text style={styles.addButtonText}>{t('chefDashboard', 'addOrderButton')}</Text>
@@ -174,7 +183,14 @@ export default function ChefDashboardScreen() {
               </FluidPressable>
             </View>
           </View>
-          <TodayOrders orders={orders} drivers={drivers} />
+          {/* key: Beim Wechsel des Zeitraums beginnt die Liste wieder oben. */}
+          <DashboardOrders
+            key={period}
+            orders={orders}
+            externalOrders={externalOrders}
+            drivers={drivers}
+            period={period}
+          />
         </View>
 
         {/* Neue Erinnerungen ganz unten — Aufträge und Rechnungen bleiben

@@ -13,6 +13,10 @@ export default function TabLayout() {
   const palette = Colors[colorScheme ?? "light"];
   const { user, isLoading } = useAuth();
 
+  if (!isLoading && !user) {
+    return <Redirect href="/login" />;
+  }
+
   // Nur eigene Fahrer — ein fremder Fahrer hätte hier Tankliste und
   // Profil vor sich, die für ihn nicht gedacht sind.
   if (!isLoading && user && user.role !== "driver") {

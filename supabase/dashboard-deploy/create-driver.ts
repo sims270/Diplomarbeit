@@ -41,6 +41,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 const ACCOUNT_EMAIL_DOMAIN = "accounts.translogpro.internal";
 const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,32}$/;
@@ -95,7 +105,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -126,8 +137,11 @@ Deno.serve(async (req) => {
   }
 
   const { username, password, licensePlate } = body;
-  if (!username || !password) {
+  if (typeof username !== "string" || typeof password !== "string" || !username || !password) {
     return json({ error: "username and password are required" }, 400);
+  }
+  if (licensePlate !== undefined && licensePlate !== null && typeof licensePlate !== "string") {
+    return json({ error: "License plate must be text" }, 400);
   }
   if (!isValidUsername(username)) {
     return json(
@@ -135,8 +149,8 @@ Deno.serve(async (req) => {
       400
     );
   }
-  if (password.length < 6) {
-    return json({ error: "Password must be at least 6 characters" }, 400);
+  if (password.length < 8) {
+    return json({ error: "Password must be at least 8 characters" }, 400);
   }
 
   // Das Kennzeichen ist optional: Der Chef legt einen Fahrer oft an, bevor
@@ -149,13 +163,12 @@ Deno.serve(async (req) => {
     return json({ error: "License plate must be at most 15 characters" }, 400);
   }
 
-  // Die Rolle steht in public.profiles, nicht im user_metadata — das könnte
-  // der Fahrer selbst ändern.
+  // Rolle und Kennzeichen stehen in public.profiles, nicht im user_metadata —
+  // das könnte der Fahrer selbst ändern.
   const { data, error: createError } = await adminClient.auth.admin.createUser({
     email: usernameToEmail(username),
     password,
     email_confirm: true,
-    user_metadata: { license_plate: plate },
   });
 
   if (createError || !data.user) {
@@ -163,7 +176,8 @@ Deno.serve(async (req) => {
     // from the boss's point of view, that's a taken username.
     const message = createError?.message.toLowerCase().includes("already")
       ? "That username is already taken"
-      : createError?.message ?? "Could not create user";
+      : "Could not create user";
+    console.error("[create-driver]", createError);
     return json({ error: message }, 400);
   }
 
@@ -171,11 +185,11 @@ Deno.serve(async (req) => {
   // Konto wieder entfernen, statt einen halb angelegten Fahrer zu hinterlassen.
   const { error: profileError } = await adminClient
     .from("profiles")
-    .insert({ id: data.user.id, role: "driver" });
+    .insert({ id: data.user.id, role: "driver", license_plate: plate || null });
 
   if (profileError) {
     await adminClient.auth.admin.deleteUser(data.user.id);
-    return json({ error: profileError.message }, 500);
+    return internalError("create-driver", profileError);
   }
 
   return json({ success: true, userId: data.user.id });

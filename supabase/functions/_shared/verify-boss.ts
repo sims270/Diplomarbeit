@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient, type User } from "jsr:@supabase/supabase-js@2";
+import { INTERNAL_ERROR_MESSAGE } from "./errors.ts";
 
 interface VerifyBossResult {
   caller?: User;
@@ -57,7 +58,8 @@ export async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {

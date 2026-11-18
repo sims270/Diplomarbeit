@@ -46,6 +46,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------- _shared/verify-boss
 interface VerifyBossResult {
   caller?: User;
@@ -104,7 +114,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {
@@ -162,7 +173,7 @@ Deno.serve(async (req) => {
     .eq("role", "boss");
 
   if (countError) {
-    return json({ error: countError.message }, 400);
+    return internalError("delete-boss", countError);
   }
   if ((count ?? 0) <= 1) {
     return json({ error: "CANNOT_DELETE_LAST_BOSS" }, 400);
@@ -170,7 +181,7 @@ Deno.serve(async (req) => {
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return json({ error: deleteError.message }, 400);
+    return internalError("delete-boss", deleteError);
   }
 
   return json({ success: true });

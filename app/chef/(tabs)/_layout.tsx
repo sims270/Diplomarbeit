@@ -9,9 +9,9 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useTranslation } from "@/hooks/use-translation";
 
-// Eigene Gruppe statt Tabs direkt in app/chef/_layout.tsx: Fahrer, LKW und
-// Aufträge öffnen sich im Stack darüber und sollen die Tab-Leiste nicht
-// unter jeder Detailseite mitschleppen.
+// Die sichtbare Leiste ist components/ChefTabBar.tsx in app/chef/_layout.tsx:
+// Fahrer, LKW und Aufträge öffnen sich im Stack darüber und würden die Leiste
+// dieser Tabs verdecken.
 export default function ChefTabLayout() {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? "light"];
@@ -19,6 +19,7 @@ export default function ChefTabLayout() {
 
   return (
     <Tabs
+      tabBar={() => null}
       screenOptions={{
         tabBarActiveTintColor: palette.tint,
         tabBarInactiveTintColor: palette.tabIconDefault,

@@ -12,6 +12,7 @@
 //   supabase functions deploy create-boss
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { isValidUsername, usernameToEmail } from "../_shared/email.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -62,7 +63,8 @@ Deno.serve(async (req) => {
     // Sicht des Chefs ist das ein vergebener Benutzername.
     const message = createError?.message.toLowerCase().includes("already")
       ? "That username is already taken"
-      : createError?.message ?? "Could not create user";
+      : "Could not create user";
+    console.error("[create-boss]", createError);
     return json({ error: message }, 400);
   }
 
@@ -74,7 +76,7 @@ Deno.serve(async (req) => {
 
   if (profileError) {
     await adminClient.auth.admin.deleteUser(data.user.id);
-    return json({ error: profileError.message }, 500);
+    return internalError("create-boss", profileError);
   }
 
   return json({ success: true, userId: data.user.id });

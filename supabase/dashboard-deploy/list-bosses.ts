@@ -38,6 +38,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 // Keep this identical to lib/username.ts on the app side (React Native /
 // Node runtime) — both must derive the exact same synthetic email for the
@@ -117,7 +127,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {
@@ -146,7 +157,7 @@ Deno.serve(async (req) => {
     perPage: 1000,
   });
   if (listError) {
-    return json({ error: listError.message }, 400);
+    return internalError("list-bosses", listError);
   }
 
   const { data: profiles, error: profilesError } = await adminClient
@@ -155,7 +166,7 @@ Deno.serve(async (req) => {
     .eq("role", "boss");
 
   if (profilesError) {
-    return json({ error: profilesError.message }, 400);
+    return internalError("list-bosses", profilesError);
   }
 
   const bossIds = new Set(profiles.map((p) => p.id as string));

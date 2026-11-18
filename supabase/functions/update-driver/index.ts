@@ -6,6 +6,7 @@
 // Deploy: supabase functions deploy update-driver
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { isValidUsername, usernameToEmail } from "../_shared/email.ts";
 import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -35,8 +36,15 @@ Deno.serve(async (req) => {
   }
 
   const { userId, username, password, licensePlate } = body;
-  if (!userId) {
+  if (typeof userId !== "string" || !userId) {
     return json({ error: "userId is required" }, 400);
+  }
+  if (
+    (username !== undefined && typeof username !== "string") ||
+    (password !== undefined && typeof password !== "string") ||
+    (licensePlate !== undefined && typeof licensePlate !== "string")
+  ) {
+    return json({ error: "username, password and licensePlate must be text" }, 400);
   }
   // Beim Kennzeichen zählt "wurde mitgeschickt", nicht "ist nicht leer" —
   // sonst ließe sich ein falsch eingetragenes Kennzeichen nie wieder
@@ -63,7 +71,6 @@ Deno.serve(async (req) => {
   const updates: {
     email?: string;
     password?: string;
-    user_metadata?: Record<string, unknown>;
   } = {};
 
   if (username) {
@@ -77,36 +84,42 @@ Deno.serve(async (req) => {
   }
 
   if (password) {
-    if (password.length < 6) {
-      return json({ error: "Password must be at least 6 characters" }, 400);
+    if (password.length < 8) {
+      return json({ error: "Password must be at least 8 characters" }, 400);
     }
     updates.password = password;
   }
 
-  if (licensePlate !== undefined) {
-    const plate = licensePlate.trim().toUpperCase();
-    if (plate.length > 15) {
-      return json({ error: "License plate must be at most 15 characters" }, 400);
-    }
-    // Die bestehenden Metadaten mitschicken: updateUserById ersetzt das
-    // user_metadata als Ganzes, sonst fiele etwa der Name weg. Die Rolle
-    // steht nicht mehr darin, sondern in public.profiles.
-    updates.user_metadata = {
-      ...existing.user.user_metadata,
-      license_plate: plate,
-    };
+  const plate = licensePlate?.trim().toUpperCase();
+  if (plate !== undefined && plate.length > 15) {
+    return json({ error: "License plate must be at most 15 characters" }, 400);
   }
 
-  const { error: updateError } = await adminClient.auth.admin.updateUserById(
-    userId,
-    updates
-  );
+  if (updates.email || updates.password) {
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      updates
+    );
 
-  if (updateError) {
-    const message = updateError.message.toLowerCase().includes("already")
-      ? "That username is already taken"
-      : updateError.message;
-    return json({ error: message }, 400);
+    if (updateError) {
+      if (updateError.message.toLowerCase().includes("already")) {
+        return json({ error: "That username is already taken" }, 400);
+      }
+      return internalError("update-driver", updateError);
+    }
+  }
+
+  // In public.profiles statt im user_metadata: Das könnte der Fahrer selbst
+  // ändern.
+  if (plate !== undefined) {
+    const { error: plateError } = await adminClient
+      .from("profiles")
+      .update({ license_plate: plate || null })
+      .eq("id", userId);
+
+    if (plateError) {
+      return internalError("update-driver", plateError);
+    }
   }
 
   return json({ success: true });

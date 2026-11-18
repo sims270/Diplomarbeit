@@ -1,13 +1,16 @@
 import { type ExternalOrder, getAllExternalOrders } from '@/app/services/externalOrderService';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
+import { OrderPeriodFilter } from '@/components/OrderPeriodFilter';
 import { shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { isoToGerman } from '@/lib/dateFormat';
+import { currentMonth } from '@/lib/month';
+import { ALL_PERIOD, isOrderInPeriod } from '@/lib/orderPeriod';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -26,6 +29,13 @@ export default function ExternalOrdersListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  // Wie bei den eigenen Aufträgen: standardmäßig der laufende Monat.
+  const [period, setPeriod] = useState(currentMonth);
+
+  const visibleOrders = useMemo(
+    () => orders.filter((o) => isOrderInPeriod(o, period)),
+    [orders, period]
+  );
 
   const loadOrders = useCallback(async () => {
     setLoadError(false);
@@ -62,9 +72,11 @@ export default function ExternalOrdersListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
+        <OrderPeriodFilter period={period} onChange={setPeriod} />
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            {t('chefExternalOrdersList', 'title')} ({orders.length})
+            {t('chefExternalOrdersList', 'title')} ({visibleOrders.length})
           </Text>
           <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/external-order/new')}>
             <Text style={styles.addButtonText}>{t('chefExternalOrdersList', 'addButton')}</Text>
@@ -75,10 +87,18 @@ export default function ExternalOrdersListScreen() {
           <ActivityIndicator style={styles.loading} color={c.tint} />
         ) : loadError ? (
           <Text style={styles.errorText}>{t('chefExternalOrdersList', 'loadFailed')}</Text>
-        ) : orders.length === 0 ? (
+        ) : visibleOrders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>{t('chefExternalOrdersList', 'emptyState')}</Text>
-            <Text style={styles.emptyStateSubtext}>{t('chefExternalOrdersList', 'emptyStateSub')}</Text>
+            <Text style={styles.emptyStateText}>
+              {period === ALL_PERIOD
+                ? t('chefExternalOrdersList', 'emptyState')
+                : t('chefOrdersList', 'emptyPeriod')}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              {period === ALL_PERIOD
+                ? t('chefExternalOrdersList', 'emptyStateSub')
+                : t('chefOrdersList', 'emptyPeriodSub')}
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -86,7 +106,7 @@ export default function ExternalOrdersListScreen() {
             key={`grid-${columns}`}
             numColumns={columns}
             columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
-            data={orders}
+            data={visibleOrders}
             keyExtractor={(item) => item.id}
             refreshControl={
               <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />

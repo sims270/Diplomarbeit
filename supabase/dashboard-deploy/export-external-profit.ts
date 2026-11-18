@@ -32,6 +32,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --- aus _shared/verify-boss.ts ---------------------------------------------
 interface VerifyBossResult {
   caller?: User;
@@ -78,7 +88,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -433,7 +444,6 @@ Deno.serve(async (req) => {
       },
     });
   } catch (exportError) {
-    const message = exportError instanceof Error ? exportError.message : "Export fehlgeschlagen.";
-    return json({ error: message }, 400);
+    return internalError("export-external-profit", exportError);
   }
 });

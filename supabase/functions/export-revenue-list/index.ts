@@ -22,6 +22,8 @@
 
 import ExcelJS from "npm:exceljs@4.4.0";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
+import { fetchAll } from "../_shared/fetch-all.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
 interface OrderRow {
@@ -200,34 +202,46 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  const [ordersResult, invoicesResult, platesResult] = await Promise.all([
-    adminClient
-      .from("orders")
-      .select(
-        "id, order_nr, cargo_type, empty_km, freight_km, loading_date, unloading_date, completed_at, direction, license_plate",
-      )
-      .eq("status", "completed"),
-    adminClient.from("invoice_items").select("order_id, preis"),
-    adminClient
-      .from("license_plates")
-      .select("name, retired_at")
-      .order("created_at", { ascending: true }),
-  ]);
+  let orders: OrderRow[];
+  let invoices: InvoiceRow[];
+  let platesResult;
+  try {
+    [orders, invoices, platesResult] = await Promise.all([
+      fetchAll<OrderRow>((from, to) =>
+        adminClient
+          .from("orders")
+          .select(
+            "id, order_nr, cargo_type, empty_km, freight_km, loading_date, unloading_date, completed_at, direction, license_plate",
+          )
+          .eq("status", "completed")
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll<InvoiceRow>((from, to) =>
+        adminClient.from("invoice_items").select("order_id, preis").order("id").range(from, to)
+      ),
+      adminClient
+        .from("license_plates")
+        .select("name, retired_at")
+        .order("created_at", { ascending: true }),
+    ]);
+  } catch (queryError) {
+    return internalError("export-revenue-list", queryError);
+  }
 
-  const queryError = ordersResult.error ?? invoicesResult.error ?? platesResult.error;
-  if (queryError) {
-    return json({ error: queryError.message }, 400);
+  if (platesResult.error) {
+    return internalError("export-revenue-list", platesResult.error);
   }
 
   const prices = new Map(
-    ((invoicesResult.data ?? []) as InvoiceRow[]).map((row) => [
+    invoices.map((row) => [
       row.order_id,
       toNumberOrNull(row.preis),
     ]),
   );
 
   const blocks = buildBlocks(
-    (ordersResult.data ?? []) as OrderRow[],
+    orders,
     prices,
     (platesResult.data ?? []) as PlateRow[],
   );

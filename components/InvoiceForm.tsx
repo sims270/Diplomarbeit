@@ -140,7 +140,11 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
     try {
       await task();
     } catch (error) {
-      showAlert(t('common', 'error'), error instanceof Error ? error.message : fallbackMessage);
+      const message = error instanceof Error ? error.message : fallbackMessage;
+      showAlert(
+        t('common', 'error'),
+        message === 'INVOICE_NUMBER_TAKEN' ? t('chefInvoice', 'numberTaken') : message
+      );
     } finally {
       setBusy(null);
     }

@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { isValidUsername, usernameToEmail } from "../_shared/email.ts";
 import { randomPassword } from "../_shared/password.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
@@ -135,8 +136,10 @@ Deno.serve(async (req) => {
       ? await createAuthUser(adminClient, username, password, false)
       : await createAuthUser(adminClient, baseUsername(label), password, true);
   } catch (createError) {
-    const taken = createError instanceof UsernameTakenError;
-    return json({ error: (createError as Error).message }, taken ? 409 : 400);
+    if (createError instanceof UsernameTakenError) {
+      return internalError("create-external-driver", createError);
+    }
+    return internalError("create-external-driver", createError);
   }
 
   // Rolle und Zugang. Scheitert einer der beiden Schritte, das Konto wieder
@@ -159,7 +162,7 @@ Deno.serve(async (req) => {
 
   if (profileError || accountError) {
     await adminClient.auth.admin.deleteUser(created.userId);
-    return json({ error: (profileError ?? accountError)!.message }, 500);
+    return internalError("create-external-driver", profileError ?? accountError);
   }
 
   return json({

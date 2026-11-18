@@ -33,6 +33,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --- aus _shared/verify-boss.ts ---------------------------------------------
 interface VerifyBossResult {
   caller?: User;
@@ -79,7 +89,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -492,7 +503,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const [orders, invoicePrices, orderPrices, platesResult, usersResult] = await Promise.all([
+    const [orders, invoicePrices, orderPrices, platesResult, usersResult, profilesResult] = await Promise.all([
       fetchAll<OrderRow>((from, to) =>
         adminClient
           .from("orders")
@@ -521,10 +532,21 @@ Deno.serve(async (req) => {
         .select("name, retired_at")
         .order("created_at", { ascending: true }),
       adminClient.auth.admin.listUsers({ perPage: 1000 }),
+      adminClient.from("profiles").select("id, license_plate").eq("role", "driver"),
     ]);
 
     if (platesResult.error) throw new Error(platesResult.error.message);
     if (usersResult.error) throw new Error(usersResult.error.message);
+    if (profilesResult.error) throw new Error(profilesResult.error.message);
+
+    // Das Kennzeichen aus public.profiles: Das user_metadata kann der Fahrer
+    // selbst ändern.
+    const platesByDriver = new Map<string, string>(
+      (profilesResult.data ?? []).map((row) => [
+        row.id as string,
+        String(row.license_plate ?? "").trim(),
+      ]),
+    );
 
     // Der Preis der Rechnung gilt vor dem Preis am Auftrag: Dort hat ihn der
     // Chef zuletzt bearbeitet.
@@ -540,7 +562,7 @@ Deno.serve(async (req) => {
         user.id,
         {
           name: user.email ? emailToUsername(user.email) : "",
-          plate: String(user.user_metadata?.license_plate ?? "").trim(),
+          plate: platesByDriver.get(user.id) ?? "",
         },
       ]),
     );
@@ -567,7 +589,6 @@ Deno.serve(async (req) => {
       },
     });
   } catch (exportError) {
-    const message = exportError instanceof Error ? exportError.message : "Export fehlgeschlagen.";
-    return json({ error: message }, 400);
+    return internalError("export-weekly-revenue", exportError);
   }
 });

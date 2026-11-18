@@ -2,6 +2,7 @@ import {
   saveToRememberedFile,
   supportsRememberedFile,
 } from '@/lib/rememberedFile';
+import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 
@@ -148,15 +149,17 @@ export async function getTankEntriesByDriver(driverId: string): Promise<TankEntr
  * all tank entries"); ein Fahrer bekäme hier nur seine eigenen.
  */
 export async function getAllTankEntries(): Promise<TankEntry[]> {
-  const { data, error } = await supabase
-    .from('tank_entries')
-    .select('*')
-    .order('entry_date', { ascending: false })
-    .order('created_at', { ascending: false });
+  const rows = await fetchAll<TankEntryRow>((from, to) =>
+    supabase
+      .from('tank_entries')
+      .select('*')
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
 
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map(mapRow);
+  return rows.map(mapRow);
 }
 
 /**

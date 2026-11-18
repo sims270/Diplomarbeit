@@ -6,6 +6,7 @@
 // Deploy: supabase functions deploy list-drivers
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { emailToUsername } from "../_shared/email.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -29,28 +30,30 @@ Deno.serve(async (req) => {
   });
 
   if (listError) {
-    return json({ error: listError.message }, 400);
+    return internalError("list-drivers", listError);
   }
 
   // Wer Fahrer ist, steht in public.profiles — fremde Fahrer und der Chef
   // gehören nicht in diese Liste.
   const { data: profiles, error: profilesError } = await adminClient
     .from("profiles")
-    .select("id")
+    .select("id, license_plate")
     .eq("role", "driver");
 
   if (profilesError) {
-    return json({ error: profilesError.message }, 400);
+    return internalError("list-drivers", profilesError);
   }
 
-  const driverIds = new Set(profiles.map((p) => p.id as string));
+  const platesByDriver = new Map(
+    profiles.map((p) => [p.id as string, (p.license_plate as string | null) ?? ""])
+  );
 
   const drivers = data.users
-    .filter((u) => driverIds.has(u.id))
+    .filter((u) => platesByDriver.has(u.id))
     .map((u) => ({
       id: u.id,
       username: u.email ? emailToUsername(u.email) : u.id,
-      licensePlate: (u.user_metadata?.license_plate as string | undefined) ?? "",
+      licensePlate: platesByDriver.get(u.id) ?? "",
       createdAt: u.created_at,
     }))
     .sort((a, b) => a.username.localeCompare(b.username));

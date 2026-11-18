@@ -35,6 +35,37 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
+// ----------------------------------------------------------- _shared/fetch-all
+const FETCH_PAGE_SIZE = 1000;
+
+// PostgREST liefert höchstens 1000 Zeilen je Abfrage. Ohne Blättern fehlten
+// ab Zeile 1001 still Daten im Export. Die Abfrage braucht eine eindeutige
+// Sortierung, sonst können Zeilen zwischen zwei Seiten verrutschen.
+async function fetchAll<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await page(from, from + FETCH_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as T[]));
+    if (!data || data.length < FETCH_PAGE_SIZE) return rows;
+  }
+}
+
 // --- aus _shared/verify-boss.ts ---------------------------------------------
 interface VerifyBossResult {
   caller?: User;
@@ -81,7 +112,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -267,34 +299,46 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  const [ordersResult, invoicesResult, platesResult] = await Promise.all([
-    adminClient
-      .from("orders")
-      .select(
-        "id, order_nr, cargo_type, empty_km, freight_km, loading_date, unloading_date, completed_at, direction, license_plate",
-      )
-      .eq("status", "completed"),
-    adminClient.from("invoice_items").select("order_id, preis"),
-    adminClient
-      .from("license_plates")
-      .select("name, retired_at")
-      .order("created_at", { ascending: true }),
-  ]);
+  let orders: OrderRow[];
+  let invoices: InvoiceRow[];
+  let platesResult;
+  try {
+    [orders, invoices, platesResult] = await Promise.all([
+      fetchAll<OrderRow>((from, to) =>
+        adminClient
+          .from("orders")
+          .select(
+            "id, order_nr, cargo_type, empty_km, freight_km, loading_date, unloading_date, completed_at, direction, license_plate",
+          )
+          .eq("status", "completed")
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll<InvoiceRow>((from, to) =>
+        adminClient.from("invoice_items").select("order_id, preis").order("id").range(from, to)
+      ),
+      adminClient
+        .from("license_plates")
+        .select("name, retired_at")
+        .order("created_at", { ascending: true }),
+    ]);
+  } catch (queryError) {
+    return internalError("export-revenue-list", queryError);
+  }
 
-  const queryError = ordersResult.error ?? invoicesResult.error ?? platesResult.error;
-  if (queryError) {
-    return json({ error: queryError.message }, 400);
+  if (platesResult.error) {
+    return internalError("export-revenue-list", platesResult.error);
   }
 
   const prices = new Map(
-    ((invoicesResult.data ?? []) as InvoiceRow[]).map((row) => [
+    invoices.map((row) => [
       row.order_id,
       toNumberOrNull(row.preis),
     ]),
   );
 
   const blocks = buildBlocks(
-    (ordersResult.data ?? []) as OrderRow[],
+    orders,
     prices,
     (platesResult.data ?? []) as PlateRow[],
   );

@@ -8,6 +8,10 @@ export default function ExternalLayout() {
   const stackOptions = useStackScreenOptions();
   const { user, isLoading } = useAuth();
 
+  if (!isLoading && !user) {
+    return <Redirect href="/login" />;
+  }
+
   if (!isLoading && user && user.role !== 'external_driver') {
     return <Redirect href={homeRouteFor(user.role)} />;
   }

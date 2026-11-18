@@ -61,8 +61,8 @@ const emptyFields: ExternalOrderFields = {
   unloadingTimeUntil: '',
   unloadingCompany: '',
   unloadingAddress: '',
-  freightRate: '0,00',
-  deadlineSurcharge: '0,00',
+  freightRate: '',
+  deadlineSurcharge: '',
   paymentTerms: PAYMENT_TERMS_OPTIONS[0],
   vehicleType: '',
   notes: '',
@@ -72,6 +72,10 @@ const emptyFields: ExternalOrderFields = {
   clientAddress: '',
   customerPrice: '',
 };
+
+// Ältere Aufträge haben hier noch die frühere Vorgabe 0,00 gespeichert. Sie
+// zeigen wie neue den grauen Platzhalter, damit klar ist, was einzutragen ist.
+const blankIfZero = (amount: string) => (amount.trim() === '0,00' ? '' : amount);
 
 interface ExternalOrderFormProps {
   initialValues?: Partial<ExternalOrderFields>;
@@ -98,7 +102,14 @@ export function ExternalOrderForm({
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
 
-  const [form, setForm] = useState<ExternalOrderFields>({ ...emptyFields, ...initialValues });
+  const [form, setForm] = useState<ExternalOrderFields>(() => {
+    const initial = { ...emptyFields, ...initialValues };
+    return {
+      ...initial,
+      freightRate: blankIfZero(initial.freightRate),
+      deadlineSurcharge: blankIfZero(initial.deadlineSurcharge),
+    };
+  });
   const [carrierCompanies, setCarrierCompanies] = useState<CarrierCompany[]>([]);
   const [siteCompanies, setSiteCompanies] = useState<SiteCompany[]>([]);
   const [unloadingCompanies, setUnloadingCompanies] = useState<string[]>([]);

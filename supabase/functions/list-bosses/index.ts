@@ -6,6 +6,7 @@
 // Deploy: supabase functions deploy list-bosses
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { emailToUsername } from "../_shared/email.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -27,7 +28,7 @@ Deno.serve(async (req) => {
     perPage: 1000,
   });
   if (listError) {
-    return json({ error: listError.message }, 400);
+    return internalError("list-bosses", listError);
   }
 
   const { data: profiles, error: profilesError } = await adminClient
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     .eq("role", "boss");
 
   if (profilesError) {
-    return json({ error: profilesError.message }, 400);
+    return internalError("list-bosses", profilesError);
   }
 
   const bossIds = new Set(profiles.map((p) => p.id as string));

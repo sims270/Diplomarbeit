@@ -2,6 +2,7 @@ import {
   saveToRememberedFile,
   supportsRememberedFile,
 } from '@/lib/rememberedFile';
+import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 import type { CargoType } from './orderService';
@@ -33,30 +34,45 @@ export interface RevenueTrip {
 /** Vorschläge unter dem Richtungsfeld — die häufigsten Einträge der bisherigen Liste. */
 export const DIRECTION_SUGGESTIONS = ['hin', 'her', 'hin - her'];
 
-export async function getRevenueTrips(): Promise<RevenueTrip[]> {
-  const [ordersResult, invoicesResult] = await Promise.all([
-    supabase
-      .from('orders')
-      .select(
-        'id, order_nr, cargo_type, loading_date, unloading_date, license_plate, empty_km, freight_km, direction'
-      )
-      .eq('status', 'completed')
-      .order('loading_date', { ascending: false, nullsFirst: false }),
-    supabase.from('invoice_items').select('order_id, preis'),
-  ]);
+interface RevenueOrderRow {
+  id: string;
+  order_nr: string;
+  cargo_type: string | null;
+  loading_date: string | null;
+  unloading_date: string | null;
+  license_plate: string | null;
+  empty_km: number | null;
+  freight_km: number | null;
+  direction: string | null;
+}
 
-  if (ordersResult.error) throw new Error(ordersResult.error.message);
-  if (invoicesResult.error) throw new Error(invoicesResult.error.message);
+export async function getRevenueTrips(): Promise<RevenueTrip[]> {
+  const [orders, invoiceItems] = await Promise.all([
+    fetchAll<RevenueOrderRow>((from, to) =>
+      supabase
+        .from('orders')
+        .select(
+          'id, order_nr, cargo_type, loading_date, unloading_date, license_plate, empty_km, freight_km, direction'
+        )
+        .eq('status', 'completed')
+        .order('loading_date', { ascending: false, nullsFirst: false })
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAll<{ order_id: string | null; preis: string | number | null }>((from, to) =>
+      supabase.from('invoice_items').select('order_id, preis').order('id').range(from, to)
+    ),
+  ]);
 
   // numeric kommt aus PostgREST als String.
   const prices = new Map<string, number | null>(
-    (invoicesResult.data ?? []).map((row) => [
+    invoiceItems.map((row) => [
       row.order_id as string,
       row.preis === null ? null : Number(row.preis),
     ])
   );
 
-  return (ordersResult.data ?? []).map((row) => ({
+  return orders.map((row) => ({
     orderId: row.id,
     orderNr: row.order_nr,
     cargoType: (row.cargo_type as CargoType | null) ?? 'komplett',

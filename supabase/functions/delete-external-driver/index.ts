@@ -15,6 +15,7 @@
 // Deploy: supabase functions deploy delete-external-driver
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
 Deno.serve(async (req) => {
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
   try {
     role = await getRole(adminClient, userId);
   } catch (roleError) {
-    return json({ error: (roleError as Error).message }, 500);
+    return internalError("delete-external-driver", roleError);
   }
   if (role !== "external_driver") {
     return json({ error: "That account is not an external driver" }, 403);
@@ -58,12 +59,12 @@ Deno.serve(async (req) => {
     uid: userId,
   });
   if (releaseError) {
-    return json({ error: releaseError.message }, 500);
+    return internalError("delete-external-driver", releaseError);
   }
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return json({ error: deleteError.message }, 400);
+    return internalError("delete-external-driver", deleteError);
   }
 
   return json({ success: true });

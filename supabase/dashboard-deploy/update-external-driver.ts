@@ -48,6 +48,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 // Keep this identical to lib/username.ts on the app side (React Native /
 // Node runtime) — both must derive the exact same synthetic email for the
@@ -127,7 +137,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {
@@ -177,7 +188,7 @@ Deno.serve(async (req) => {
   try {
     role = await getRole(adminClient, userId);
   } catch (roleError) {
-    return json({ error: (roleError as Error).message }, 500);
+    return internalError("update-external-driver", roleError);
   }
   if (role !== "external_driver") {
     return json({ error: "That account is not an external driver" }, 403);
@@ -194,15 +205,10 @@ Deno.serve(async (req) => {
     email: usernameToEmail(username),
   });
   if (authError) {
-    const taken = authError.message.toLowerCase().includes("already");
-    return json(
-      {
-        error: taken
-          ? `Der Benutzername „${username}“ ist schon vergeben`
-          : authError.message,
-      },
-      taken ? 409 : 400
-    );
+    if (!authError.message.toLowerCase().includes("already")) {
+      return internalError("update-external-driver", authError);
+    }
+    return json({ error: `Der Benutzername „${username}“ ist schon vergeben` }, 409);
   }
 
   const { error: accountError } = await adminClient
@@ -216,15 +222,10 @@ Deno.serve(async (req) => {
     if (previousEmail) {
       await adminClient.auth.admin.updateUserById(userId, { email: previousEmail });
     }
-    const taken = accountError.code === "23505";
-    return json(
-      {
-        error: taken
-          ? `Der Benutzername „${username}“ ist schon vergeben`
-          : accountError.message,
-      },
-      taken ? 409 : 500
-    );
+    if (accountError.code !== "23505") {
+      return internalError("update-external-driver", accountError);
+    }
+    return json({ error: `Der Benutzername „${username}“ ist schon vergeben` }, 409);
   }
 
   return json({ success: true, username });

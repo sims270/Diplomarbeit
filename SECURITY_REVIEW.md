@@ -10,6 +10,18 @@
 
 ## 1. Zusammenfassung
 
+> **Nachtrag 18.11.2026 – Stand der Behebung**
+>
+> | Status | Punkte |
+> |---|---|
+> | ✅ Behoben und aktiv | #1 |
+> | 🔧 Im Code behoben, muss noch eingespielt und getestet werden | #3, #4, #5, #6, #7, #8, #9, #10, #11, #12, #16, #17 |
+> | ⚙️ Einstellung im Dashboard offen | #2, #13, dazu bei #11 die Passwort-Einstellungen in Supabase |
+> | ⚠️ Teilweise | #14: `npm audit` von 65 auf 51 Meldungen gesenkt (0 kritisch, 42 hoch, 9 mittel). Alle Expo-Pakete passen wieder zu SDK 54. Die restlichen Fixes brauchen ein Expo-SDK-Upgrade, das bewusst nicht gemacht wird. Sie stammen aus `brace-expansion`, `decode-uri-component`, `image-size`, `picomatch` und `postcss`. |
+> | 📝 Bekannte Lücke | #15: `20260911140000_dedupe_company_names.sql` ist nicht mehr vorhanden und lässt sich nicht wiederherstellen. Die laufende Datenbank ist davon nicht betroffen, nur beim Neuaufsetzen aus dem Repository fehlt dieser Schritt. |
+>
+> Entscheidungen: Tankungen nur auf aktive LKW, km-Sprünge bis 10.000 km, Passwörter mindestens 8 Zeichen, kein Expo-SDK-Upgrade. `app/services` und `app/context` bleiben in `app/`. Das Token bleibt im localStorage, weil es keinen eigenen Server gibt (akzeptiertes Restrisiko aus #12). Unverrechnete Aufträge löscht die neue Edge Function `delete-order` samt Belegen, verrechnete lehnt die Datenbank ab. Die Abschnitte unten beschreiben den Stand vom 09.11.2026.
+
 | | Anzahl | Punkte |
 |---|---|---|
 | ✅ Behoben | 1 | #1 |

@@ -9,6 +9,7 @@
 // Deploy: supabase functions deploy reset-external-driver-password
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { randomPassword } from "../_shared/password.ts";
 import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -43,7 +44,7 @@ Deno.serve(async (req) => {
   try {
     role = await getRole(adminClient, userId);
   } catch (roleError) {
-    return json({ error: (roleError as Error).message }, 500);
+    return internalError("reset-external-driver-password", roleError);
   }
   if (role !== "external_driver") {
     return json({ error: "That account is not an external driver" }, 403);
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
     password,
   });
   if (updateError) {
-    return json({ error: updateError.message }, 400);
+    return internalError("reset-external-driver-password", updateError);
   }
 
   return json({ success: true, password });

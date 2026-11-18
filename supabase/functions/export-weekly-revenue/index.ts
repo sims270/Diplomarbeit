@@ -18,6 +18,7 @@
 
 import ExcelJS from "npm:exceljs@4.4.0";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { emailToUsername } from "../_shared/email.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
@@ -419,7 +420,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const [orders, invoicePrices, orderPrices, platesResult, usersResult] = await Promise.all([
+    const [orders, invoicePrices, orderPrices, platesResult, usersResult, profilesResult] = await Promise.all([
       fetchAll<OrderRow>((from, to) =>
         adminClient
           .from("orders")
@@ -448,10 +449,21 @@ Deno.serve(async (req) => {
         .select("name, retired_at")
         .order("created_at", { ascending: true }),
       adminClient.auth.admin.listUsers({ perPage: 1000 }),
+      adminClient.from("profiles").select("id, license_plate").eq("role", "driver"),
     ]);
 
     if (platesResult.error) throw new Error(platesResult.error.message);
     if (usersResult.error) throw new Error(usersResult.error.message);
+    if (profilesResult.error) throw new Error(profilesResult.error.message);
+
+    // Das Kennzeichen aus public.profiles: Das user_metadata kann der Fahrer
+    // selbst ändern.
+    const platesByDriver = new Map<string, string>(
+      (profilesResult.data ?? []).map((row) => [
+        row.id as string,
+        String(row.license_plate ?? "").trim(),
+      ]),
+    );
 
     // Der Preis der Rechnung gilt vor dem Preis am Auftrag: Dort hat ihn der
     // Chef zuletzt bearbeitet.
@@ -467,7 +479,7 @@ Deno.serve(async (req) => {
         user.id,
         {
           name: user.email ? emailToUsername(user.email) : "",
-          plate: String(user.user_metadata?.license_plate ?? "").trim(),
+          plate: platesByDriver.get(user.id) ?? "",
         },
       ]),
     );
@@ -494,7 +506,6 @@ Deno.serve(async (req) => {
       },
     });
   } catch (exportError) {
-    const message = exportError instanceof Error ? exportError.message : "Export fehlgeschlagen.";
-    return json({ error: message }, 400);
+    return internalError("export-weekly-revenue", exportError);
   }
 });

@@ -49,6 +49,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 // Keep this identical to lib/username.ts on the app side (React Native /
 // Node runtime) — both must derive the exact same synthetic email for the
@@ -154,7 +164,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {
@@ -281,8 +292,10 @@ Deno.serve(async (req) => {
       ? await createAuthUser(adminClient, username, password, false)
       : await createAuthUser(adminClient, baseUsername(label), password, true);
   } catch (createError) {
-    const taken = createError instanceof UsernameTakenError;
-    return json({ error: (createError as Error).message }, taken ? 409 : 400);
+    if (createError instanceof UsernameTakenError) {
+      return internalError("create-external-driver", createError);
+    }
+    return internalError("create-external-driver", createError);
   }
 
   // Rolle und Zugang. Scheitert einer der beiden Schritte, das Konto wieder
@@ -305,7 +318,7 @@ Deno.serve(async (req) => {
 
   if (profileError || accountError) {
     await adminClient.auth.admin.deleteUser(created.userId);
-    return json({ error: (profileError ?? accountError)!.message }, 500);
+    return internalError("create-external-driver", profileError ?? accountError);
   }
 
   return json({

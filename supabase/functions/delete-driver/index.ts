@@ -6,6 +6,7 @@
 // Deploy: supabase functions deploy delete-driver
 
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { getRole, verifyBoss } from "../_shared/verify-boss.ts";
 
 Deno.serve(async (req) => {
@@ -50,12 +51,12 @@ Deno.serve(async (req) => {
     uid: userId,
   });
   if (releaseError) {
-    return json({ error: releaseError.message }, 500);
+    return internalError("delete-driver", releaseError);
   }
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return json({ error: deleteError.message }, 400);
+    return internalError("delete-driver", deleteError);
   }
 
   // Erst nach dem Löschen: Scheitert es, bleiben die Zuweisungen unberührt.
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
     .is("assigned_to", null)
     .in("status", ["assigned", "in_progress"]);
   if (reopenError) {
-    return json({ error: reopenError.message }, 500);
+    return internalError("delete-driver", reopenError);
   }
 
   return json({ success: true });

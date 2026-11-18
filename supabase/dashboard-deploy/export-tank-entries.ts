@@ -35,6 +35,37 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
+// ----------------------------------------------------------- _shared/fetch-all
+const FETCH_PAGE_SIZE = 1000;
+
+// PostgREST liefert höchstens 1000 Zeilen je Abfrage. Ohne Blättern fehlten
+// ab Zeile 1001 still Daten im Export. Die Abfrage braucht eine eindeutige
+// Sortierung, sonst können Zeilen zwischen zwei Seiten verrutschen.
+async function fetchAll<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await page(from, from + FETCH_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as T[]));
+    if (!data || data.length < FETCH_PAGE_SIZE) return rows;
+  }
+}
+
 // --- aus _shared/verify-boss.ts ---------------------------------------------
 interface VerifyBossResult {
   caller?: User;
@@ -81,7 +112,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -431,22 +463,26 @@ Deno.serve(async (req) => {
     return json({ error }, status ?? 401);
   }
 
-  const { data, error: queryError } = await adminClient
-    .from("tank_entries")
-    .select(
-      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_adblue_per_liter, price_per_liter, price_total",
-    )
-    .order("license_plate_key", { ascending: true })
-    .order("entry_date", { ascending: true })
-    // Zwei Tankungen am selben Tag: der km-Stand legt fest, welche die
-    // erste ist — die Auswertung rechnet ab der ersten Volltankung.
-    .order("km_stand", { ascending: true });
-
-  if (queryError) {
-    return json({ error: queryError.message }, 400);
+  let rows: TankEntryRow[];
+  try {
+    rows = await fetchAll<TankEntryRow>((from, to) =>
+      adminClient
+        .from("tank_entries")
+        .select(
+          "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_adblue_per_liter, price_per_liter, price_total",
+        )
+        .order("license_plate_key", { ascending: true })
+        .order("entry_date", { ascending: true })
+        // Zwei Tankungen am selben Tag: der km-Stand legt fest, welche die
+        // erste ist — die Auswertung rechnet ab der ersten Volltankung.
+        .order("km_stand", { ascending: true })
+        // Eindeutig, damit beim Blättern keine Zeile verrutscht.
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+  } catch (queryError) {
+    return internalError("export-tank-entries", queryError);
   }
-
-  const rows = (data ?? []) as TankEntryRow[];
 
   // Gruppiert wird über den normalisierten Schlüssel, damit "GR400FX" und
   // "gr 400 fx" auf demselben Blatt landen.

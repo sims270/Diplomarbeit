@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Header } from '@/components/header';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
+import { OrderPeriodFilter } from '@/components/OrderPeriodFilter';
 import { Spacing, Typography } from '@/constants/theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
@@ -10,6 +11,7 @@ import { useTranslation } from '@/hooks/use-translation';
 import { useAuth } from '@/app/context/AuthContext';
 import { isoToGerman } from '@/lib/dateFormat';
 import { formatAmount } from '@/lib/invoiceTotals';
+import { ALL_PERIOD, isDateInPeriod } from '@/lib/orderPeriod';
 import {
   type BillableOrder,
   getBillableOrders,
@@ -38,6 +40,19 @@ export default function InvoicesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Startet mit allen: Ein älterer, noch nicht verrechneter Auftrag darf nicht
+  // hinter einem Monatsfilter verschwinden.
+  const [period, setPeriod] = useState(ALL_PERIOD);
+
+  // Zu verrechnen zählt das Datum des Auftrags, bei Rechnungen das Rechnungsdatum.
+  const visibleBillable = useMemo(
+    () => billable.filter((order) => isDateInPeriod(order.date, period)),
+    [billable, period]
+  );
+  const visibleInvoices = useMemo(
+    () => invoices.filter((invoice) => isDateInPeriod(invoice.rechnungsdatum, period)),
+    [invoices, period]
+  );
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -65,14 +80,14 @@ export default function InvoicesScreen() {
   // der Chef auf einen Blick, was zusammen auf eine Rechnung passt.
   const groups = useMemo(() => {
     const map = new Map<string, BillableOrder[]>();
-    for (const order of billable) {
+    for (const order of visibleBillable) {
       const key = order.billingCompany || t('common', 'unknown');
       const list = map.get(key);
       if (list) list.push(order);
       else map.set(key, [order]);
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [billable, t]);
+  }, [visibleBillable, t]);
 
   const openOrder = (id: string, external: boolean) =>
     router.push(
@@ -107,7 +122,7 @@ export default function InvoicesScreen() {
             onPress={() => setTab('open')}
           >
             <Text style={[styles.tabText, tab === 'open' && styles.tabTextActive]}>
-              {t('invoices', 'tabOpen')} ({billable.length})
+              {t('invoices', 'tabOpen')} ({visibleBillable.length})
             </Text>
           </FluidPressable>
           <FluidPressable
@@ -115,10 +130,12 @@ export default function InvoicesScreen() {
             onPress={() => setTab('created')}
           >
             <Text style={[styles.tabText, tab === 'created' && styles.tabTextActive]}>
-              {t('invoices', 'tabCreated')} ({invoices.length})
+              {t('invoices', 'tabCreated')} ({visibleInvoices.length})
             </Text>
           </FluidPressable>
         </View>
+
+        <OrderPeriodFilter period={period} onChange={setPeriod} />
 
         {isOfflineMode ? (
           <Text style={styles.errorText}>{t('common', 'offlineModeHint')}</Text>
@@ -132,7 +149,11 @@ export default function InvoicesScreen() {
         ) : tab === 'open' ? (
           groups.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>{t('invoices', 'openEmpty')}</Text>
+              <Text style={styles.emptyStateText}>
+                {period === ALL_PERIOD
+                  ? t('invoices', 'openEmpty')
+                  : t('invoices', 'periodEmpty')}
+              </Text>
             </View>
           ) : (
             <>
@@ -171,13 +192,17 @@ export default function InvoicesScreen() {
               ))}
             </>
           )
-        ) : invoices.length === 0 ? (
+        ) : visibleInvoices.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>{t('invoices', 'createdEmpty')}</Text>
+            <Text style={styles.emptyStateText}>
+              {period === ALL_PERIOD
+                ? t('invoices', 'createdEmpty')
+                : t('invoices', 'periodEmpty')}
+            </Text>
           </View>
         ) : (
           <View style={styles.card}>
-            {invoices.map((invoice, index) => (
+            {visibleInvoices.map((invoice, index) => (
               <FluidPressable
                 key={invoice.id}
                 style={[styles.row, index === 0 && styles.rowFirst]}

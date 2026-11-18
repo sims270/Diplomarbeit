@@ -41,6 +41,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 function emailToUsername(email: string): string {
   return email.split("@")[0];
@@ -88,7 +98,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
     .maybeSingle();
 
   if (profileError) {
-    return { error: profileError.message, status: 500 };
+    console.error("[verify-boss]", profileError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
   if (profile?.role !== "boss") {
     return { error: "Only a boss account can do this", status: 403 };
@@ -118,28 +129,30 @@ Deno.serve(async (req) => {
   });
 
   if (listError) {
-    return json({ error: listError.message }, 400);
+    return internalError("list-drivers", listError);
   }
 
   // Wer Fahrer ist, steht in public.profiles — fremde Fahrer und der Chef
   // gehören nicht in diese Liste.
   const { data: profiles, error: profilesError } = await adminClient
     .from("profiles")
-    .select("id")
+    .select("id, license_plate")
     .eq("role", "driver");
 
   if (profilesError) {
-    return json({ error: profilesError.message }, 400);
+    return internalError("list-drivers", profilesError);
   }
 
-  const driverIds = new Set(profiles.map((p) => p.id as string));
+  const platesByDriver = new Map(
+    profiles.map((p) => [p.id as string, (p.license_plate as string | null) ?? ""])
+  );
 
   const drivers = data.users
-    .filter((u) => driverIds.has(u.id))
+    .filter((u) => platesByDriver.has(u.id))
     .map((u) => ({
       id: u.id,
       username: u.email ? emailToUsername(u.email) : u.id,
-      licensePlate: (u.user_metadata?.license_plate as string | undefined) ?? "",
+      licensePlate: platesByDriver.get(u.id) ?? "",
       createdAt: u.created_at,
     }))
     .sort((a, b) => a.username.localeCompare(b.username));

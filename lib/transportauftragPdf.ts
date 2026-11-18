@@ -189,8 +189,8 @@ ${PDF_STYLES}
     </table>
 
     <table class="fields">
-      <tr><td class="label">Frachtsatz:</td><td>€ ${escapeHtml(order.freightRate)} pauschal (inkl. allen Mauten, Nebenspesen u. Unterwegskosten).</td></tr>
-      <tr><td class="label">Terminzuschlag:</td><td>€ ${escapeHtml(order.deadlineSurcharge)} pauschal</td></tr>
+      <tr><td class="label">Frachtsatz:</td><td>€ ${escapeHtml(order.freightRate.trim() || '0,00')} pauschal (inkl. allen Mauten, Nebenspesen u. Unterwegskosten).</td></tr>
+      <tr><td class="label">Terminzuschlag:</td><td>€ ${escapeHtml(order.deadlineSurcharge.trim() || '0,00')} pauschal</td></tr>
     </table>
 
     <div class="field-row"><span class="field-label">Transportmittel:</span> ${escapeHtml(order.vehicleType)}</div>

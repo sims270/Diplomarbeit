@@ -1,3 +1,4 @@
+import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
 import { computeInvoiceTotals } from '@/lib/invoiceTotals';
@@ -14,8 +15,8 @@ import { computeInvoiceTotals } from '@/lib/invoiceTotals';
  * app/services/tankEntryService.ts: exceljs ist keine Abhängigkeit der App,
  * und die Function prüft zugleich, dass wirklich ein Chef-Account fragt.
  *
- * Geändert wird danach direkt auf den Tabellen invoices und invoice_items —
- * dafür genügen die RLS-Policies, es braucht keinen Serverumweg.
+ * Geändert wird danach über die Datenbankfunktion save_invoice, die Kopf und
+ * Positionen in einer Transaktion schreibt (20261119140000).
  * Tabellen: supabase/migrations/20260914130000_add_collective_invoices.sql
  */
 export interface InvoiceHeader {
@@ -264,21 +265,22 @@ export function billingCompanyOf(order: { clientCompany: string; loadingCompany:
  * aller drei Tabellen.
  */
 export async function getBillableOrders(): Promise<BillableOrder[]> {
-  const [ordersResult, externalResult, itemsResult] = await Promise.all([
-    supabase.from('orders').select(BILLABLE_COLUMNS).eq('status', 'completed'),
-    supabase.from('external_orders').select(BILLABLE_COLUMNS).eq('status', 'completed'),
-    supabase.from('invoice_items').select('order_id, external_order_id'),
+  type Row = Record<'id' | 'order_nr' | 'client_company' | 'loading_company' | 'unloading_company' | 'loading_date' | 'unloading_date', string | null>;
+
+  const [orders, externalOrders, items] = await Promise.all([
+    fetchAll<Row>((from, to) =>
+      supabase.from('orders').select(BILLABLE_COLUMNS).eq('status', 'completed').order('id').range(from, to)
+    ),
+    fetchAll<Row>((from, to) =>
+      supabase.from('external_orders').select(BILLABLE_COLUMNS).eq('status', 'completed').order('id').range(from, to)
+    ),
+    fetchAll<{ order_id: string | null; external_order_id: string | null }>((from, to) =>
+      supabase.from('invoice_items').select('order_id, external_order_id').order('id').range(from, to)
+    ),
   ]);
 
-  if (ordersResult.error) throw new Error(ordersResult.error.message);
-  if (externalResult.error) throw new Error(externalResult.error.message);
-  if (itemsResult.error) throw new Error(itemsResult.error.message);
+  const billed = new Set(items.map((row) => (row.order_id ?? row.external_order_id) as string));
 
-  const billed = new Set(
-    (itemsResult.data ?? []).map((row) => (row.order_id ?? row.external_order_id) as string)
-  );
-
-  type Row = NonNullable<typeof ordersResult.data>[number];
   const toBillable = (external: boolean) => (row: Row) => ({
     id: row.id as string,
     external,
@@ -294,8 +296,8 @@ export async function getBillableOrders(): Promise<BillableOrder[]> {
 
   // Neueste zuerst, eigene und Fremdaufträge gemischt; ohne Datum ans Ende.
   return [
-    ...(ordersResult.data ?? []).map(toBillable(false)),
-    ...(externalResult.data ?? []).map(toBillable(true)),
+    ...orders.map(toBillable(false)),
+    ...externalOrders.map(toBillable(true)),
   ]
     .filter((order) => !billed.has(order.id))
     .sort((a, b) => (b.date || '0000').localeCompare(a.date || '0000'));
@@ -324,22 +326,28 @@ export interface InvoiceSummary {
  * RLS-Policies des Chefs erlauben das Lesen von invoices und invoice_items.
  */
 export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
-  const [invoicesResult, itemsResult] = await Promise.all([
-    supabase
-      .from('invoices')
-      .select('id, belegnummer, rechnungsdatum, empfaenger_name, ust_satz, netto_betrag, ust_betrag, end_betrag'),
-    supabase
-      .from('invoice_items')
-      .select('invoice_id, order_id, external_order_id, preis, reihenfolge')
-      .order('reihenfolge'),
+  type Row = Record<string, Nullable>;
+
+  const [invoices, items] = await Promise.all([
+    fetchAll<Row>((from, to) =>
+      supabase
+        .from('invoices')
+        .select('id, belegnummer, rechnungsdatum, empfaenger_name, ust_satz, netto_betrag, ust_betrag, end_betrag')
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAll<Row>((from, to) =>
+      supabase
+        .from('invoice_items')
+        .select('invoice_id, order_id, external_order_id, preis, reihenfolge')
+        .order('reihenfolge')
+        .order('id')
+        .range(from, to)
+    ),
   ]);
 
-  if (invoicesResult.error) throw new Error(invoicesResult.error.message);
-  if (itemsResult.error) throw new Error(itemsResult.error.message);
-
-  type ItemRow = NonNullable<typeof itemsResult.data>[number];
-  const itemsByInvoice = new Map<string, ItemRow[]>();
-  for (const item of itemsResult.data ?? []) {
+  const itemsByInvoice = new Map<string, Row[]>();
+  for (const item of items) {
     const list = itemsByInvoice.get(item.invoice_id as string);
     if (list) list.push(item);
     else itemsByInvoice.set(item.invoice_id as string, [item]);
@@ -348,14 +356,14 @@ export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
   const toNumber = (value: Nullable): number | null =>
     value === null || value === undefined || value === '' ? null : Number(value);
 
-  return (invoicesResult.data ?? [])
+  return invoices
     .map((row) => {
-      const items = itemsByInvoice.get(row.id as string) ?? [];
-      const first = items[0];
+      const invoiceItems = itemsByInvoice.get(row.id as string) ?? [];
+      const first = invoiceItems[0];
       // Dieselbe Rechnung wie im Formular und im Export: ein eingetragener
       // Betrag gilt, sonst aus den Preisen und dem Ust-Satz.
       const totals = computeInvoiceTotals(
-        items.map((item) => toNumber(item.preis)),
+        invoiceItems.map((item) => toNumber(item.preis)),
         toNumber(row.ust_satz),
         {
           netto: toNumber(row.netto_betrag),
@@ -368,7 +376,7 @@ export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
         belegnummer: text(row.belegnummer),
         rechnungsdatum: text(row.rechnungsdatum),
         empfaengerName: text(row.empfaenger_name),
-        itemCount: items.length,
+        itemCount: invoiceItems.length,
         total: totals.end,
         firstOrder: first
           ? first.order_id
@@ -392,47 +400,41 @@ export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
  */
 export async function saveInvoice(invoice: Invoice): Promise<void> {
   const { header, items } = invoice;
-  const now = new Date().toISOString();
 
-  const results = await Promise.all([
-    supabase
-      .from('invoices')
-      .update({
-        belegnummer: header.belegnummer.trim(),
-        rechnungsdatum: toDateColumn(header.rechnungsdatum),
-        empfaenger_name: header.empfaengerName.trim(),
-        empfaenger_strasse: header.empfaengerStrasse.trim(),
-        empfaenger_ort: header.empfaengerOrt.trim(),
-        kundennummer: header.kundennummer.trim(),
-        uid_nummer: header.uidNummer.trim(),
-        ust_satz: parseAmount(header.ustSatz),
-        zahlungsziel: header.zahlungsziel.trim(),
-        // Ein leer gelassener Betrag heißt wieder: ausrechnen.
-        netto_betrag: header.nettoBetrag === null ? null : parseAmount(header.nettoBetrag),
-        ust_betrag: header.ustBetrag === null ? null : parseAmount(header.ustBetrag),
-        end_betrag: header.endBetrag === null ? null : parseAmount(header.endBetrag),
-        updated_at: now,
-      })
-      .eq('id', header.id),
-    ...items.map((item) =>
-      supabase
-        .from('invoice_items')
-        .update({
-          position_datum: toDateColumn(item.positionDatum),
-          bezeichnung: item.bezeichnung.trim(),
-          transportnr: item.transportnr.trim(),
-          ladestelle: item.ladestelle.trim(),
-          ladedatum: toDateColumn(item.ladedatum),
-          entladestelle: item.entladestelle.trim(),
-          entladedatum: toDateColumn(item.entladedatum),
-          preis: parseAmount(item.preis),
-        })
-        .eq('id', item.id)
-    ),
-  ]);
+  const { error } = await supabase.rpc('save_invoice', {
+    p_invoice_id: header.id,
+    p_header: {
+      belegnummer: header.belegnummer.trim(),
+      rechnungsdatum: toDateColumn(header.rechnungsdatum),
+      empfaenger_name: header.empfaengerName.trim(),
+      empfaenger_strasse: header.empfaengerStrasse.trim(),
+      empfaenger_ort: header.empfaengerOrt.trim(),
+      kundennummer: header.kundennummer.trim(),
+      uid_nummer: header.uidNummer.trim(),
+      ust_satz: parseAmount(header.ustSatz),
+      zahlungsziel: header.zahlungsziel.trim(),
+      // Ein leer gelassener Betrag heißt wieder: ausrechnen.
+      netto_betrag: header.nettoBetrag === null ? null : parseAmount(header.nettoBetrag),
+      ust_betrag: header.ustBetrag === null ? null : parseAmount(header.ustBetrag),
+      end_betrag: header.endBetrag === null ? null : parseAmount(header.endBetrag),
+    },
+    p_items: items.map((item) => ({
+      id: item.id,
+      position_datum: toDateColumn(item.positionDatum),
+      bezeichnung: item.bezeichnung.trim(),
+      transportnr: item.transportnr.trim(),
+      ladestelle: item.ladestelle.trim(),
+      ladedatum: toDateColumn(item.ladedatum),
+      entladestelle: item.entladestelle.trim(),
+      entladedatum: toDateColumn(item.entladedatum),
+      preis: parseAmount(item.preis),
+    })),
+  });
 
-  const failed = results.find((result) => result.error);
-  if (failed?.error) throw new Error(failed.error.message);
+  if (error) {
+    // components/InvoiceForm.tsx übersetzt diese Kennung.
+    throw new Error(error.code === '23505' ? 'INVOICE_NUMBER_TAKEN' : error.message);
+  }
 }
 
 /**

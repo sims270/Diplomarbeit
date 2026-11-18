@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import {
   buildOfflineUser,
+  isOfflineFallbackConfigured,
   matchesOfflineFallback,
 } from "../../lib/offlineFallback";
 import { authStorage, supabase } from "../../lib/supabase";
@@ -61,15 +62,25 @@ export function homeRouteFor(role: UserRole): "/chef" | "/driver" | "/external" 
 
 const NO_ROLE_MESSAGE = "Für dieses Konto ist kein Zugang eingerichtet.";
 
-async function fetchRole(userId: string): Promise<UserRole | null> {
+interface Profile {
+  role: UserRole | null;
+  licensePlate: string;
+}
+
+// Rolle und zugeteilter LKW stehen in public.profiles. Das user_metadata kann
+// jeder Nutzer selbst ändern.
+async function fetchProfile(userId: string): Promise<Profile> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, license_plate")
     .eq("id", userId)
     .maybeSingle();
 
   if (error) throw error;
-  return (data?.role as UserRole | undefined) ?? null;
+  return {
+    role: (data?.role as UserRole | undefined) ?? null,
+    licensePlate: (data?.license_plate as string | null | undefined) ?? "",
+  };
 }
 
 export interface AppUser {
@@ -105,7 +116,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 //
 // Ohne Rolle gibt es keinen Nutzer — bewusst kein stiller Rückfall auf
 // "driver": ein Konto, das nirgends eingetragen ist, soll nirgends hinein.
-function toAppUser(session: Session | null, role: UserRole | null): AppUser | null {
+function toAppUser(
+  session: Session | null,
+  role: UserRole | null,
+  licensePlate: string
+): AppUser | null {
   if (!session?.user || !role) return null;
   const { id, email, user_metadata } = session.user;
   const username = email ? emailToUsername(email) : id;
@@ -114,7 +129,7 @@ function toAppUser(session: Session | null, role: UserRole | null): AppUser | nu
     role,
     name: (user_metadata?.name as string | undefined) ?? username,
     username,
-    licensePlate: (user_metadata?.license_plate as string | undefined) ?? '',
+    licensePlate,
   };
 }
 
@@ -129,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loadedRole, setLoadedRole] = useState<{
     userId: string;
     role: UserRole | null;
+    licensePlate: string;
   } | null>(null);
 
   const sessionUserId = session?.user?.id ?? null;
@@ -139,10 +155,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!sessionUserId) return;
     let isActive = true;
 
-    fetchRole(sessionUserId)
-      .then((role) => {
+    fetchProfile(sessionUserId)
+      .then(({ role, licensePlate }) => {
         if (!isActive) return;
-        setLoadedRole({ userId: sessionUserId, role });
+        setLoadedRole({ userId: sessionUserId, role, licensePlate });
         // Angemeldet, aber ohne Rolle: abmelden, sonst hinge das Konto in
         // einem Zustand fest, in dem es weder hinein noch zum Login kommt.
         if (!role) supabase.auth.signOut();
@@ -150,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       .catch(() => {
         // Rolle nicht lesbar (etwa kein Netz): kein Zugang, aber auch kein
         // Abmelden — beim nächsten Start wird es erneut versucht.
-        if (isActive) setLoadedRole({ userId: sessionUserId, role: null });
+        if (isActive) setLoadedRole({ userId: sessionUserId, role: null, licensePlate: "" });
       });
 
     return () => {
@@ -160,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isRoleLoading = !!sessionUserId && loadedRole?.userId !== sessionUserId;
   const role = sessionUserId && loadedRole?.userId === sessionUserId ? loadedRole.role : null;
+  const licensePlate = role ? loadedRole?.licensePlate ?? "" : "";
 
   useEffect(() => {
     let isActive = true;
@@ -181,8 +198,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setSession(restoredSession);
 
       // Eine echte Sitzung hat immer Vorrang: existiert sie, ist eine alte
-      // Offline-Sitzung hinfällig.
-      if (!restoredSession && storedOfflineUser) {
+      // Offline-Sitzung hinfällig. Ohne eingerichteten Fallback zählt ein
+      // Eintrag im Speicher nicht: Den könnte jeder selbst dort ablegen.
+      if (!restoredSession && storedOfflineUser && isOfflineFallbackConfigured()) {
         try {
           setOfflineUser(JSON.parse(storedOfflineUser) as AppUser);
         } catch {
@@ -255,7 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // kommentarlos auf dem Login stehen zu bleiben.
       if (signInData.user) {
         try {
-          if (!(await fetchRole(signInData.user.id))) {
+          if (!(await fetchProfile(signInData.user.id)).role) {
             await supabase.auth.signOut();
             return { success: false, error: NO_ROLE_MESSAGE };
           }
@@ -282,7 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const sessionUser = toAppUser(session, role);
+  const sessionUser = toAppUser(session, role, licensePlate);
 
   return (
     <AuthContext.Provider

@@ -20,6 +20,7 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   'fuelpump.fill': 'local-gas-station',
   'person.fill': 'person',
+  'square.grid.2x2': 'grid-view',
 } as IconMapping;
 
 /**

@@ -58,6 +58,11 @@ export default function CreateDriverScreen() {
       return;
     }
 
+    if (password.length < 8) {
+      showAlert(t('common', 'error'), t('createDriver', 'alertPasswordTooShort'));
+      return;
+    }
+
     setIsCreating(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-driver', {

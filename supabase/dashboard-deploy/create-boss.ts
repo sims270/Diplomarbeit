@@ -44,6 +44,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// -------------------------------------------------------------- _shared/errors
+const INTERNAL_ERROR_MESSAGE = "Interner Fehler. Bitte später erneut versuchen.";
+
+// Meldungen von Postgres und Auth verraten Tabellen- und Constraint-Namen.
+// Die Details landen deshalb nur im Log der Function.
+function internalError(context: string, cause: unknown): Response {
+  console.error(`[${context}]`, cause);
+  return json({ error: INTERNAL_ERROR_MESSAGE }, 500);
+}
+
 // --------------------------------------------------------------- _shared/email
 // Keep this identical to lib/username.ts on the app side (React Native /
 // Node runtime) — both must derive the exact same synthetic email for the
@@ -123,7 +133,8 @@ async function verifyBoss(req: Request): Promise<VerifyBossResult> {
   try {
     role = await getRole(adminClient, caller.id);
   } catch (roleError) {
-    return { error: (roleError as Error).message, status: 500 };
+    console.error("[verify-boss]", roleError);
+    return { error: INTERNAL_ERROR_MESSAGE, status: 500 };
   }
 
   if (role !== "boss") {
@@ -181,7 +192,8 @@ Deno.serve(async (req) => {
     // Sicht des Chefs ist das ein vergebener Benutzername.
     const message = createError?.message.toLowerCase().includes("already")
       ? "That username is already taken"
-      : createError?.message ?? "Could not create user";
+      : "Could not create user";
+    console.error("[create-boss]", createError);
     return json({ error: message }, 400);
   }
 
@@ -193,7 +205,7 @@ Deno.serve(async (req) => {
 
   if (profileError) {
     await adminClient.auth.admin.deleteUser(data.user.id);
-    return json({ error: profileError.message }, 500);
+    return internalError("create-boss", profileError);
   }
 
   return json({ success: true, userId: data.user.id });

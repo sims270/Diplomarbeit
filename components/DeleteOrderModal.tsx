@@ -46,9 +46,14 @@ export function DeleteOrderModal({ visible, orderNr, onClose, onDelete }: Delete
       await onDelete();
       setTyped('');
     } catch (error) {
+      const message = error instanceof Error ? error.message : '';
       showAlert(
         t('common', 'error'),
-        error instanceof Error ? error.message : t('deleteOrder', 'failed')
+        message === 'ORDER_INVOICED'
+          ? t('deleteOrder', 'invoiced')
+          : message && message !== 'ORDER_NOT_FOUND'
+            ? message
+            : t('deleteOrder', 'failed')
       );
     } finally {
       setIsDeleting(false);

@@ -1,4 +1,6 @@
 import { parseAmount } from '@/app/services/invoiceService';
+import { deleteOrderWithDocuments } from '@/app/services/orderDeletionService';
+import { fetchAll } from '@/lib/fetchAll';
 import { formatAmount } from '@/lib/invoiceTotals';
 import { supabase } from '@/lib/supabase';
 
@@ -200,13 +202,16 @@ function toFriendlyError(error: { code?: string; message: string }): Error {
 }
 
 export async function getAllExternalOrders(): Promise<ExternalOrder[]> {
-  const { data, error } = await supabase
-    .from('external_orders')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const rows = await fetchAll<unknown>((from, to) =>
+    supabase
+      .from('external_orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
 
-  if (error) throw new Error(error.message);
-  return data.map(rowToOrder);
+  return rows.map(rowToOrder);
 }
 
 export async function getExternalOrderById(id: string): Promise<ExternalOrder | undefined> {
@@ -273,17 +278,6 @@ export async function updateExternalOrder(
   return rowToOrder(row);
 }
 
-// Wie deleteOrder in orderService: Policy aus
-// 20261108100000_boss_delete_orders.sql, und ohne gelöschte Zeile ein Fehler.
 export async function deleteExternalOrder(id: string): Promise<void> {
-  const { data, error } = await supabase
-    .from('external_orders')
-    .delete()
-    .eq('id', id)
-    .select('id');
-
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
-    throw new Error('Der Auftrag konnte nicht gelöscht werden.');
-  }
+  await deleteOrderWithDocuments(id, true);
 }

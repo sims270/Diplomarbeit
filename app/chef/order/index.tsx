@@ -23,8 +23,9 @@ import { showAlert } from '@/lib/alert';
 import { isoToGerman, timestampToGermanDate } from '@/lib/dateFormat';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { currentMonth, isInMonth } from '@/lib/month';
-import { MonthPicker } from '@/components/MonthPicker';
+import { currentMonth } from '@/lib/month';
+import { ALL_PERIOD, isOrderInPeriod, isOrderPeriod } from '@/lib/orderPeriod';
+import { OrderPeriodFilter } from '@/components/OrderPeriodFilter';
 import {
   ActivityIndicator,
   FlatList,
@@ -53,13 +54,12 @@ export default function OrdersListScreen() {
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Nur Aufträge des gewählten Monats, standardmäßig des laufenden. Monat
-  // eines Auftrags: Ladedatum, sonst Entladedatum — wie auf den Dashboards.
-  // Von einer Kachel des Dashboards kommen Status und dort gewählter Monat
+  // Aufträge des gewählten Zeitraums, standardmäßig des laufenden Monats.
+  // Von einer Kachel des Dashboards kommen Status und dort gewählter Zeitraum
   // mit (app/chef/(tabs)/index.tsx); ohne Parameter alle Status.
-  const params = useLocalSearchParams<{ status?: string; month?: string }>();
-  const [month, setMonth] = useState(() =>
-    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth()
+  const params = useLocalSearchParams<{ status?: string; period?: string }>();
+  const [period, setPeriod] = useState(() =>
+    isOrderPeriod(params.period) ? params.period : currentMonth()
   );
   const statusFilter = params.status ?? null;
   const showsExternalOrders =
@@ -69,19 +69,15 @@ export default function OrdersListScreen() {
   // Liste — neueste zuerst, gemischt mit den eigenen.
   const monthOrders = useMemo<(Order | ExternalOrder)[]>(() => {
     const own = orders.filter(
-      (o) =>
-        isInMonth(o.loadingDate || o.unloadingDate, month) &&
-        (statusFilter === null || o.status === statusFilter)
+      (o) => isOrderInPeriod(o, period) && (statusFilter === null || o.status === statusFilter)
     );
     if (!showsExternalOrders) return own;
 
     const external = externalOrders.filter(
-      (o) =>
-        externalOrderTileStatus(o) === statusFilter &&
-        isInMonth(o.loadingDate || o.unloadingDate, month)
+      (o) => externalOrderTileStatus(o) === statusFilter && isOrderInPeriod(o, period)
     );
     return [...own, ...external].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [orders, externalOrders, month, statusFilter, showsExternalOrders]);
+  }, [orders, externalOrders, period, statusFilter, showsExternalOrders]);
 
   const loadOrders = useCallback(async () => {
     setLoadError(false);
@@ -251,7 +247,7 @@ export default function OrdersListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
-        <MonthPicker month={month} onChange={setMonth} />
+        <OrderPeriodFilter period={period} onChange={setPeriod} />
 
         {/* Der Status kommt von einer Kachel — das X führt zurück zu den Kacheln.
             canGoBack(): Im Web lässt sich die Liste direkt über ihre URL
@@ -282,8 +278,12 @@ export default function OrdersListScreen() {
           <Text style={styles.errorText}>{t('chefOrdersList', 'loadFailed')}</Text>
         ) : monthOrders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>{t('chefOrdersList', 'emptyState')}</Text>
-            <Text style={styles.emptyStateSubtext}>{t('chefOrdersList', 'emptyStateSub')}</Text>
+            <Text style={styles.emptyStateText}>
+              {t('chefOrdersList', period === ALL_PERIOD ? 'emptyState' : 'emptyPeriod')}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              {t('chefOrdersList', period === ALL_PERIOD ? 'emptyStateSub' : 'emptyPeriodSub')}
+            </Text>
           </View>
         ) : (
           <FlatList

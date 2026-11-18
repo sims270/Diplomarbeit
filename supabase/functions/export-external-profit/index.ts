@@ -16,6 +16,7 @@
 
 import ExcelJS from "npm:exceljs@4.4.0";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { internalError } from "../_shared/errors.ts";
 import { verifyBoss } from "../_shared/verify-boss.ts";
 
 interface OrderRow {
@@ -363,7 +364,6 @@ Deno.serve(async (req) => {
       },
     });
   } catch (exportError) {
-    const message = exportError instanceof Error ? exportError.message : "Export fehlgeschlagen.";
-    return json({ error: message }, 400);
+    return internalError("export-external-profit", exportError);
   }
 });
