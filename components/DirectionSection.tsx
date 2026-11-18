@@ -15,7 +15,7 @@ import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
 import { plateKey } from '@/lib/plateKey';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 /**
@@ -39,13 +39,13 @@ const isIncomplete = (trip: RevenueTrip) => needsDirection(trip) || trip.price =
 const formatKm = (km: number | null) => (km === null ? '–' : km.toLocaleString('de-DE'));
 
 export function DirectionSection({
-  action,
+  onMissingCount,
   refreshSignal,
   month,
   selectedPlate,
 }: {
-  /** Steht unter dem Hinweis — im Tab der Button "Umsatzliste exportieren". */
-  action?: ReactNode;
+  /** Meldet, wie viele Fahrten noch unvollständig sind — steht auf dem Reiter. */
+  onMissingCount?: (count: number) => void;
   /** Hochzählen lädt neu (Pull-to-Refresh der ScrollView im Tab). */
   refreshSignal: number;
   /** 'YYYY-MM' — nur Fahrten aus diesem Monat. */
@@ -131,6 +131,10 @@ export function DirectionSection({
 
   const missingCount = inScope.filter(isIncomplete).length;
 
+  useEffect(() => {
+    onMissingCount?.(missingCount);
+  }, [missingCount, onMissingCount]);
+
   const handleSaved = (orderId: string, direction: string) =>
     setTrips((prev) =>
       prev.map((trip) => (trip.orderId === orderId ? { ...trip, direction } : trip))
@@ -138,28 +142,30 @@ export function DirectionSection({
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{t('chefUmsatzliste', 'title')}</Text>
-      <Text style={styles.hint}>{t('chefUmsatzliste', 'hint')}</Text>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>{t('chefUmsatzliste', 'title')}</Text>
+          <Text style={styles.hint}>{t('chefUmsatzliste', 'hint')}</Text>
+        </View>
 
-      {action}
-
-      <View style={styles.filterRow}>
-        <FluidPressable
-          style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
-          onPress={() => setOnlyMissing(true)}
-        >
-          <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
-            {`${t('chefUmsatzliste', 'filterMissing')} (${missingCount})`}
-          </Text>
-        </FluidPressable>
-        <FluidPressable
-          style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
-          onPress={() => setOnlyMissing(false)}
-        >
-          <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
-            {`${t('chefUmsatzliste', 'filterAll')} (${inScope.length})`}
-          </Text>
-        </FluidPressable>
+        <View style={styles.filterRow}>
+          <FluidPressable
+            style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
+            onPress={() => setOnlyMissing(true)}
+          >
+            <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
+              {`${t('chefUmsatzliste', 'filterMissing')} (${missingCount})`}
+            </Text>
+          </FluidPressable>
+          <FluidPressable
+            style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
+            onPress={() => setOnlyMissing(false)}
+          >
+            <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
+              {`${t('chefUmsatzliste', 'filterAll')} (${inScope.length})`}
+            </Text>
+          </FluidPressable>
+        </View>
       </View>
 
       {isOfflineMode ? (
@@ -334,23 +340,38 @@ const createStyles = (theme: AppTheme) => {
   const { c, scheme } = theme;
   const u = uiStyles(theme);
   return StyleSheet.create({
-    section: u.column,
+    section: {
+      ...u.column,
+      paddingTop: Spacing.lg,
+    },
+    // Überschrift links, Filter rechts; am Handy untereinander.
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionHeading: {
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 320,
+    },
     sectionTitle: {
-      ...Typography.title2,
+      ...Typography.title3,
       color: c.text,
       marginBottom: Spacing.xxs,
     },
     hint: {
       ...u.hint,
       marginTop: 0,
-      marginBottom: Spacing.sm,
     },
     // Filter als iOS-Pills
     filterRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Spacing.xs,
-      marginBottom: Spacing.md,
     },
     filterChip: {
       minHeight: Layout.minTouch,

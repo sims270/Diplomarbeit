@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,13 +20,17 @@ import { useAuth } from '@/app/context/AuthContext';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { type ComponentProps, useEffect, useState } from 'react';
 import {
   exportTankEntries,
   TANKLISTE_FILE_KEY,
 } from '../../services/tankEntryService';
 import {
+  exportExternalProfitList,
   exportRevenueList,
+  exportWeeklyRevenueList,
+  GEWINNLISTE_FILE_KEY,
+  UMSATZLISTE_2_FILE_KEY,
   UMSATZLISTE_FILE_KEY,
 } from '../../services/revenueListService';
 import {
@@ -40,9 +45,11 @@ import { plateKey } from '@/lib/plateKey';
 import { currentMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
 
-// Tankliste-Tab des Chefs: oben Preise eintragen mit dem Tankliste-Export,
-// darunter Richtung eintragen mit dem Umsatzliste-Export. Darüber die
-// Filterleiste für Monat und Kennzeichen, die für beide Listen gilt.
+type ListTab = 'prices' | 'directions';
+
+// Listen-Tab des Chefs, von oben nach unten: Filter für Monat und Kennzeichen,
+// die drei Excel-Exporte und darunter in zwei Reitern, was noch einzutragen
+// ist — Tankpreise oder Richtungen.
 export default function ChefTankTabScreen() {
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
@@ -56,6 +63,11 @@ export default function ChefTankTabScreen() {
   const [month, setMonth] = useState(currentMonth);
   const [selectedPlate, setSelectedPlate] = useState<string | null>(null);
   const [plates, setPlates] = useState<string[]>([]);
+
+  const [activeTab, setActiveTab] = useState<ListTab>('prices');
+  // Was in jedem Reiter noch fehlt — steht als Zahl auf dem Reiter.
+  const [missingPrices, setMissingPrices] = useState(0);
+  const [missingDirections, setMissingDirections] = useState(0);
 
   // Auswahl aus den Fahrzeugen: Jedes Kennzeichen aus einer Tankung legt der
   // Trigger dort an (20260911110000_add_fleet_to_license_plates.sql).
@@ -75,7 +87,17 @@ export default function ChefTankTabScreen() {
   const [isExportingRevenue, setIsExportingRevenue] = useState(false);
   const [revenueFileName, setRevenueFileName] = useState<string | null>(null);
 
+  // Und für die Umsatzliste 2.
+  const [isExportingWeekly, setIsExportingWeekly] = useState(false);
+  const [weeklyFileName, setWeeklyFileName] = useState<string | null>(null);
+
+  // Und für die Gewinnliste.
+  const [isExportingProfit, setIsExportingProfit] = useState(false);
+  const [profitFileName, setProfitFileName] = useState<string | null>(null);
+
   useEffect(() => {
+    getRememberedFileName(GEWINNLISTE_FILE_KEY).then(setProfitFileName);
+    getRememberedFileName(UMSATZLISTE_2_FILE_KEY).then(setWeeklyFileName);
     getRememberedFileName(TANKLISTE_FILE_KEY).then(setExportFileName);
     getRememberedFileName(UMSATZLISTE_FILE_KEY).then(setRevenueFileName);
   }, []);
@@ -137,6 +159,52 @@ export default function ChefTankTabScreen() {
     }
   };
 
+  const handleExportUmsatzliste2 = async (chooseNewFile = false) => {
+    setIsExportingWeekly(true);
+    try {
+      const result = await exportWeeklyRevenueList({ chooseNewFile });
+      if (result.savedTo === 'file') {
+        setWeeklyFileName(result.fileName);
+        showAlert(
+          t('common', 'success'),
+          `${t('chefDashboard', 'exportUmsatzliste2SavedTo')} "${result.fileName}"`
+        );
+      }
+    } catch (error) {
+      if (error instanceof SaveCancelledError) return;
+
+      showAlert(
+        t('common', 'error'),
+        error instanceof Error ? error.message : t('chefDashboard', 'exportTanklisteError')
+      );
+    } finally {
+      setIsExportingWeekly(false);
+    }
+  };
+
+  const handleExportGewinnliste = async (chooseNewFile = false) => {
+    setIsExportingProfit(true);
+    try {
+      const result = await exportExternalProfitList({ chooseNewFile });
+      if (result.savedTo === 'file') {
+        setProfitFileName(result.fileName);
+        showAlert(
+          t('common', 'success'),
+          `${t('chefDashboard', 'exportGewinnlisteSavedTo')} "${result.fileName}"`
+        );
+      }
+    } catch (error) {
+      if (error instanceof SaveCancelledError) return;
+
+      showAlert(
+        t('common', 'error'),
+        error instanceof Error ? error.message : t('chefDashboard', 'exportTanklisteError')
+      );
+    } finally {
+      setIsExportingProfit(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -148,6 +216,11 @@ export default function ChefTankTabScreen() {
   if (!isAuthenticated) {
     return null;
   }
+
+  const tabs: { key: ListTab; label: string; missing: number }[] = [
+    { key: 'prices', label: t('chefDashboard', 'listTabPrices'), missing: missingPrices },
+    { key: 'directions', label: t('chefDashboard', 'listTabDirections'), missing: missingDirections },
+  ];
 
   return (
     <View style={styles.container}>
@@ -179,33 +252,84 @@ export default function ChefTankTabScreen() {
             onPlateChange={setSelectedPlate}
           />
 
-          <TankPricesSection
-            refreshSignal={refreshSignal}
-            month={month}
-            selectedPlate={selectedPlate}
-            action={
-              <ExportAction
-                label={t('chefDashboard', 'exportTanklisteButton')}
+          <View style={styles.exports}>
+            <Text style={styles.exportsTitle}>{t('chefDashboard', 'exportsTitle')}</Text>
+            <View style={styles.exportGrid}>
+              <ExportTile
+                icon="local-gas-station"
+                title={t('chefDashboard', 'exportTanklisteName')}
+                description={t('chefDashboard', 'exportTanklisteDescription')}
                 isExporting={isExporting}
                 fileName={exportFileName}
                 onExport={handleExportTankliste}
               />
-            }
-          />
-
-          <DirectionSection
-            refreshSignal={refreshSignal}
-            month={month}
-            selectedPlate={selectedPlate}
-            action={
-              <ExportAction
-                label={t('chefDashboard', 'exportUmsatzlisteButton')}
+              <ExportTile
+                icon="bar-chart"
+                title={t('chefDashboard', 'exportUmsatzlisteName')}
+                description={t('chefDashboard', 'exportUmsatzlisteDescription')}
                 isExporting={isExportingRevenue}
                 fileName={revenueFileName}
                 onExport={handleExportUmsatzliste}
               />
-            }
-          />
+              <ExportTile
+                icon="calendar-view-week"
+                title={t('chefDashboard', 'exportUmsatzliste2Name')}
+                description={t('chefDashboard', 'exportUmsatzliste2Description')}
+                isExporting={isExportingWeekly}
+                fileName={weeklyFileName}
+                onExport={handleExportUmsatzliste2}
+              />
+              <ExportTile
+                icon="trending-up"
+                title={t('chefDashboard', 'exportGewinnlisteName')}
+                description={t('chefDashboard', 'exportGewinnlisteDescription')}
+                isExporting={isExportingProfit}
+                fileName={profitFileName}
+                onExport={handleExportGewinnliste}
+              />
+            </View>
+          </View>
+
+          <View style={styles.tabs}>
+            {tabs.map((tab) => {
+              const isActive = tab.key === activeTab;
+              return (
+                <FluidPressable
+                  key={tab.key}
+                  style={[styles.tab, isActive && styles.tabActive]}
+                  onPress={() => setActiveTab(tab.key)}
+                >
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]} numberOfLines={1}>
+                    {tab.label}
+                  </Text>
+                  {tab.missing > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{tab.missing}</Text>
+                    </View>
+                  )}
+                </FluidPressable>
+              );
+            })}
+          </View>
+
+          {/* Beide bleiben geladen: So stimmen die Zahlen auf den Reitern, und
+              halb getippte Preise gehen beim Wechseln nicht verloren. */}
+          <View style={activeTab === 'prices' ? undefined : styles.hidden}>
+            <TankPricesSection
+              refreshSignal={refreshSignal}
+              month={month}
+              selectedPlate={selectedPlate}
+              onMissingCount={setMissingPrices}
+            />
+          </View>
+          <View style={activeTab === 'directions' ? undefined : styles.hidden}>
+            <DirectionSection
+              refreshSignal={refreshSignal}
+              month={month}
+              selectedPlate={selectedPlate}
+              onMissingCount={setMissingDirections}
+            />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -234,59 +358,82 @@ function MonthPlateFilter({
 
   return (
     <View style={styles.filterBar}>
-      <MonthPicker month={month} onChange={onMonthChange} />
+      <View style={styles.filterCard}>
+        <View style={styles.filterMonth}>
+          <MonthPicker month={month} onChange={onMonthChange} />
+        </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.plateRow}
-      >
-        {[null, ...plates].map((plate) => {
-          const key = plate === null ? null : plateKey(plate);
-          const isActive = key === selectedPlate;
-          return (
-            <FluidPressable
-              key={key ?? 'all'}
-              style={[styles.plateChip, isActive && styles.plateChipActive]}
-              onPress={() => onPlateChange(key)}
-            >
-              <Text style={[styles.plateChipText, isActive && styles.plateChipTextActive]}>
-                {plate ?? t('chefTankliste', 'filterPlateAll')}
-              </Text>
-            </FluidPressable>
-          );
-        })}
-      </ScrollView>
+        <ScrollView
+          horizontal
+          style={styles.flexShrink}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.plateRow}
+        >
+          {[null, ...plates].map((plate) => {
+            const key = plate === null ? null : plateKey(plate);
+            const isActive = key === selectedPlate;
+            return (
+              <FluidPressable
+                key={key ?? 'all'}
+                style={[styles.plateChip, isActive && styles.plateChipActive]}
+                onPress={() => onPlateChange(key)}
+              >
+                <Text style={[styles.plateChipText, isActive && styles.plateChipTextActive]}>
+                  {plate ?? t('chefTankliste', 'filterPlateAll')}
+                </Text>
+              </FluidPressable>
+            );
+          })}
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-/** Export-Button mit der Zeile, in welche Datei der Export schreibt. */
-function ExportAction({
-  label,
+/** Eine Excel-Liste: wofür sie ist, der Export-Button und die gewählte Datei. */
+function ExportTile({
+  icon,
+  title,
+  description,
   isExporting,
   fileName,
   onExport,
 }: {
-  label: string;
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  title: string;
+  description: string;
   isExporting: boolean;
   fileName: string | null;
   onExport: (chooseNewFile?: boolean) => void;
 }) {
   const styles = useThemedStyles(createStyles);
+  const { c } = useAppTheme();
   const { t } = useTranslation();
 
   return (
-    <View style={styles.exportAction}>
+    <View style={styles.exportTile}>
+      <View style={styles.exportHead}>
+        <View style={styles.exportIcon}>
+          <MaterialIcons name={icon} size={22} color={c.tint} />
+        </View>
+        <View style={styles.exportHeadText}>
+          <Text style={styles.exportTitle} numberOfLines={1}>{title}</Text>
+          <Text style={styles.exportDescription} numberOfLines={2}>{description}</Text>
+        </View>
+      </View>
+
       <FluidPressable
         style={[styles.exportButton, isExporting && styles.exportButtonDisabled]}
         onPress={() => onExport()}
         disabled={isExporting}
       >
         {isExporting ? (
-          <ActivityIndicator size="small" color="white" />
+          <ActivityIndicator size="small" color={c.onTint} />
         ) : (
-          <Text style={styles.exportButtonText}>{label}</Text>
+          <>
+            <MaterialIcons name="file-download" size={18} color={c.onTint} />
+            <Text style={styles.exportButtonText}>{t('chefDashboard', 'exportButton')}</Text>
+          </>
         )}
       </FluidPressable>
 
@@ -296,15 +443,11 @@ function ExportAction({
       {supportsRememberedFile() && (
         <View style={styles.exportFileRow}>
           <Text style={styles.exportFileText} numberOfLines={1}>
-            {fileName
-              ? `${t('chefDashboard', 'exportSavesTo')} ${fileName}`
-              : t('chefDashboard', 'exportNoFileYet')}
+            {fileName ?? t('chefDashboard', 'exportNoFileShort')}
           </Text>
           {fileName && (
             <FluidPressable onPress={() => onExport(true)} disabled={isExporting}>
-              <Text style={styles.exportFileLink}>
-                {t('chefDashboard', 'exportChangeFile')}
-              </Text>
+              <Text style={styles.exportFileLink}>{t('chefDashboard', 'exportChangeShort')}</Text>
             </FluidPressable>
           )}
         </View>
@@ -314,7 +457,7 @@ function ExportAction({
 }
 
 const createStyles = (theme: AppTheme) => {
-  const { c } = theme;
+  const { c, isTablet, isDesktop } = theme;
   const u = uiStyles(theme);
   return StyleSheet.create({
     container: u.screen,
@@ -326,9 +469,27 @@ const createStyles = (theme: AppTheme) => {
     flex: {
       flex: 1,
     },
+    flexShrink: {
+      flexShrink: 1,
+      minWidth: 0,
+    },
+    hidden: {
+      display: 'none',
+    },
     filterBar: {
       ...u.column,
       paddingBottom: 0,
+    },
+    filterCard: {
+      ...u.card,
+      flexDirection: isDesktop ? 'row' : 'column',
+      alignItems: isDesktop ? 'center' : 'stretch',
+      gap: isDesktop ? Spacing.lg : Spacing.xs,
+    },
+    filterMonth: {
+      width: isDesktop ? 280 : undefined,
+      // Der Monatswähler bringt seinen eigenen Abstand nach unten mit.
+      marginBottom: isDesktop ? -Spacing.sm : 0,
     },
     plateRow: {
       flexDirection: 'row',
@@ -352,22 +513,70 @@ const createStyles = (theme: AppTheme) => {
     plateChipTextActive: {
       color: c.onTint,
     },
-    exportAction: {
-      marginBottom: Spacing.md,
+    exports: {
+      ...u.inset,
+      marginTop: Spacing.lg,
+    },
+    exportsTitle: {
+      ...u.sectionTitle,
+      marginTop: 0,
+    },
+    // Laptop: vier nebeneinander, Tablet: zwei mal zwei, Handy: untereinander.
+    exportGrid: {
+      flexDirection: isTablet ? 'row' : 'column',
+      flexWrap: isTablet && !isDesktop ? 'wrap' : 'nowrap',
+      gap: Spacing.sm,
+    },
+    exportTile: {
+      ...u.card,
+      flexGrow: isTablet ? 1 : 0,
+      flexBasis: isDesktop ? 0 : isTablet ? '45%' : 'auto',
+      minWidth: 0,
+      gap: Spacing.sm,
+    },
+    exportHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
+    exportIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.tintSoft,
+    },
+    exportHeadText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    exportTitle: {
+      ...Typography.headline,
+      color: c.text,
+    },
+    exportDescription: {
+      ...Typography.footnote,
+      color: c.textSecondary,
     },
     exportButton: {
       ...u.primaryButton,
-      minHeight: 48,
+      minHeight: 44,
       paddingHorizontal: Spacing.sm,
     },
-    exportButtonText: u.primaryButtonText,
+    exportButtonText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.onTint,
+    },
     exportButtonDisabled: u.disabled,
     exportFileRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      gap: Spacing.sm,
-      paddingTop: Spacing.xs,
+      gap: Spacing.xs,
+      minHeight: Layout.minTouch,
+      marginVertical: -Spacing.xs,
     },
     exportFileText: {
       ...Typography.footnote,
@@ -380,7 +589,38 @@ const createStyles = (theme: AppTheme) => {
       color: c.tint,
       minHeight: Layout.minTouch,
       lineHeight: Layout.minTouch,
-      paddingHorizontal: Spacing.xs,
+      paddingLeft: Spacing.xs,
+    },
+    tabs: {
+      ...u.segmented,
+      marginTop: Spacing.xl,
+      marginBottom: 0,
+    },
+    tab: {
+      ...u.segment,
+      minHeight: Layout.minTouch,
+      flexDirection: 'row',
+      gap: Spacing.xs,
+    },
+    tabActive: u.segmentActive,
+    tabText: {
+      ...u.segmentText,
+      flexShrink: 1,
+    },
+    tabTextActive: u.segmentTextActive,
+    tabBadge: {
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 6,
+      borderRadius: Radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.tintFill,
+    },
+    tabBadgeText: {
+      ...Typography.caption2,
+      fontWeight: '700',
+      color: c.onTint,
     },
   });
 };

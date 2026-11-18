@@ -100,6 +100,7 @@ interface TankEntryRow {
   liters_adblue: string | number | null;
   fuel_station: string;
   price_adblue: string | number | null;
+  price_adblue_per_liter: string | number | null;
   price_per_liter: string | number | null;
   price_total: string | number | null;
 }
@@ -338,7 +339,7 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
     },
     {
       label: "Dieselkosten / Monat",
-      formula: `SUM(${calendar("H")})`,
+      formula: `SUM(${calendar("I")})`,
       result: s.dieselCost,
       numFmt: '"EUR" #,##0.00',
     },
@@ -351,7 +352,7 @@ function addSummary(sheet: ExcelJS.Worksheet, s: SummaryInput): void {
     },
     {
       label: "AdBlue-Kosten / Monat",
-      formula: `SUM(${calendar("E")})`,
+      formula: `SUM(${calendar("F")})`,
       result: s.adblueCost,
       numFmt: '"EUR" #,##0.00',
     },
@@ -433,7 +434,7 @@ Deno.serve(async (req) => {
   const { data, error: queryError } = await adminClient
     .from("tank_entries")
     .select(
-      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_per_liter, price_total",
+      "entry_date, license_plate, license_plate_key, km_stand, liters_diesel, liters_adblue, fuel_station, price_adblue, price_adblue_per_liter, price_per_liter, price_total",
     )
     .order("license_plate_key", { ascending: true })
     .order("entry_date", { ascending: true })
@@ -477,6 +478,7 @@ Deno.serve(async (req) => {
       { header: "km-Stand", key: "km", width: 14 },
       { header: "Liter Diesel", key: "diesel", width: 14 },
       { header: "Liter AdBlue", key: "adblue", width: 14 },
+      { header: "AdBlue Preis/Liter", key: "priceAdbluePerLiter", width: 18 },
       { header: "Preis AdBlue", key: "priceAdblue", width: 14 },
       { header: "Tankstelle/Ort", key: "station", width: 32 },
       { header: "Preis/Liter", key: "pricePerLiter", width: 14 },
@@ -537,6 +539,8 @@ Deno.serve(async (req) => {
             // Leer lassen statt 0 — auf dem Zettel steht dort ein Strich,
             // wenn nichts nachgefüllt wurde.
             adblue: entry.liters_adblue === null ? null : toNumber(entry.liters_adblue),
+            priceAdbluePerLiter:
+              entry.price_adblue_per_liter === null ? null : toNumber(entry.price_adblue_per_liter),
             priceAdblue: entry.price_adblue === null ? null : toNumber(entry.price_adblue),
             station: entry.fuel_station,
             // Leer, solange der Chef den Preis noch nicht eingetragen hat —
@@ -576,6 +580,7 @@ Deno.serve(async (req) => {
     sheet.getColumn("adblue").numFmt = "#,##0.00";
     // Zwei bis vier Nachkommastellen: zeigt einen Literpreis (0,8900) wie
     // einen Betrag (12,50) so, wie er eingetragen wurde.
+    sheet.getColumn("priceAdbluePerLiter").numFmt = "#,##0.0000";
     sheet.getColumn("priceAdblue").numFmt = "#,##0.00##";
     // Vier Nachkommastellen, weil Literpreise so notiert werden (1,3775).
     sheet.getColumn("pricePerLiter").numFmt = "#,##0.0000";

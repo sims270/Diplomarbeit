@@ -1,3 +1,4 @@
+import { convertExternalToOwnOrder } from '@/app/services/orderConversionService';
 import {
   type ExternalOrder,
   type ExternalOrderFields,
@@ -35,6 +36,7 @@ export default function EditExternalOrderScreen() {
 
   const [order, setOrder] = useState<ExternalOrder | undefined | null>(undefined);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
@@ -75,6 +77,33 @@ export default function EditExternalOrderScreen() {
       },
       {
         confirmText: t('chefExternalOrder', 'completeConfirmButton'),
+        cancelText: t('common', 'cancel'),
+      }
+    );
+  };
+
+  // Danach direkt zum eigenen Auftrag: Dort wird der Fahrer zugewiesen und
+  // der Preis eingetragen.
+  const handleConvert = () => {
+    if (!order) return;
+    showConfirm(
+      t('chefExternalOrder', 'convertConfirmTitle'),
+      `Nr. ${order.orderNr} ${t('chefExternalOrder', 'convertConfirmMessage')}`,
+      async () => {
+        setIsConverting(true);
+        try {
+          await convertExternalToOwnOrder(order.id);
+          router.replace({ pathname: '/chef/order/[id]', params: { id: order.id } });
+        } catch (error) {
+          showAlert(
+            t('common', 'error'),
+            error instanceof Error ? error.message : t('chefExternalOrder', 'convertFailed')
+          );
+          setIsConverting(false);
+        }
+      },
+      {
+        confirmText: t('chefExternalOrder', 'convertConfirmButton'),
         cancelText: t('common', 'cancel'),
       }
     );
@@ -155,6 +184,19 @@ export default function EditExternalOrderScreen() {
                 )}
               </FluidPressable>
               <Text style={styles.hint}>{t('chefExternalOrder', 'completeHint')}</Text>
+              <FluidPressable
+                style={[styles.completeButton, isConverting && styles.buttonDisabled]}
+                onPress={handleConvert}
+                disabled={isConverting}
+              >
+                {isConverting ? (
+                  <ActivityIndicator color={c.tint} />
+                ) : (
+                  <Text style={styles.completeButtonText}>
+                    {t('chefExternalOrder', 'convertButton')}
+                  </Text>
+                )}
+              </FluidPressable>
             </>
           )}
         </View>

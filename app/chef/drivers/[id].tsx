@@ -108,7 +108,10 @@ export default function EditDriverScreen() {
           });
 
           if (error || data?.error) {
-            throw new Error(data?.error ?? error?.message ?? 'Unknown error');
+            // Bei einem Fehlerstatus steht die Begründung im Antwort-Body,
+            // error.message sagt nur "non-2xx status code".
+            const body = await error?.context?.json?.().catch(() => null);
+            throw new Error(body?.error ?? data?.error ?? error?.message ?? 'Unknown error');
           }
 
           showAlert(t('common', 'success'), `"${label}" ${t('editDriver', 'alertDeleted')}`);

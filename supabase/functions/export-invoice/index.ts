@@ -459,8 +459,11 @@ async function loadCompletedOrders(
   );
 }
 
-/** Position aus dem Auftrag vorbefüllt. Der Preis bleibt leer — er wird ausgehandelt. */
-function itemPrefill(order: OrderRow) {
+/**
+ * Position aus dem Auftrag vorbefüllt. Der Preis kommt aus order_prices bzw.
+ * external_orders.customer_price; ohne Eintrag bleibt er leer.
+ */
+function itemPrefill(order: OrderRow, preis: string | number | null) {
   const loading = splitAddress(order.loading_address);
   const unloading = splitAddress(order.unloading_address);
 
@@ -472,7 +475,7 @@ function itemPrefill(order: OrderRow) {
     ladedatum: order.loading_date,
     entladestelle: unloading.town ? `lt. Weisung in ${unloading.town}` : "",
     entladedatum: order.unloading_date,
-    preis: null,
+    preis,
   };
 }
 
@@ -498,12 +501,26 @@ async function prefillInvoice(adminClient: SupabaseClient, invoiceId: string): P
     (await fetchOrders(adminClient, orderIds)).map((order) => [order.id, order]),
   );
 
+  const emptyItemIds = emptyItems.map((item) => item.order_id);
+  const [ownPrices, externalPrices] = await Promise.all([
+    adminClient.from("order_prices").select("order_id, preis").in("order_id", emptyItemIds),
+    adminClient.from("external_orders").select("id, customer_price").in("id", emptyItemIds),
+  ]);
+  if (ownPrices.error) throw new HttpError(ownPrices.error.message, 400);
+  if (externalPrices.error) throw new HttpError(externalPrices.error.message, 400);
+  const prices = new Map<string, string | number | null>([
+    ...((ownPrices.data ?? []) as { order_id: string; preis: string | number | null }[])
+      .map((row): [string, string | number | null] => [row.order_id, row.preis]),
+    ...((externalPrices.data ?? []) as { id: string; customer_price: string | number | null }[])
+      .map((row): [string, string | number | null] => [row.id, row.customer_price]),
+  ]);
+
   for (const item of emptyItems) {
     const order = orders.get(item.order_id);
     if (!order) continue;
     const { error: itemError } = await adminClient
       .from("invoice_items")
-      .update(itemPrefill(order))
+      .update(itemPrefill(order, prices.get(item.order_id) ?? null))
       .eq("id", item.id);
     if (itemError) throw new HttpError(itemError.message, 400);
   }

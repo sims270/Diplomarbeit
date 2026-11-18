@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ExternalOrderFields } from '@/app/services/externalOrderService';
+import { parseAmount } from '@/app/services/invoiceService';
 import {
   addCarrierCompanyIfNew,
   getCarrierCompanies,
@@ -69,6 +70,7 @@ const emptyFields: ExternalOrderFields = {
   driverName: '',
   clientCompany: '',
   clientAddress: '',
+  customerPrice: '',
 };
 
 interface ExternalOrderFormProps {
@@ -218,6 +220,14 @@ export function ExternalOrderForm({
       !vehicleType.trim()
     ) {
       showAlert(t('common', 'error'), t('chefExternalOrder', 'alertFillFields'));
+      return;
+    }
+
+    // Leer ist erlaubt (noch kein Preis vereinbart), Unlesbares nicht — das
+    // würde sonst still als "kein Preis" gespeichert.
+    const parsedPrice = parseAmount(form.customerPrice);
+    if (form.customerPrice.trim() && (parsedPrice === null || parsedPrice < 0)) {
+      showAlert(t('common', 'error'), t('chefExternalOrder', 'alertInvalidCustomerPrice'));
       return;
     }
 
@@ -434,6 +444,18 @@ export function ExternalOrderForm({
       {/* Laptop/Desktop: zwei Spalten nebeneinander */}
       <View style={styles.pair}>
         <View style={styles.pairItem}>
+          <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'customerPriceLabel')}</Text>
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefExternalOrder', 'customerPricePlaceholder')}
+            value={form.customerPrice}
+            onChangeText={set('customerPrice')}
+            keyboardType="decimal-pad"
+          />
+          <Text style={styles.hint}>{t('chefExternalOrder', 'customerPriceHint')}</Text>
+
           <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'conditionsSection')}</Text>
           <TextInput
             placeholderTextColor={c.placeholder}

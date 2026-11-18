@@ -18,7 +18,7 @@ import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
 import { plateKey } from '@/lib/plateKey';
 import { useFocusEffect } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 /**
@@ -45,6 +45,19 @@ const formatInput = (value: number | null, digits: number) =>
         useGrouping: false,
       });
 
+// Liter mal Literpreis, auf Cent gerundet; leer, solange kein gültiger
+// Literpreis dasteht.
+const computeTotal = (liters: number | null, perLiter: string) => {
+  const price = parseGermanNumber(perLiter);
+  if (liters === null || price === null || price <= 0) return '';
+  return formatInput(Math.round(liters * price * 100) / 100, 2);
+};
+
+// Ein gespeicherter Betrag, der nicht dem ausgerechneten entspricht, stammt
+// vom Beleg. Er bleibt stehen, bis der Chef das Feld selbst leert.
+const isManualTotal = (total: number | null, liters: number | null, perLiter: number | null) =>
+  total !== null && formatInput(total, 2) !== computeTotal(liters, formatInput(perLiter, 4));
+
 // Der AdBlue-Preis zählt nur mit, wenn auch AdBlue getankt wurde — sonst
 // stünde jede Diesel-Tankung ewig als "ohne Preis" in der Liste.
 const hasAllPrices = (entry: TankEntry) =>
@@ -53,13 +66,13 @@ const hasAllPrices = (entry: TankEntry) =>
   (entry.litersAdBlue === null || entry.priceAdBlue !== null);
 
 export function TankPricesSection({
-  action,
+  onMissingCount,
   refreshSignal,
   month,
   selectedPlate,
 }: {
-  /** Steht unter dem Hinweis — im Tab der Button "Tankliste exportieren". */
-  action?: ReactNode;
+  /** Meldet, wie viele Tankungen noch keinen Preis haben — steht auf dem Reiter. */
+  onMissingCount?: (count: number) => void;
   /** Hochzählen lädt neu (Pull-to-Refresh der ScrollView im Tab). */
   refreshSignal: number;
   /** 'YYYY-MM' — nur Tankungen aus diesem Monat. */
@@ -144,33 +157,39 @@ export function TankPricesSection({
 
   const missingCount = inScope.filter((e) => !hasAllPrices(e)).length;
 
+  useEffect(() => {
+    onMissingCount?.(missingCount);
+  }, [missingCount, onMissingCount]);
+
   const handleSaved = (updated: TankEntry) =>
     setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{t('chefTankliste', 'title')}</Text>
-      <Text style={styles.hint}>{t('chefTankliste', 'hint')}</Text>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>{t('chefTankliste', 'title')}</Text>
+          <Text style={styles.hint}>{t('chefTankliste', 'hint')}</Text>
+        </View>
 
-      {action}
-
-      <View style={styles.filterRow}>
-        <FluidPressable
-          style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
-          onPress={() => setOnlyMissing(true)}
-        >
-          <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
-            {`${t('chefTankliste', 'filterMissing')} (${missingCount})`}
-          </Text>
-        </FluidPressable>
-        <FluidPressable
-          style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
-          onPress={() => setOnlyMissing(false)}
-        >
-          <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
-            {`${t('chefTankliste', 'filterAll')} (${inScope.length})`}
-          </Text>
-        </FluidPressable>
+        <View style={styles.filterRow}>
+          <FluidPressable
+            style={[styles.filterChip, onlyMissing && styles.filterChipActive]}
+            onPress={() => setOnlyMissing(true)}
+          >
+            <Text style={[styles.filterText, onlyMissing && styles.filterTextActive]}>
+              {`${t('chefTankliste', 'filterMissing')} (${missingCount})`}
+            </Text>
+          </FluidPressable>
+          <FluidPressable
+            style={[styles.filterChip, !onlyMissing && styles.filterChipActive]}
+            onPress={() => setOnlyMissing(false)}
+          >
+            <Text style={[styles.filterText, !onlyMissing && styles.filterTextActive]}>
+              {`${t('chefTankliste', 'filterAll')} (${inScope.length})`}
+            </Text>
+          </FluidPressable>
+        </View>
       </View>
 
       {isOfflineMode ? (
@@ -218,9 +237,37 @@ function PriceRow({
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
-  const [priceAdBlue, setPriceAdBlue] = useState(formatInput(entry.priceAdBlue, 2));
+  const [priceAdBluePerLiter, setPriceAdBluePerLiter] = useState(
+    formatInput(entry.priceAdBluePerLiter, 4)
+  );
+  const [typedAdBlueTotal, setTypedAdBlueTotal] = useState(formatInput(entry.priceAdBlue, 2));
   const [pricePerLiter, setPricePerLiter] = useState(formatInput(entry.pricePerLiter, 4));
-  const [priceTotal, setPriceTotal] = useState(formatInput(entry.priceTotal, 2));
+  const [typedDieselTotal, setTypedDieselTotal] = useState(formatInput(entry.priceTotal, 2));
+  // Solange der Chef einen Gesamtbetrag nicht selbst ändert, rechnet ihn die
+  // App aus Litern und Literpreis. Leert er das Feld, rechnet sie wieder.
+  const [isAdBlueTotalManual, setIsAdBlueTotalManual] = useState(() =>
+    isManualTotal(entry.priceAdBlue, entry.litersAdBlue, entry.priceAdBluePerLiter)
+  );
+  const [isDieselTotalManual, setIsDieselTotalManual] = useState(() =>
+    isManualTotal(entry.priceTotal, entry.litersDiesel, entry.pricePerLiter)
+  );
+
+  const adBlueTotal = isAdBlueTotalManual
+    ? typedAdBlueTotal
+    : computeTotal(entry.litersAdBlue, priceAdBluePerLiter);
+  const dieselTotal = isDieselTotalManual
+    ? typedDieselTotal
+    : computeTotal(entry.litersDiesel, pricePerLiter);
+
+  const changeAdBlueTotal = (value: string) => {
+    setTypedAdBlueTotal(value);
+    setIsAdBlueTotalManual(value.trim() !== '');
+  };
+  const changeDieselTotal = (value: string) => {
+    setTypedDieselTotal(value);
+    setIsDieselTotalManual(value.trim() !== '');
+  };
+
   // Die Eingabe des Fahrers bleibt zugeklappt — ändern muss der Chef sie
   // nur, wenn sich jemand vertippt hat.
   const [isEditing, setIsEditing] = useState(false);
@@ -240,11 +287,17 @@ function PriceRow({
 
     // Ohne AdBlue gibt es das Feld gar nicht — dann wird auch nichts
     // mitgeschickt, egal was vorher einmal drinstand.
-    const adBlue = entry.litersAdBlue === null ? null : parse(priceAdBlue);
+    const adBlue = entry.litersAdBlue === null ? null : parse(adBlueTotal);
+    const adBluePerLiter = entry.litersAdBlue === null ? null : parse(priceAdBluePerLiter);
     const perLiter = parse(pricePerLiter);
-    const total = parse(priceTotal);
+    const total = parse(dieselTotal);
 
-    if (adBlue === 'invalid' || perLiter === 'invalid' || total === 'invalid') {
+    if (
+      adBlue === 'invalid' ||
+      adBluePerLiter === 'invalid' ||
+      perLiter === 'invalid' ||
+      total === 'invalid'
+    ) {
       showAlert(t('common', 'error'), t('chefTankliste', 'alertInvalidPrice'));
       return;
     }
@@ -253,13 +306,21 @@ function PriceRow({
     try {
       await setTankEntryPrices(entry.id, {
         priceAdBlue: adBlue,
+        priceAdBluePerLiter: adBluePerLiter,
         pricePerLiter: perLiter,
         priceTotal: total,
       });
-      onSaved({ ...entry, priceAdBlue: adBlue, pricePerLiter: perLiter, priceTotal: total });
-      setPriceAdBlue(formatInput(adBlue, 2));
+      onSaved({
+        ...entry,
+        priceAdBlue: adBlue,
+        priceAdBluePerLiter: adBluePerLiter,
+        pricePerLiter: perLiter,
+        priceTotal: total,
+      });
+      setPriceAdBluePerLiter(formatInput(adBluePerLiter, 4));
+      setTypedAdBlueTotal(formatInput(adBlue, 2));
       setPricePerLiter(formatInput(perLiter, 4));
-      setPriceTotal(formatInput(total, 2));
+      setTypedDieselTotal(formatInput(total, 2));
     } catch (error) {
       showAlert(
         t('common', 'error'),
@@ -305,24 +366,40 @@ function PriceRow({
         </FluidPressable>
       )}
 
-      <View style={styles.priceRow}>
-        {/* Reihenfolge wie in der Excel-Datei: AdBlue-Preis steht dort
-            direkt hinter den AdBlue-Litern, vor den Diesel-Preisen. */}
-        {entry.litersAdBlue !== null && (
+      {/* Reihenfolge wie in der Excel-Datei: AdBlue-Preise stehen dort
+          direkt hinter den AdBlue-Litern, vor den Diesel-Preisen. */}
+      {entry.litersAdBlue !== null && (
+        <View style={[styles.priceRow, styles.adBlueRow]}>
+          <View style={styles.priceField}>
+            <Text style={styles.priceLabel}>{t('chefTankliste', 'priceAdBluePerLiterLabel')}</Text>
+            <TextInput
+              placeholderTextColor={c.placeholder}
+              keyboardAppearance={scheme}
+              style={styles.input}
+              value={priceAdBluePerLiter}
+              onChangeText={setPriceAdBluePerLiter}
+              placeholder="0,8900"
+              keyboardType="decimal-pad"
+              editable={!isSaving}
+            />
+          </View>
           <View style={styles.priceField}>
             <Text style={styles.priceLabel}>{t('chefTankliste', 'priceAdBlueLabel')}</Text>
             <TextInput
               placeholderTextColor={c.placeholder}
               keyboardAppearance={scheme}
               style={styles.input}
-              value={priceAdBlue}
-              onChangeText={setPriceAdBlue}
+              value={adBlueTotal}
+              onChangeText={changeAdBlueTotal}
               placeholder="0,00"
               keyboardType="decimal-pad"
               editable={!isSaving}
             />
           </View>
-        )}
+        </View>
+      )}
+
+      <View style={styles.priceRow}>
         <View style={styles.priceField}>
           <Text style={styles.priceLabel}>{t('chefTankliste', 'pricePerLiterLabel')}</Text>
           <TextInput
@@ -342,8 +419,8 @@ function PriceRow({
             placeholderTextColor={c.placeholder}
             keyboardAppearance={scheme}
             style={styles.input}
-            value={priceTotal}
-            onChangeText={setPriceTotal}
+            value={dieselTotal}
+            onChangeText={changeDieselTotal}
             placeholder="567,43"
             keyboardType="decimal-pad"
             editable={!isSaving}
@@ -441,6 +518,7 @@ function EntryEditForm({
         fuelStation: fuelStation.trim(),
         // Ohne AdBlue verwirft die Datenbank auch den AdBlue-Preis.
         priceAdBlue: parsedAdBlue === null ? null : entry.priceAdBlue,
+        priceAdBluePerLiter: parsedAdBlue === null ? null : entry.priceAdBluePerLiter,
       });
     } catch (error) {
       showAlert(
@@ -554,23 +632,38 @@ const createStyles = (theme: AppTheme) => {
   const { c, scheme } = theme;
   const u = uiStyles(theme);
   return StyleSheet.create({
-    section: u.column,
+    section: {
+      ...u.column,
+      paddingTop: Spacing.lg,
+    },
+    // Überschrift links, Filter rechts; am Handy untereinander.
+    sectionHeader: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionHeading: {
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 320,
+    },
     sectionTitle: {
-      ...Typography.title2,
+      ...Typography.title3,
       color: c.text,
       marginBottom: Spacing.xxs,
     },
     hint: {
       ...u.hint,
       marginTop: 0,
-      marginBottom: Spacing.sm,
     },
     // Filter als iOS-Pills
     filterRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Spacing.xs,
-      marginBottom: Spacing.md,
     },
     filterChip: {
       minHeight: Layout.minTouch,
@@ -654,6 +747,9 @@ const createStyles = (theme: AppTheme) => {
       flexWrap: 'wrap',
       alignItems: 'flex-end',
       gap: Spacing.xs,
+    },
+    adBlueRow: {
+      marginBottom: Spacing.xs,
     },
     priceField: {
       flex: 1,

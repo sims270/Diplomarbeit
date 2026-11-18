@@ -10,6 +10,11 @@ import { useTranslation } from '@/hooks/use-translation';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getAllOrders, type Order } from '../../services/orderService';
+import {
+  type ExternalOrder,
+  externalOrderTileStatus,
+  getAllExternalOrders,
+} from '../../services/externalOrderService';
 import { currentMonth, isInMonth } from '@/lib/month';
 import { MonthPicker } from '@/components/MonthPicker';
 import { ReminderGroups } from '@/components/ReminderGroups';
@@ -24,6 +29,7 @@ export default function ChefDashboardScreen() {
   const router = useRouter();
   const { isLoading, isAuthenticated, isOfflineMode } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [externalOrders, setExternalOrders] = useState<ExternalOrder[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
   // Die Kacheln zählen nur Aufträge des gewählten Monats — standardmäßig des
@@ -32,12 +38,19 @@ export default function ChefDashboardScreen() {
   const [month, setMonth] = useState(currentMonth);
   const stats = useMemo(() => {
     const inMonth = orders.filter((o) => isInMonth(o.loadingDate || o.unloadingDate, month));
+    // Fremdaufträge zählen in denselben Kacheln wie die eigenen.
+    const externalInMonth = externalOrders.filter((o) =>
+      isInMonth(o.loadingDate || o.unloadingDate, month)
+    );
+    const count = (status: 'pending' | 'assigned' | 'completed') =>
+      inMonth.filter((o) => o.status === status).length +
+      externalInMonth.filter((o) => externalOrderTileStatus(o) === status).length;
     return {
-      pending: inMonth.filter((o) => o.status === 'pending').length,
-      assigned: inMonth.filter((o) => o.status === 'assigned').length,
-      completed: inMonth.filter((o) => o.status === 'completed').length,
+      pending: count('pending'),
+      assigned: count('assigned'),
+      completed: count('completed'),
     };
-  }, [orders, month]);
+  }, [orders, externalOrders, month]);
   // Tankliste und Umsatzliste haben einen eigenen Tab (app/chef/(tabs)/tank.tsx).
 
   // Erinnerungen (Service, Pickerl, Genehmigungen, abgelaufene Zugänge)
@@ -91,6 +104,7 @@ export default function ChefDashboardScreen() {
   const loadStats = async () => {
     try {
       setOrders(await getAllOrders());
+      setExternalOrders(await getAllExternalOrders());
     } catch {
       // Stats are just a glance-at-a-glance summary — fall back to zeros
       // rather than blocking the rest of the dashboard on this.

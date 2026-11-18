@@ -87,11 +87,16 @@ const XLSX_MIME =
 
 /** Unter diesem Schlüssel merkt sich der Browser die Datei des Chefs. */
 export const UMSATZLISTE_FILE_KEY = 'umsatzliste';
+export const UMSATZLISTE_2_FILE_KEY = 'umsatzliste-2';
+export const GEWINNLISTE_FILE_KEY = 'gewinnliste';
 
 // Gleiche Fehlerbehandlung wie in tankEntryService.describeFunctionError:
 // Die Begründung steht im JSON-Body, und ein FunctionsFetchError heißt fast
 // immer "noch nicht deployt".
-async function describeFunctionError(error: { name?: string; message?: string }): Promise<string> {
+async function describeFunctionError(
+  error: { name?: string; message?: string },
+  functionName: string
+): Promise<string> {
   const response = (error as { context?: unknown }).context;
 
   if (response instanceof Response) {
@@ -105,22 +110,22 @@ async function describeFunctionError(error: { name?: string; message?: string })
 
   if (error.name === 'FunctionsFetchError') {
     return (
-      'Die Edge Function "export-revenue-list" ist nicht erreichbar. ' +
+      `Die Edge Function "${functionName}" ist nicht erreichbar. ` +
       'Sie muss einmalig deployt werden:\n\n' +
-      'supabase functions deploy export-revenue-list'
+      `supabase functions deploy ${functionName}`
     );
   }
 
   return error.message ?? 'Export fehlgeschlagen.';
 }
 
-async function fetchRevenueListXlsx(): Promise<Blob> {
-  const { data, error } = await supabase.functions.invoke('export-revenue-list', {
+async function fetchXlsx(functionName: string): Promise<Blob> {
+  const { data, error } = await supabase.functions.invoke(functionName, {
     method: 'POST',
   });
 
   if (error) {
-    throw new Error(await describeFunctionError(error));
+    throw new Error(await describeFunctionError(error, functionName));
   }
 
   if (!(data instanceof Blob)) {
@@ -139,9 +144,46 @@ async function fetchRevenueListXlsx(): Promise<Blob> {
  * Chrome in die einmal gewählte Datei, sonst als Download. Muss direkt aus
  * dem Klick heraus aufgerufen werden.
  */
-export async function exportRevenueList(
-  options: { chooseNewFile?: boolean } = {}
-): Promise<{ savedTo: 'file' | 'download'; fileName: string }> {
+export function exportRevenueList(options: { chooseNewFile?: boolean } = {}) {
+  return exportXlsx({
+    functionName: 'export-revenue-list',
+    fileKey: UMSATZLISTE_FILE_KEY,
+    baseName: 'Umsatzliste',
+    chooseNewFile: options.chooseNewFile,
+  });
+}
+
+/** Die Umsatzliste 2: die Wochen-Disposition, ein Blatt je Kalenderwoche. */
+export function exportWeeklyRevenueList(options: { chooseNewFile?: boolean } = {}) {
+  return exportXlsx({
+    functionName: 'export-weekly-revenue',
+    fileKey: UMSATZLISTE_2_FILE_KEY,
+    baseName: 'Umsatzliste_2',
+    chooseNewFile: options.chooseNewFile,
+  });
+}
+
+/** Die Gewinnliste: Eingang, Ausgang und Gewinn der erledigten Fremdaufträge je Monat. */
+export function exportExternalProfitList(options: { chooseNewFile?: boolean } = {}) {
+  return exportXlsx({
+    functionName: 'export-external-profit',
+    fileKey: GEWINNLISTE_FILE_KEY,
+    baseName: 'Gewinnliste',
+    chooseNewFile: options.chooseNewFile,
+  });
+}
+
+async function exportXlsx({
+  functionName,
+  fileKey,
+  baseName,
+  chooseNewFile,
+}: {
+  functionName: string;
+  fileKey: string;
+  baseName: string;
+  chooseNewFile?: boolean;
+}): Promise<{ savedTo: 'file' | 'download'; fileName: string }> {
   if (Platform.OS !== 'web') {
     throw new Error(
       'Der Excel-Export steht im Web-Dashboard zur Verfügung. Bitte dort herunterladen.'
@@ -150,20 +192,20 @@ export async function exportRevenueList(
 
   if (supportsRememberedFile()) {
     const fileName = await saveToRememberedFile({
-      key: UMSATZLISTE_FILE_KEY,
-      suggestedName: 'Umsatzliste.xlsx',
+      key: fileKey,
+      suggestedName: `${baseName}.xlsx`,
       mimeType: XLSX_MIME,
       extension: '.xlsx',
       description: 'Excel-Tabelle',
-      produce: fetchRevenueListXlsx,
-      chooseNew: options.chooseNewFile,
+      produce: () => fetchXlsx(functionName),
+      chooseNew: chooseNewFile,
     });
     return { savedTo: 'file', fileName };
   }
 
-  const blob = await fetchRevenueListXlsx();
+  const blob = await fetchXlsx(functionName);
   const url = URL.createObjectURL(blob);
-  const fileName = `Umsatzliste_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `${baseName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
   const link = document.createElement('a');
   link.href = url;

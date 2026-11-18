@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { parseAmount } from '@/app/services/invoiceService';
 import type { OrderFields } from '@/app/services/orderService';
 import {
   addSiteCompanyIfNew,
@@ -62,8 +63,10 @@ const emptyFields: OrderFields = {
 
 interface OwnOrderFormProps {
   initialValues?: Partial<OrderFields>;
+  /** Getrennt von den Auftragsfeldern — siehe app/services/orderPriceService.ts. */
+  initialPrice?: string;
   submitLabel: string;
-  onSubmit: (fields: OrderFields) => Promise<void>;
+  onSubmit: (fields: OrderFields, price: string) => Promise<void>;
 }
 
 // Shared by app/chef/order/new.tsx (create) and [id].tsx (edit) — same
@@ -71,12 +74,13 @@ interface OwnOrderFormProps {
 // directory for Ladestelle/Entladestelle), minus everything that only
 // makes sense once a job leaves the company (recipient, freight terms,
 // vehicle, legal notes).
-export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderFormProps) {
+export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, onSubmit }: OwnOrderFormProps) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
 
   const [form, setForm] = useState<OrderFields>({ ...emptyFields, ...initialValues });
+  const [price, setPrice] = useState(initialPrice);
   const [siteCompanies, setSiteCompanies] = useState<SiteCompany[]>([]);
   const [unloadingCompanies, setUnloadingCompanies] = useState<string[]>([]);
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
@@ -180,9 +184,17 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
       return;
     }
 
+    // Leer ist erlaubt (noch kein Preis vereinbart), Unlesbares nicht — das
+    // würde sonst still als "kein Preis" gespeichert.
+    const parsedPrice = parseAmount(price);
+    if (price.trim() && (parsedPrice === null || parsedPrice < 0)) {
+      showAlert(t('common', 'error'), t('chefOwnOrder', 'alertInvalidPrice'));
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await onSubmit(form);
+      await onSubmit(form, price);
 
       // Best-effort, after the fact: remembers freshly typed site companies
       // for next time's dropdowns. Never blocks saving if it fails (see
@@ -240,6 +252,18 @@ export function OwnOrderForm({ initialValues, submitLabel, onSubmit }: OwnOrderF
           ? form.clientAddress
           : t('chefOwnOrder', 'clientHint')}
       </Text>
+
+      <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'priceLabel')}</Text>
+      <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
+        style={styles.input}
+        placeholder={t('chefOwnOrder', 'pricePlaceholder')}
+        value={price}
+        onChangeText={setPrice}
+        keyboardType="decimal-pad"
+      />
+      <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'priceHint')}</Text>
 
       {/* Laptop/Desktop: zwei Spalten nebeneinander */}
       <View style={styles.pair}>

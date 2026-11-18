@@ -34,12 +34,13 @@ export default function DriversListScreen() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  // Der Grund vom Server, damit ein Fehler nicht wie eine leere Liste wirkt.
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Eigene Fahrer oder die Zugänge fremder Fahrer (components/ExternalAccessList.tsx)
   const [activeTab, setActiveTab] = useState<'own' | 'external'>('own');
 
   const loadDrivers = useCallback(async () => {
-    setLoadError(false);
+    setLoadError(null);
 
     // Im Offline-Modus gibt es kein JWT, das die Edge Function akzeptieren
     // könnte — der Aufruf würde zwangsläufig scheitern. Statt den Nutzer in
@@ -56,11 +57,16 @@ export default function DriversListScreen() {
         method: 'GET',
       });
       if (error || data?.error) {
-        throw new Error(data?.error ?? error?.message ?? 'Unknown error');
+        // Bei einem Fehlerstatus steht die Begründung im Antwort-Body.
+        const body = await error?.context?.json?.().catch(() => null);
+        const httpStatus = error?.context?.status;
+        const reason = body?.error ?? data?.error ?? error?.message ?? 'Unknown error';
+        throw new Error(httpStatus ? `${reason} (HTTP ${httpStatus})` : reason);
       }
       setDrivers(data.drivers ?? []);
-    } catch {
-      setLoadError(true);
+    } catch (error) {
+      setDrivers([]);
+      setLoadError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -133,7 +139,7 @@ export default function DriversListScreen() {
             ) : isLoading ? (
               <ActivityIndicator style={styles.loading} color={c.tint} />
             ) : loadError ? (
-              <Text style={styles.errorText}>{t('driversList', 'loadFailed')}</Text>
+              <Text style={styles.errorText}>{`${t('driversList', 'loadFailed')}: ${loadError}`}</Text>
             ) : drivers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>{t('driversList', 'emptyState')}</Text>

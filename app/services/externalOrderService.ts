@@ -1,3 +1,5 @@
+import { parseAmount } from '@/app/services/invoiceService';
+import { formatAmount } from '@/lib/invoiceTotals';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -65,6 +67,24 @@ export interface ExternalOrder {
    */
   status: string;
   completedAt: string | null;
+  /**
+   * Was der Kunde zahlt, im Format "1.395,00"; leer = noch nicht eingetragen.
+   * Nicht zu verwechseln mit freightRate, dem Preis für den Frachtführer. Steht
+   * auf keinem PDF und nicht in der App des fremden Fahrers.
+   */
+  customerPrice: string;
+  /** Zugang des fremden Fahrers; null = noch niemandem zugewiesen. */
+  assignedExternalUserId: string | null;
+}
+
+/**
+ * Unter welcher Kachel des Chefs ein Fremdauftrag steht. Die Spalte status
+ * kennt nur 'pending' und 'completed' — "zugewiesen" ergibt sich daraus, dass
+ * ein fremder Fahrer eingetragen ist.
+ */
+export function externalOrderTileStatus(order: ExternalOrder): 'pending' | 'assigned' | 'completed' {
+  if (order.status === 'completed') return 'completed';
+  return order.assignedExternalUserId ? 'assigned' : 'pending';
 }
 
 // orderNr stays editable: leaving it blank auto-assigns the next number
@@ -74,7 +94,7 @@ export interface ExternalOrder {
 // Status und Abschluss gehören nicht ins Formular — die setzt das Erledigen.
 export type ExternalOrderFields = Omit<
   ExternalOrder,
-  'id' | 'createdAt' | 'updatedAt' | 'status' | 'completedAt'
+  'id' | 'createdAt' | 'updatedAt' | 'status' | 'completedAt' | 'assignedExternalUserId'
 >;
 
 // external_orders.loading_date/unloading_date are real `date` columns —
@@ -121,6 +141,8 @@ function rowToOrder(row: any): ExternalOrder {
     clientAddress: row.client_address ?? '',
     status: row.status ?? 'pending',
     completedAt: row.completed_at ?? null,
+    customerPrice: row.customer_price == null ? '' : formatAmount(Number(row.customer_price)),
+    assignedExternalUserId: row.assigned_external_user_id ?? null,
   };
 }
 
@@ -156,6 +178,7 @@ function fieldsToRow(data: ExternalOrderFields): Record<string, unknown> {
     client_company: data.clientCompany.trim(),
     // Ohne Auftraggeber auch keine Anschrift — sonst bliebe eine alte stehen.
     client_address: data.clientCompany.trim() ? data.clientAddress.trim() : '',
+    customer_price: parseAmount(data.customerPrice),
   };
 
   if (data.orderNr.trim()) {

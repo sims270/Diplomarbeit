@@ -1,5 +1,7 @@
 import { useAuth } from '@/app/context/AuthContext';
 import { Driver, getDrivers } from '@/app/services/driverService';
+import { convertOwnToExternalOrder } from '@/app/services/orderConversionService';
+import { getOrderPrice, saveOrderPrice } from '@/app/services/orderPriceService';
 import {
   assignOrderToDriver,
   deleteOrder,
@@ -21,7 +23,7 @@ import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-the
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { timestampToGerman } from '@/lib/dateFormat';
-import { showAlert } from '@/lib/alert';
+import { showAlert, showConfirm } from '@/lib/alert';
 import { exportOwnOrderPdf } from '@/lib/ownOrderExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -36,9 +38,11 @@ export default function ChefOrderDetailScreen() {
   const { isOfflineMode } = useAuth();
 
   const [order, setOrder] = useState<Order | undefined | null>(undefined);
+  const [price, setPrice] = useState('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     loadOrder();
@@ -47,8 +51,13 @@ export default function ChefOrderDetailScreen() {
 
   const loadOrder = () => {
     if (!id) return;
-    getOrderById(id)
-      .then((found) => setOrder(found ?? null))
+    // Gemeinsam laden: Das Formular übernimmt den Preis nur beim ersten
+    // Anzeigen, und ein leeres Feld würde ihn beim Speichern löschen.
+    Promise.all([getOrderById(id), getOrderPrice(id)])
+      .then(([found, foundPrice]) => {
+        setPrice(foundPrice);
+        setOrder(found ?? null);
+      })
       .catch(() => setOrder(null));
   };
 
@@ -91,14 +100,17 @@ export default function ChefOrderDetailScreen() {
     return statusMap[status] || status;
   };
 
-  const handleUpdate = async (fields: OrderFields) => {
+  const handleUpdate = async (fields: OrderFields, newPrice: string) => {
     if (!id) return;
     const updated = await updateOrder(id, fields);
     const assignedDriver = drivers.find((d) => d.id === updated.assignedTo);
 
     // Same reasoning as the create screen: keep this right after the click
     // with nothing awaited ahead of it, so web's popup permission holds.
-    await exportOwnOrderPdf(updated, assignedDriver?.username);
+    await Promise.all([
+      saveOrderPrice(id, newPrice),
+      exportOwnOrderPdf(updated, assignedDriver?.username),
+    ]);
     router.back();
   };
 
@@ -118,6 +130,33 @@ export default function ChefOrderDetailScreen() {
     } finally {
       setIsAssigning(false);
     }
+  };
+
+  // Danach direkt ins Formular des Fremdauftrags: Dort fehlen noch
+  // Frachtführer und Frachtrate.
+  const handleConvert = () => {
+    if (!order) return;
+    showConfirm(
+      t('chefOrderDetail', 'convertConfirmTitle'),
+      `Nr. ${order.orderNr} ${t('chefOrderDetail', 'convertConfirmMessage')}`,
+      async () => {
+        setIsConverting(true);
+        try {
+          await convertOwnToExternalOrder(order.id);
+          router.replace({ pathname: '/chef/external-order/[id]', params: { id: order.id } });
+        } catch (error) {
+          showAlert(
+            t('common', 'error'),
+            error instanceof Error ? error.message : t('chefOrderDetail', 'convertFailed')
+          );
+          setIsConverting(false);
+        }
+      },
+      {
+        confirmText: t('chefOrderDetail', 'convertConfirmButton'),
+        cancelText: t('common', 'cancel'),
+      }
+    );
   };
 
   const handleDelete = async () => {
@@ -169,6 +208,19 @@ export default function ChefOrderDetailScreen() {
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
             <Text style={styles.statusBadgeText}>{getStatusText(order.status)}</Text>
           </View>
+          {order.status !== 'completed' ? (
+            <FluidPressable
+              style={[styles.convertButton, isConverting && styles.buttonDisabled]}
+              onPress={handleConvert}
+              disabled={isConverting}
+            >
+              {isConverting ? (
+                <ActivityIndicator color={c.tint} />
+              ) : (
+                <Text style={styles.convertButtonText}>{t('chefOrderDetail', 'convertButton')}</Text>
+              )}
+            </FluidPressable>
+          ) : null}
         </View>
 
         {order.completedAt ? (
@@ -257,6 +309,9 @@ export default function ChefOrderDetailScreen() {
                   <Text style={styles.label}>{t('chefOrderDetail', 'assignedDriverLabel')}</Text>
                   <Text style={styles.value}>{assignedDriver.username}</Text>
                 </View>
+              ) : order.status === 'completed' && !order.assignedTo ? (
+                // Der Fahrer wurde gelöscht. Eine gefahrene Tour wird nicht neu zugewiesen.
+                <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'driverRemoved')}</Text>
               ) : (
                 <>
                   <Text style={styles.notAssignedText}>{t('chefOrderDetail', 'notAssigned')}</Text>
@@ -301,6 +356,7 @@ export default function ChefOrderDetailScreen() {
         
         <OwnOrderForm
           initialValues={order}
+          initialPrice={price}
           submitLabel={t('chefOwnOrder', 'saveButton')}
           onSubmit={handleUpdate}
         />
@@ -368,6 +424,13 @@ const createStyles = (theme: AppTheme) => {
       paddingVertical: Spacing.xxs + 1,
     },
     statusBadgeText: u.badgeText,
+    convertButton: {
+      ...u.tintedButton,
+      alignSelf: 'stretch',
+      marginTop: Spacing.sm,
+    },
+    convertButtonText: u.tintedButtonText,
+    buttonDisabled: u.disabled,
     section: {
       ...u.card,
       marginBottom: Spacing.md,

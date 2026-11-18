@@ -26,8 +26,10 @@ export interface TankEntry {
   litersAdBlue: number | null;
   fuelStation: string;
   createdAt: string;
-  /** "Preis AdBlue" — trägt der Chef nach; nur bei nachgefülltem AdBlue. */
+  /** "Preis AdBlue" (gesamt) — trägt der Chef nach; nur bei nachgefülltem AdBlue. */
   priceAdBlue: number | null;
+  /** Preis/Liter AdBlue laut Beleg — daraus rechnet die App den Gesamtbetrag vor. */
+  priceAdBluePerLiter: number | null;
   /** Preis/Liter Diesel laut Beleg — trägt der Chef nach, null solange nicht geschehen. */
   pricePerLiter: number | null;
   /** Gesamtbetrag laut Beleg — trägt der Chef nach, null solange nicht geschehen. */
@@ -53,6 +55,7 @@ interface TankEntryRow {
   fuel_station: string;
   created_at: string;
   price_adblue?: string | number | null;
+  price_adblue_per_liter?: string | number | null;
   price_per_liter?: string | number | null;
   price_total?: string | number | null;
 }
@@ -80,6 +83,7 @@ function mapRow(row: TankEntryRow): TankEntry {
     fuelStation: row.fuel_station,
     createdAt: row.created_at,
     priceAdBlue: toNumberOrNull(row.price_adblue),
+    priceAdBluePerLiter: toNumberOrNull(row.price_adblue_per_liter),
     pricePerLiter: toNumberOrNull(row.price_per_liter),
     priceTotal: toNumberOrNull(row.price_total),
   };
@@ -167,6 +171,7 @@ export async function setTankEntryPrices(
   entryId: string,
   prices: {
     priceAdBlue: number | null;
+    priceAdBluePerLiter: number | null;
     pricePerLiter: number | null;
     priceTotal: number | null;
   }
@@ -174,6 +179,7 @@ export async function setTankEntryPrices(
   const { error } = await supabase.rpc('set_tank_entry_prices', {
     entry_id: entryId,
     price_adblue: prices.priceAdBlue,
+    price_adblue_per_liter: prices.priceAdBluePerLiter,
     price_per_liter: prices.pricePerLiter,
     price_total: prices.priceTotal,
   });

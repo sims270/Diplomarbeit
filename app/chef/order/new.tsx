@@ -1,4 +1,5 @@
 import { useAuth } from '@/app/context/AuthContext';
+import { saveOrderPrice } from '@/app/services/orderPriceService';
 import { addOrder, type OrderFields } from '@/app/services/orderService';
 import { OwnOrderForm } from '@/components/OwnOrderForm';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -17,13 +18,14 @@ export default function NewOrderScreen() {
   const { t } = useTranslation();
   const { user } = useAuth();
 
-  const handleCreate = async (fields: OrderFields) => {
+  const handleCreate = async (fields: OrderFields, price: string) => {
     const order = await addOrder({ ...fields, createdBy: user?.id || '' });
 
     // Must run right after the click with no awaits ahead of it — on web
     // this opens a popup window, and browsers silently block window.open
     // once the "recent user gesture" allowance from the click has lapsed.
-    await exportOwnOrderPdf(order);
+    // Der Preis läuft deshalb parallel statt davor.
+    await Promise.all([saveOrderPrice(order.id, price), exportOwnOrderPdf(order)]);
     router.back();
   };
 

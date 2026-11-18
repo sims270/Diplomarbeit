@@ -146,9 +146,30 @@ Deno.serve(async (req) => {
     return json({ error: "That account is not a driver" }, 403);
   }
 
+  // Supabase löscht kein Konto, dem noch Dateien im Storage gehören. Die
+  // hochgeladenen Belege gehören aber zum Auftrag und bleiben erhalten.
+  const { error: releaseError } = await adminClient.rpc("release_storage_ownership", {
+    uid: userId,
+  });
+  if (releaseError) {
+    return json({ error: releaseError.message }, 500);
+  }
+
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (deleteError) {
     return json({ error: deleteError.message }, 400);
+  }
+
+  // Erst nach dem Löschen: Scheitert es, bleiben die Zuweisungen unberührt.
+  // Die Datenbank hat assigned_to geleert (20261118120000), offene Aufträge
+  // müssen wieder als "noch zuzuweisen" gelten.
+  const { error: reopenError } = await adminClient
+    .from("orders")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .is("assigned_to", null)
+    .in("status", ["assigned", "in_progress"]);
+  if (reopenError) {
+    return json({ error: reopenError.message }, 500);
   }
 
   return json({ success: true });

@@ -1,6 +1,16 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import { Driver, getDrivers } from '@/app/services/driverService';
+import {
+  assignOrder as assignExternalOrder,
+  type ExternalAccess,
+  getAccesses,
+} from '@/app/services/externalDriverAccessService';
+import {
+  type ExternalOrder,
+  externalOrderTileStatus,
+  getAllExternalOrders,
+} from '@/app/services/externalOrderService';
 import { assignOrderToDriver, getAllOrders, type Order } from '@/app/services/orderService';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -32,12 +42,14 @@ export default function OrdersListScreen() {
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [externalOrders, setExternalOrders] = useState<ExternalOrder[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [accesses, setAccesses] = useState<ExternalAccess[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | ExternalOrder | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,27 +62,43 @@ export default function OrdersListScreen() {
     params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth()
   );
   const statusFilter = params.status ?? null;
-  const monthOrders = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          isInMonth(o.loadingDate || o.unloadingDate, month) &&
-          (statusFilter === null || o.status === statusFilter)
-      ),
-    [orders, month, statusFilter]
-  );
+  const showsExternalOrders =
+    statusFilter === 'pending' || statusFilter === 'assigned' || statusFilter === 'completed';
+
+  // Von einer Kachel aus stehen auch die passenden Fremdaufträge in der
+  // Liste — neueste zuerst, gemischt mit den eigenen.
+  const monthOrders = useMemo<(Order | ExternalOrder)[]>(() => {
+    const own = orders.filter(
+      (o) =>
+        isInMonth(o.loadingDate || o.unloadingDate, month) &&
+        (statusFilter === null || o.status === statusFilter)
+    );
+    if (!showsExternalOrders) return own;
+
+    const external = externalOrders.filter(
+      (o) =>
+        externalOrderTileStatus(o) === statusFilter &&
+        isInMonth(o.loadingDate || o.unloadingDate, month)
+    );
+    return [...own, ...external].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [orders, externalOrders, month, statusFilter, showsExternalOrders]);
 
   const loadOrders = useCallback(async () => {
     setLoadError(false);
     try {
-      setOrders(await getAllOrders());
+      const [own, external] = await Promise.all([
+        getAllOrders(),
+        showsExternalOrders ? getAllExternalOrders() : Promise.resolve([]),
+      ]);
+      setOrders(own);
+      setExternalOrders(external);
     } catch {
       setLoadError(true);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [showsExternalOrders]);
 
   // Real drivers a boss created via Fahrerverwaltung.
   const loadDrivers = useCallback(async () => {
@@ -85,6 +113,17 @@ export default function OrdersListScreen() {
     }
   }, [isOfflineMode]);
 
+  // Zugänge der fremden Fahrer: zum Zuweisen in "Offen" und für den Namen
+  // auf den Karten der zugewiesenen und erledigten Fremdaufträge.
+  const loadAccesses = useCallback(async () => {
+    if (!showsExternalOrders) return;
+    try {
+      setAccesses(await getAccesses());
+    } catch {
+      setAccesses([]);
+    }
+  }, [showsExternalOrders]);
+
   // Refresh every time this screen becomes active (e.g. after creating or
   // editing an order and navigating back).
   useFocusEffect(
@@ -92,7 +131,8 @@ export default function OrdersListScreen() {
       setIsLoading(true);
       loadOrders();
       loadDrivers();
-    }, [loadOrders, loadDrivers])
+      loadAccesses();
+    }, [loadOrders, loadDrivers, loadAccesses])
   );
 
   const handleRefresh = () => {
@@ -135,7 +175,39 @@ export default function OrdersListScreen() {
     return tileLabels[status] ?? getStatusText(status);
   };
 
-  const openAssignModal = (order: Order) => {
+  // Eigene Aufträge gehen an eigene Fahrer, Fremdaufträge an einen gültigen
+  // Zugang eines fremden Fahrers.
+  const isExternalSelection = selectedOrder !== null && 'recipientCompany' in selectedOrder;
+  const assignOptions = isExternalSelection
+    ? accesses
+        .filter((access) => access.isActive)
+        .map((access) => ({
+          id: access.userId,
+          name: access.label ? `${access.label} · ${access.username}` : access.username,
+        }))
+    : drivers.map((driver) => ({ id: driver.id, name: driver.username }));
+
+  // Ein erledigter Fremdauftrag kann ohne Zugang gefahren worden sein: Dann
+  // steht dort nur, dass es ein Fremdauftrag ist.
+  const externalCardText = (order: ExternalOrder) => {
+    const badge = t('invoices', 'externalBadge');
+    if (!order.assignedExternalUserId) return badge;
+
+    const access = accesses.find((a) => a.userId === order.assignedExternalUserId);
+    const name = access?.label || access?.username || t('common', 'unknown');
+    return `${badge} · ${t('chefDashboard', 'assignedTo')}: ${name}`;
+  };
+
+  // Einen neuen Zugang legt der Fremdauftrag selbst an: Dort gibt es Name,
+  // Benutzername, Gültigkeit und die Anzeige des Passworts.
+  const openExternalOrder = () => {
+    if (!selectedOrder) return;
+    const id = selectedOrder.id;
+    setShowAssignModal(false);
+    router.push({ pathname: '/chef/external-order/[id]', params: { id } });
+  };
+
+  const openAssignModal = (order: Order | ExternalOrder) => {
     setSelectedOrder(order);
     setSelectedDriver(null);
     setShowAssignModal(true);
@@ -149,7 +221,11 @@ export default function OrdersListScreen() {
 
     setIsSubmitting(true);
     try {
-      await assignOrderToDriver(selectedOrder.id, selectedDriver);
+      if (isExternalSelection) {
+        await assignExternalOrder(selectedOrder.id, selectedDriver);
+      } else {
+        await assignOrderToDriver(selectedOrder.id, selectedDriver);
+      }
       await loadOrders();
       setShowAssignModal(false);
       setSelectedOrder(null);
@@ -220,7 +296,51 @@ export default function OrdersListScreen() {
             refreshControl={
               <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
             }
-            renderItem={({ item }) => (
+            renderItem={({ item }) => 'recipientCompany' in item ? (
+              <FluidPressable
+                style={styles.orderCard}
+                onPress={() =>
+                  router.push({ pathname: '/chef/external-order/[id]', params: { id: item.id } })
+                }
+              >
+                <View style={styles.orderCardHeader}>
+                  <Text style={styles.orderNr}>Nr. {item.orderNr}</Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(externalOrderTileStatus(item)) },
+                    ]}
+                  >
+                    <Text style={styles.statusBadgeText}>
+                      {getStatusText(externalOrderTileStatus(item))}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.route}>
+                  {(item.loadingCompany || '—')} → {(item.unloadingCompany || '—')}
+                </Text>
+                {item.loadingDate ? (
+                  <Text style={styles.date}>
+                    {t('chefOrdersList', 'loadingOn')} {isoToGerman(item.loadingDate)}
+                  </Text>
+                ) : null}
+                {item.completedAt ? (
+                  <Text style={styles.completedAt}>
+                    ✓ {t('chefOrdersList', 'completedOn')} {timestampToGermanDate(item.completedAt)}
+                  </Text>
+                ) : null}
+                {externalOrderTileStatus(item) === 'pending' ? (
+                  <>
+                    <Text style={styles.externalHint}>{t('chefOrdersList', 'externalUnassigned')}</Text>
+                    <FluidPressable style={styles.assignButton} onPress={() => openAssignModal(item)}>
+                      <Text style={styles.assignButtonText}>{t('chefDashboard', 'assignButton')}</Text>
+                    </FluidPressable>
+                  </>
+                ) : (
+                  <Text style={styles.externalHint}>{externalCardText(item)}</Text>
+                )}
+              </FluidPressable>
+            ) : (
               <FluidPressable
                 style={styles.orderCard}
                 onPress={() =>
@@ -289,13 +409,21 @@ export default function OrdersListScreen() {
                   {(selectedOrder.loadingCompany || '—')} → {(selectedOrder.unloadingCompany || '—')}
                 </Text>
 
-                <Text style={styles.driversTitle}>{t('chefDashboard', 'selectDriver')}</Text>
-                {drivers.length === 0 ? (
-                  <Text style={styles.noDriversText}>{t('chefDashboard', 'noDriversYet')}</Text>
+                <Text style={styles.driversTitle}>
+                  {isExternalSelection
+                    ? t('chefOrdersList', 'selectExternalAccess')
+                    : t('chefDashboard', 'selectDriver')}
+                </Text>
+                {assignOptions.length === 0 ? (
+                  <Text style={styles.noDriversText}>
+                    {isExternalSelection
+                      ? t('chefOrdersList', 'noExternalAccess')
+                      : t('chefDashboard', 'noDriversYet')}
+                  </Text>
                 ) : (
                   <FlatList
                     scrollEnabled={false}
-                    data={drivers}
+                    data={assignOptions}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => (
                       <FluidPressable
@@ -315,10 +443,18 @@ export default function OrdersListScreen() {
                             <Text style={styles.driverRadioMark}>●</Text>
                           )}
                         </View>
-                        <Text style={styles.driverName}>{item.username}</Text>
+                        <Text style={styles.driverName}>{item.name}</Text>
                       </FluidPressable>
                     )}
                   />
+                )}
+
+                {isExternalSelection && (
+                  <FluidPressable style={styles.assignButton} onPress={openExternalOrder}>
+                    <Text style={styles.assignButtonText}>
+                      {t('chefOrdersList', 'createExternalAccess')}
+                    </Text>
+                  </FluidPressable>
                 )}
 
                 <View style={styles.modalButtonContainer}>
@@ -440,6 +576,11 @@ const createStyles = (theme: AppTheme) => {
       color: c.success,
       fontWeight: '600',
       marginBottom: Spacing.xs,
+    },
+    externalHint: {
+      ...Typography.footnote,
+      color: c.tint,
+      fontWeight: '600',
     },
     assignedDriver: {
       ...Typography.footnote,
