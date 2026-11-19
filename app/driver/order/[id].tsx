@@ -294,6 +294,7 @@ export default function DriverOrderDetailScreen() {
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'cargoSection')}</Text>
+          {renderRow(t('driverOrderDetail', 'cargoDescriptionLabel'), order.cargoDescription)}
           {renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)}
           {renderRow(
             t('driverOrderDetail', 'cargoTypeLabel'),

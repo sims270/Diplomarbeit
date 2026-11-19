@@ -9,7 +9,8 @@
 //   Auftragsdatum  Ladedatum (sonst Entladedatum, sonst Tag des Erledigens)
 //   von Firma      Auftraggeber, ohne Eintrag die Ladestelle
 //   an Spedition   der Frachtführer des Fremdauftrags
-//   Eingang        Preis aus der Rechnung, sonst der Kundenpreis am Auftrag
+//   Eingang        Preis aus der Rechnung samt Dieselzuschlag, sonst der
+//                  Kundenpreis am Auftrag
 //   Ausgang        Frachtsatz plus Terminzuschlag
 //
 // Deploy: supabase functions deploy export-external-profit
@@ -36,6 +37,8 @@ interface OrderRow {
 interface InvoiceItemRow {
   external_order_id: string;
   preis: string | number | null;
+  /** Dieselzuschlag in Prozent vom Preis (20261119210000_invoice_item_extras.sql). */
+  diesel_prozent: string | number | null;
 }
 
 interface ProfitRow {
@@ -325,7 +328,7 @@ Deno.serve(async (req) => {
       fetchAll<InvoiceItemRow>((from, to) =>
         adminClient
           .from("invoice_items")
-          .select("external_order_id, preis")
+          .select("external_order_id, preis, diesel_prozent")
           .not("external_order_id", "is", null)
           .order("external_order_id")
           .range(from, to)
@@ -333,11 +336,16 @@ Deno.serve(async (req) => {
     ]);
 
     // Der Preis der Rechnung gilt vor dem am Auftrag: Dort hat ihn der Chef
-    // zuletzt bearbeitet.
+    // zuletzt bearbeitet. Der Dieselzuschlag ist Einnahme wie der Preis und
+    // zählt zum Gewinn — gleich gerechnet wie auf der Rechnung
+    // (export-invoice: Preis mal Prozent, auf Cent gerundet).
     const invoicePrices = new Map<string, number>();
     for (const item of invoiceItems) {
       const price = toNumberOrNull(item.preis);
-      if (price !== null) invoicePrices.set(item.external_order_id, price);
+      if (price === null) continue;
+      const prozent = toNumberOrNull(item.diesel_prozent);
+      const diesel = prozent ? roundCents((price * prozent) / 100) : 0;
+      invoicePrices.set(item.external_order_id, roundCents(price + diesel));
     }
 
     const months = buildMonths(orders, invoicePrices);

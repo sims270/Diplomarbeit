@@ -1,7 +1,7 @@
 import { fetchAll } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
-import { computeInvoiceTotals } from '@/lib/invoiceTotals';
+import { computeInvoiceTotals, positionTotal } from '@/lib/invoiceTotals';
 
 /**
  * Rechnungen zu erledigten Aufträgen: als Einzelrechnung (eine Ladung) oder
@@ -59,6 +59,10 @@ export interface InvoiceItem {
   entladedatum: string;
   /** Leer, solange kein Preis vereinbart ist — dann bleibt die Zelle leer. */
   preis: string;
+  /** Freie Zeile über "pauschal", z. B. "12 Stk. Europaletten getauscht"; leer = keine. */
+  zusatztext: string;
+  /** Dieselzuschlag in Prozent vom Preis, z. B. "7"; leer = keiner. */
+  dieselProzent: string;
 }
 
 export interface Invoice {
@@ -132,6 +136,8 @@ function toInvoice(response: InvoiceResponse): Invoice | null {
       entladestelle: text(item.entladestelle),
       entladedatum: text(item.entladedatum),
       preis: text(item.preis),
+      zusatztext: text(item.zusatztext),
+      dieselProzent: text(item.diesel_prozent).replace('.', ','),
     })),
   };
 }
@@ -339,7 +345,7 @@ export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
     fetchAll<Row>((from, to) =>
       supabase
         .from('invoice_items')
-        .select('invoice_id, order_id, external_order_id, preis, reihenfolge')
+        .select('invoice_id, order_id, external_order_id, preis, diesel_prozent, reihenfolge')
         .order('reihenfolge')
         .order('id')
         .range(from, to)
@@ -363,7 +369,7 @@ export async function getInvoiceSummaries(): Promise<InvoiceSummary[]> {
       // Dieselbe Rechnung wie im Formular und im Export: ein eingetragener
       // Betrag gilt, sonst aus den Preisen und dem Ust-Satz.
       const totals = computeInvoiceTotals(
-        invoiceItems.map((item) => toNumber(item.preis)),
+        invoiceItems.map((item) => positionTotal(toNumber(item.preis), toNumber(item.diesel_prozent))),
         toNumber(row.ust_satz),
         {
           netto: toNumber(row.netto_betrag),
@@ -428,6 +434,8 @@ export async function saveInvoice(invoice: Invoice): Promise<void> {
       entladestelle: item.entladestelle.trim(),
       entladedatum: toDateColumn(item.entladedatum),
       preis: parseAmount(item.preis),
+      zusatztext: item.zusatztext.trim(),
+      diesel_prozent: item.dieselProzent.trim() ? parseAmount(item.dieselProzent) : null,
     })),
   });
 

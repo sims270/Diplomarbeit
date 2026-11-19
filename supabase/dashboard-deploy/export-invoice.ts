@@ -46,7 +46,9 @@
 // füllt also nur den freien Bereich dazwischen — freigehalten wird er über
 // die Druckränder (siehe PAGE_SETUP), nicht über leere Zeilen. Reicht bei
 // einer Sammelrechnung eine Seite nicht, wird zwischen zwei Positionen
-// umgebrochen; jede Folgeseite liegt wieder auf dem vorgedruckten Papier.
+// umgebrochen: unten "Übertrag: € …", die Folgeseite beginnt wieder mit
+// Empfänger, Rechnungsblock samt Seitenzahl, Tabellenkopf und demselben
+// Übertrag — wie auf den bisherigen Sammelrechnungen der Firma.
 //
 // Warum Edge Function und nicht im Client: exceljs ist keine Abhängigkeit
 // der App (siehe package.json), und alle privilegierten Serveraufgaben
@@ -156,6 +158,8 @@ interface OrderRow {
   loading_company: string;
   loading_address: string;
   loading_meters: string;
+  /** Ladegut (orders seit 20261119200000, external_orders schon immer). */
+  cargo_description: string;
   unloading_date: string | null;
   unloading_company: string;
   unloading_address: string;
@@ -170,7 +174,7 @@ interface OrderRow {
 /** Die Spalten gibt es in orders und external_orders gleichermaßen. */
 const ORDER_COLUMNS =
   "id, order_nr, status, loading_date, loading_company, loading_address, loading_meters, " +
-  "unloading_date, unloading_company, unloading_address, client_company, client_address";
+  "cargo_description, unloading_date, unloading_company, unloading_address, client_company, client_address";
 
 /**
  * Der Rechnungskopf, wie er in public.invoices steht — jedes Feld
@@ -225,13 +229,18 @@ interface ItemRow {
   entladestelle: string | null;
   entladedatum: string | null;
   preis: string | number | null;
+  /** Freie Zeile über "pauschal" (20261119210000_invoice_item_extras.sql). */
+  zusatztext: string | null;
+  /** Dieselzuschlag in Prozent vom Preis; null = keiner. */
+  diesel_prozent: string | number | null;
   /** Nur zur Anzeige im Formular — welcher Auftrag hinter der Position steht. */
   order_nr?: string;
 }
 
 const ITEM_COLUMNS =
   "id, order_id, external_order_id, reihenfolge, position_datum, bezeichnung, transportnr, " +
-  "ladestelle, ladedatum, entladestelle, entladedatum, preis, orders(order_nr), " +
+  "ladestelle, ladedatum, entladestelle, entladedatum, preis, zusatztext, diesel_prozent, " +
+  "orders(order_nr), " +
   "external_orders(order_nr)";
 
 interface InvoiceWithItems {
@@ -240,32 +249,47 @@ interface InvoiceWithItems {
 }
 
 /**
- * Ränder in Zoll, damit der Druck in die Lücke des vorgedruckten Papiers
- * fällt. Gemessen an der Musterrechnung: der Briefkopf endet rund 60 mm
- * unter der Blattkante, das Flottenfoto beginnt rund 75 mm über der
- * Unterkante. Dazwischen bleiben auf A4 etwa 160 mm für die Rechnung.
+ * Seitenmaße, abgenommen an einer echten Rechnung auf dem Firmenpapier
+ * (Briefkopf oben und das Foto der Halle unten sind vorgedruckt):
+ *
+ *   * Der Empfängername steht 45 mm unter der Blattkante — so hoch wie
+ *     "Gülde GmbH & Co KG" auf der Musterrechnung. Daraus der obere Rand.
+ *   * Das Hallenfoto beginnt bei rund 225 mm. Gedruckt wird höchstens bis
+ *     221 mm (unterer Rand), der letzte Text endet also sicher darüber.
+ *   * Links 19 mm, bündig mit dem Briefkopf.
+ *
+ * Alles in Zoll, wie Excel es erwartet.
  */
+const MM = 1 / 25.4;
 const PAGE_SETUP = {
   paperSize: 9, // A4
   orientation: "portrait" as const,
   margins: {
-    top: 2.4, // ~60 mm — unter dem vorgedruckten Briefkopf
-    bottom: 3.0, // ~76 mm — über dem vorgedruckten Foto
-    left: 0.79, // ~20 mm, bündig mit dem Briefkopf
-    right: 0.39,
+    top: 40.8 * MM,
+    bottom: 76.2 * MM,
+    left: 18 * MM,
+    right: 10 * MM,
     header: 0,
     footer: 0,
   },
 };
 
 /**
- * Feste Zeilenhöhe in Punkt, damit sich ausrechnen lässt, wie viel auf eine
- * Seite passt. 160 mm sind rund 453 pt, bei 13 pt also knapp 35 Zeilen —
- * mit etwas Luft, damit Excel nicht von sich aus schon früher umbricht und
- * mitten in einer Position eine zweite, eigene Seite beginnt.
+ * Feste Zeilenhöhen in Punkt, damit sich ausrechnen lässt, was auf eine
+ * Seite passt, und jede Zeile dort landet, wo sie auf der Musterrechnung
+ * steht. Kopf: Name bei 45 mm, Anschrift und Rechnungsblock im Abstand von
+ * 4,8 mm, Tabellenkopf bei 80 mm, erste Position bei 86 mm.
  */
-const ROW_HEIGHT = 13;
-const ROWS_PER_PAGE = 33;
+const HEAD_PT = { title: 16, gap: 13.6, line: 13.6, tableHead: 15.6, afterTableHead: 4.5 };
+/** Zeilen der Positionen und Summen — 4,2 mm wie auf der Musterrechnung. */
+const LINE_PT = 12;
+/** Abstand zwischen zwei Positionen und vor den Summen. */
+const GAP_PT = 6;
+/** Platz zwischen oberem und unterem Rand (180 mm = 510 pt) mit etwas Luft,
+ *  damit Excel nie von sich aus früher umbricht. */
+const PAGE_PT = 500;
+/** Zeile "Übertrag:" samt Abstand davor — muss unten auf jede volle Seite passen. */
+const CARRY_PT = GAP_PT + LINE_PT;
 
 /** Vorgabe für neue Rechnungen; im Formular änderbar. */
 const MWST_SATZ = 20;
@@ -327,8 +351,9 @@ const roundCents = (value: number) => Math.round(value * 100) / 100;
  * Änderung beide anpassen.
  */
 function computeTotals({ invoice, items }: InvoiceWithItems) {
+  // Je Position Preis plus Dieselzuschlag (positionTotal).
   const prices = items
-    .map((item) => toNumber(item.preis))
+    .map((item) => positionTotal(item))
     .filter((price): price is number => price !== null);
   const ustSatz = toNumber(invoice.ust_satz);
 
@@ -393,13 +418,14 @@ function buildKundennummer(bmdKtoNr: unknown, town: string): string {
 }
 
 /**
- * "1 Ladung" bzw. "1 Ladung, 13,6 Lademeter". Auf der Musterrechnung steht
- * an dieser Stelle das Gewicht ("24.000 kg") — das erfasst die App nicht,
- * wohl aber die Lademeter aus dem Auftrag. Fehlen die, bleibt es bei der
- * schlichten Angabe, statt eine Zahl zu erfinden. Der Chef kann die
- * Bezeichnung anschließend im Formular überschreiben.
+ * Die Bezeichnung der Position. Am liebsten das Ladegut aus dem Auftrag —
+ * auf den Rechnungen der Firma steht genau das ("12 Stk. Europaletten
+ * Kaltband, 24.400 kg"). Fehlt es, wie bisher "1 Ladung" bzw. "1 Ladung,
+ * 13,6 Lademeter". Der Chef kann die Bezeichnung im Formular überschreiben.
  */
-function buildDescription(loadingMeters: string): string {
+function buildDescription(cargoDescription: string | null, loadingMeters: string): string {
+  const cargo = (cargoDescription ?? "").trim();
+  if (cargo) return cargo;
   const meters = loadingMeters.trim();
   return meters ? `1 Ladung, ${meters} Lademeter` : "1 Ladung";
 }
@@ -565,7 +591,7 @@ function itemPrefill(order: OrderRow, preis: string | number | null) {
 
   return {
     position_datum: order.loading_date,
-    bezeichnung: buildDescription(order.loading_meters),
+    bezeichnung: buildDescription(order.cargo_description, order.loading_meters),
     transportnr: order.order_nr,
     ladestelle: loading.town ? `lt. Weisung in ${loading.town}` : "",
     ladedatum: order.loading_date,
@@ -812,210 +838,328 @@ async function handleRemoveItem(
   return await loadInvoiceById(adminClient, invoiceId);
 }
 
+/**
+ * Dieselzuschlag einer Position in Euro: Preis mal Prozentsatz, auf Cent
+ * gerundet. null, wenn es keinen Zuschlag (oder keinen Preis) gibt. Gleiche
+ * Rechnung wie dieselAmount in lib/invoiceTotals.ts.
+ */
+function dieselAmount(item: ItemRow): number | null {
+  const preis = toNumber(item.preis);
+  const prozent = toNumber(item.diesel_prozent);
+  if (preis === null || prozent === null || prozent === 0) return null;
+  return roundCents((preis * prozent) / 100);
+}
+
+/** Was eine Position kostet: Preis plus Dieselzuschlag; null ohne Preis. */
+function positionTotal(item: ItemRow): number | null {
+  const preis = toNumber(item.preis);
+  if (preis === null) return null;
+  return roundCents(preis + (dieselAmount(item) ?? 0));
+}
+
+/** "7 %" bzw. "7,5 %" — so steht der Satz in der Zeile "Dieselzuschlag". */
+function formatPercent(value: number): string {
+  return `${String(value).replace(".", ",")} %`;
+}
+
+/**
+ * Länder zu den Kürzeln vor der Postleitzahl ("D-59174 Kamen"). Auf der
+ * Rechnung steht bei Auslandskunden der Ort ohne Kürzel und darunter das
+ * Land — wie auf der Musterrechnung "59174 Kamen / Deutschland". Österreich
+ * bekommt keine Landzeile. Ein unbekanntes Kürzel bleibt, wie es ist, statt
+ * ein Land zu raten.
+ */
+const COUNTRY_NAMES: Record<string, string> = {
+  D: "Deutschland",
+  DE: "Deutschland",
+  I: "Italien",
+  IT: "Italien",
+  CH: "Schweiz",
+  FL: "Liechtenstein",
+  LI: "Liechtenstein",
+  SLO: "Slowenien",
+  SI: "Slowenien",
+  H: "Ungarn",
+  HU: "Ungarn",
+  CZ: "Tschechien",
+  SK: "Slowakei",
+  PL: "Polen",
+  HR: "Kroatien",
+  F: "Frankreich",
+  FR: "Frankreich",
+  NL: "Niederlande",
+  B: "Belgien",
+  BE: "Belgien",
+  L: "Luxemburg",
+  LU: "Luxemburg",
+  DK: "Dänemark",
+  S: "Schweden",
+  SE: "Schweden",
+  RO: "Rumänien",
+  BG: "Bulgarien",
+  E: "Spanien",
+  ES: "Spanien",
+  P: "Portugal",
+  PT: "Portugal",
+  GB: "Großbritannien",
+  UK: "Großbritannien",
+};
+
+/** Ort und Land für den Empfängerblock: ["59174 Kamen", "Deutschland"]. */
+function townAndCountry(town: string): [string, string] {
+  const match = town.trim().match(/^([A-Za-z]{1,3})-\s*(.+)$/);
+  if (!match) return [town.trim(), ""];
+  const code = match[1].toUpperCase();
+  if (code === "A" || code === "AT") return [town.trim(), ""];
+  const country = COUNTRY_NAMES[code];
+  return country ? [match[2].trim(), country] : [town.trim(), ""];
+}
+
+/** Hinweis bei 0 % USt — wie auf den Rechnungen an Auslandskunden. */
+const REVERSE_CHARGE_TEXT = "Nach § 3a (6) UStG in Österreich nicht steuerbar. Reverse Charge";
+
 /** Baut die .xlsx-Datei — ausschließlich aus dem gespeicherten Inhalt. */
 async function buildWorkbook({ invoice, items }: InvoiceWithItems): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Rechnung", {
     pageSetup: PAGE_SETUP,
-    properties: { defaultRowHeight: ROW_HEIGHT },
+    properties: { defaultRowHeight: LINE_PT },
+    // Ohne Blattansicht (<sheetViews>) in der Datei liest Excel jede
+    // Zeilenhöhe um ein Fünftel zu niedrig ein — dann rutscht alles nach
+    // oben und passt nicht mehr ins vorgedruckte Papier. Mit Ansicht stimmen
+    // die Höhen auf den Punkt (in Excel nachgemessen).
+    views: [{ state: "normal", showGridLines: false }],
   });
 
-  // Arial 10 wie auf der bisherigen Rechnung — ExcelJS' Standard wäre
-  // Calibri 11 und damit sichtbar breiter als der vorgedruckte Briefkopf.
+  // Arial 10 wie auf der Musterrechnung — ExcelJS' Standard wäre Calibri 11.
   const BASE_FONT = { name: "Arial", size: 10 };
 
-  // A: Datum/Beschriftungen, B: "Ladestelle:", C: Fließtext,
-  // D: Währungszeichen, E: Betrag. Zusammen rund 168 mm — passt zwischen
-  // die Druckränder oben.
+  // Spalten so breit, dass alles dort steht, wo es auf der Musterrechnung
+  // steht (Millimeter ab der linken Blattkante, Rand 19 mm):
+  //   A 19–47: Datum, Beschriftungen unten
+  //   B 47–70: Bezeichnung, "Ladestelle:", "pauschal"
+  //   C 70–127: Ort und Datum der Lade-/Entladestelle
+  //   D 127–152: rechter Kopfblock ("Belegnummer:"), "Übertrag:"
+  //   E 152–158: "€"
+  //   F 158–183: Betrag, rechtsbündig
+  // Excel misst Spaltenbreiten in Zeichen der Standardschrift; umgerechnet
+  // mit 7 px je Zeichen plus 5 px Rand bei 96 dpi. Excel druckt Spalten aber
+  // nicht ganz so breit, wie es sie anzeigt; die Werte unten sind deshalb an
+  // einem echten Excel-PDF nachgemessen und korrigiert, nicht nur gerechnet.
+  const mmToWidth = (mm: number) => Math.round(((mm / 0.2646 - 5) / 7) * 100) / 100;
   sheet.columns = [
-    { key: "a", width: 13 },
-    { key: "b", width: 13 },
-    { key: "c", width: 36 },
-    { key: "d", width: 4 },
-    { key: "e", width: 14 },
+    { key: "a", width: mmToWidth(27.1) },
+    { key: "b", width: mmToWidth(23.0) },
+    { key: "c", width: mmToWidth(53.8) },
+    { key: "d", width: mmToWidth(24.9) },
+    { key: "e", width: mmToWidth(6.05) },
+    { key: "f", width: mmToWidth(26.2) },
   ];
 
-  /** Setzt Werte einer Zeile über die Spaltenbuchstaben und gibt sie zurück. */
-  function writeRow(
-    rowNumber: number,
-    values: Partial<Record<"a" | "b" | "c" | "d" | "e", unknown>>,
-  ) {
-    const row = sheet.getRow(rowNumber);
-    for (const [key, value] of Object.entries(values)) {
-      if (value !== undefined) row.getCell(key).value = value as never;
-    }
+  type Col = "a" | "b" | "c" | "d" | "e" | "f";
+  let next = 1;
+  let used = 0; // Punkt, die auf der aktuellen Seite schon belegt sind
+
+  /** Schreibt die nächste Zeile mit fester Höhe und gibt sie zurück. */
+  function addRow(height: number, values: Partial<Record<Col, unknown>> = {}) {
+    const row = sheet.getRow(next++);
+    row.height = height;
     row.font = BASE_FONT;
-    row.height = ROW_HEIGHT;
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== null && value !== "") {
+        row.getCell(key).value = value as never;
+      }
+    }
+    used += height;
     return row;
   }
 
-  function writeTableHeader(rowNumber: number) {
-    const headerRow = writeRow(rowNumber, { a: "Datum", b: "Bezeichnung", e: "Preis" });
-    headerRow.font = { ...BASE_FONT, bold: true };
-    headerRow.getCell("e").alignment = { horizontal: "center" };
-    for (const key of ["a", "b", "c", "d", "e"]) {
-      headerRow.getCell(key).border = { bottom: { style: "thin" } };
-    }
+  function money(row: ReturnType<typeof addRow>, amount: number | null) {
+    row.getCell("e").value = "€";
+    row.getCell("e").alignment = { horizontal: "right" };
+    const cell = row.getCell("f");
+    cell.value = amount;
+    cell.numFmt = "#,##0.00";
+    cell.alignment = { horizontal: "right" };
   }
 
-  // Die Seitenzahl im Kopf steht erst fest, wenn alle Positionen verteilt
-  // sind — deshalb wird sie am Ende nachgetragen.
-  const pageNumberCells: Array<{ row: number; page: number }> = [];
-
-  // --- Empfänger und Rechnungskopf -----------------------------------------
-  const titleRow = writeRow(1, {
-    a: invoice.empfaenger_name ?? "",
-    c: "R e c h n u n g",
-  });
-  titleRow.getCell("a").font = { ...BASE_FONT, size: 11 };
-  titleRow.getCell("c").font = { ...BASE_FONT, size: 13, bold: true };
-
-  writeRow(2, {
-    a: invoice.empfaenger_strasse ?? "",
-    c: "Belegnummer:",
-    e: invoice.belegnummer ?? "",
-  });
-  writeRow(3, {
-    a: invoice.empfaenger_ort ?? "",
-    c: "Datum:",
-    e: toExcelDate(invoice.rechnungsdatum),
-  });
-  writeRow(4, { c: "Seite:" });
-  pageNumberCells.push({ row: 4, page: 1 });
-  writeRow(5, { c: "Kundennummer:", e: invoice.kundennummer ?? "" });
-  writeRow(6, { c: "Ihre UID-Nr.:", e: invoice.uid_nummer ?? "" });
-
-  for (const rowNumber of [2, 4, 5, 6]) {
-    sheet.getRow(rowNumber).getCell("e").alignment = { horizontal: "right" };
+  function underline(row: ReturnType<typeof addRow>, style: "thin" | "double") {
+    for (const key of ["d", "e", "f"]) row.getCell(key).border = { bottom: { style } };
   }
-  sheet.getRow(3).getCell("e").numFmt = "dd.mm.yyyy";
-  sheet.getRow(3).getCell("e").alignment = { horizontal: "right" };
 
-  writeTableHeader(8);
-
-  let page = 1;
-  let pageStart = 1;
-  let next = 9;
+  const name = invoice.empfaenger_name ?? "";
+  const street = invoice.empfaenger_strasse ?? "";
+  const [town, country] = townAndCountry(invoice.empfaenger_ort ?? "");
+  let page = 0;
+  let itemsOnPage = 0;
 
   /**
-   * Bricht vor einem Block um, der nicht mehr ganz auf die Seite passt —
-   * eine Position soll nie auf zwei Blätter zerfallen. Die Folgeseite
-   * beginnt mit Belegnummer, Seitenzahl und dem Tabellenkopf, damit jedes
-   * Blatt für sich zuzuordnen ist.
+   * Kopf jeder Seite: Empfänger links, Rechnungsblock rechts, Tabellenkopf.
+   * Auf jeder Seite gleich, nur die Seitenzahl wächst — so ist jedes Blatt
+   * für sich zuzuordnen, wie auf den bisherigen Sammelrechnungen.
    */
-  function ensureRoom(rows: number) {
-    if (next - pageStart + rows <= ROWS_PER_PAGE) return;
-
-    sheet.getRow(next - 1).addPageBreak();
+  function writeHeader() {
     page += 1;
-    pageStart = next;
+    used = 0;
+    itemsOnPage = 0;
 
-    const continued = writeRow(next, {
-      a: invoice.belegnummer ? `Rechnung ${invoice.belegnummer}` : "Rechnung",
-      c: "Seite:",
+    const title = addRow(HEAD_PT.title, { a: name, d: "R e c h n u n g" });
+    title.getCell("a").font = { ...BASE_FONT, size: 11 };
+    title.getCell("d").font = { ...BASE_FONT, size: 13, bold: true };
+
+    addRow(HEAD_PT.gap);
+    const right: Array<[string, unknown]> = [
+      ["Belegnummer:", invoice.belegnummer ?? ""],
+      ["Datum:", toExcelDate(invoice.rechnungsdatum)],
+      ["Seite:", page],
+      ["Kundennummer:", invoice.kundennummer ?? ""],
+      ["Ihre UID-Nr.:", invoice.uid_nummer ?? ""],
+    ];
+    const left = [street, town, country, "", ""];
+    right.forEach(([label, value], i) => {
+      const row = addRow(HEAD_PT.line, { a: left[i], d: label, f: value });
+      row.getCell("f").alignment = { horizontal: "right" };
+      if (i === 1) row.getCell("f").numFmt = "dd.mm.yyyy";
     });
-    continued.getCell("a").font = { ...BASE_FONT, bold: true };
-    continued.getCell("e").alignment = { horizontal: "right" };
-    pageNumberCells.push({ row: next, page });
 
-    writeTableHeader(next + 2);
-    next += 3;
+    const head = addRow(HEAD_PT.tableHead, { a: "Datum", b: "Bezeichnung", f: "Preis" });
+    head.font = { ...BASE_FONT, bold: true };
+    addRow(HEAD_PT.afterTableHead);
+  }
+
+  /** "Übertrag:" mit der Summe bisher — am Ende einer Seite und oben auf der nächsten. */
+  function writeCarry(amount: number) {
+    const row = addRow(LINE_PT, { d: "Übertrag:" });
+    row.getCell("d").font = { ...BASE_FONT, bold: true };
+    money(row, amount);
+    row.getCell("f").font = { ...BASE_FONT, bold: true };
+    return row;
+  }
+
+  /** Seite voll: Übertrag unten, Umbruch, Kopf und Übertrag auf der neuen Seite. */
+  function newPage(carried: number) {
+    addRow(GAP_PT);
+    const carry = writeCarry(carried);
+    carry.getCell("f").border = { top: { style: "thin" }, bottom: { style: "thin" } };
+    carry.addPageBreak();
+    writeHeader();
+    writeCarry(carried);
+    addRow(GAP_PT);
   }
 
   // --- Positionen ------------------------------------------------------------
-  // Die Einzelrechnung sieht aus wie bisher: Ort und "am <Datum>"
-  // zweizeilig, sieben Zeilen je Position. Auf der Sammelrechnung steht
-  // beides in einer Zeile ("lt. Weisung in A-8770 Musterdorf am 01.09.2026")
-  // — sonst passen schon drei Ladungen samt Summen nicht mehr auf ein Blatt.
-  // Dazu je eine Leerzeile als Abstand.
-  const compact = items.length > 1;
-  const ITEM_ROWS = compact ? 6 : 8;
+  type Line = { height: number; write: () => ReturnType<typeof addRow> };
 
-  /** "lt. Weisung in <Ort>" plus Datum — je nach Layout angehängt oder als eigene Zeile. */
-  function siteLines(site: string | null, isoDate: string | null): [string, string] {
-    const date = toGermanDate(isoDate);
-    const text = site ?? "";
-    if (!compact) return [text, date ? `am ${date}` : ""];
-    return [date ? `${text} am ${date}`.trim() : text, ""];
-  }
+  /** Alle Zeilen einer Position, damit sich vorher ausrechnen lässt, ob sie passt. */
+  function itemLines(item: ItemRow): Line[] {
+    const lines: Line[] = [];
+    const push = (values: Partial<Record<Col, unknown>>, after?: (row: ReturnType<typeof addRow>) => void) =>
+      lines.push({
+        height: LINE_PT,
+        write: () => {
+          const row = addRow(LINE_PT, values);
+          after?.(row);
+          return row;
+        },
+      });
 
-  for (const item of items) {
-    ensureRoom(ITEM_ROWS);
-    const r = next;
-
-    const positionRow = writeRow(r, {
-      a: toExcelDate(item.position_datum),
-      b: item.bezeichnung ?? "",
+    push({ a: toExcelDate(item.position_datum), b: item.bezeichnung ?? "" }, (row) => {
+      row.getCell("a").numFmt = "dd.mm.yyyy";
+      row.getCell("b").font = { ...BASE_FONT, bold: true };
     });
-    positionRow.getCell("a").numFmt = "dd.mm.yyyy";
-    positionRow.getCell("b").font = { ...BASE_FONT, bold: true };
 
     // Ohne Transportnummer bleibt die Zeile leer, statt ein nacktes
     // "Transportnr." zu drucken.
     const transportnr = item.transportnr?.trim();
-    const transportRow = writeRow(r + 1, { b: transportnr ? `Transportnr. ${transportnr}` : "" });
-    transportRow.getCell("b").font = { ...BASE_FONT, bold: true };
+    push({ b: transportnr ? `Transportnr. ${transportnr}` : "" }, (row) => {
+      row.getCell("b").font = { ...BASE_FONT, bold: true };
+    });
 
-    const [ladeText, ladeDatum] = siteLines(item.ladestelle, item.ladedatum);
-    const [entladeText, entladeDatum] = siteLines(item.entladestelle, item.entladedatum);
+    const ladeDatum = toGermanDate(item.ladedatum);
+    const entladeDatum = toGermanDate(item.entladedatum);
+    push({ b: "Ladestelle:", c: item.ladestelle ?? "" });
+    push({ c: ladeDatum ? `am ${ladeDatum}` : "" });
+    push({ b: "Entladestelle:", c: item.entladestelle ?? "" });
+    push({ c: entladeDatum ? `am ${entladeDatum}` : "" });
 
-    let line = r + 2;
-    writeRow(line++, { b: "Ladestelle:", c: ladeText });
-    if (!compact) writeRow(line++, { c: ladeDatum });
-    writeRow(line++, { b: "Entladestelle:", c: entladeText });
-    if (!compact) writeRow(line++, { c: entladeDatum });
+    const zusatz = (item.zusatztext ?? "").trim();
+    if (zusatz) push({ b: zusatz });
 
-    const pauschalRow = writeRow(line, { b: "pauschal", d: "€", e: toNumber(item.preis) });
-    pauschalRow.getCell("e").border = { bottom: { style: "thin" } };
-    pauschalRow.getCell("e").numFmt = "#,##0.00";
-    pauschalRow.getCell("e").alignment = { horizontal: "right" };
-    pauschalRow.getCell("d").alignment = { horizontal: "right" };
+    push({ b: "pauschal" }, (row) => money(row, toNumber(item.preis)));
 
-    next = r + ITEM_ROWS;
+    const diesel = dieselAmount(item);
+    const prozent = toNumber(item.diesel_prozent);
+    if (diesel !== null && prozent !== null) {
+      push({ b: `Dieselzuschlag ${formatPercent(prozent)}` }, (row) => money(row, diesel));
+    }
+
+    lines.push({ height: GAP_PT, write: () => addRow(GAP_PT) });
+    return lines;
   }
 
-  // --- Summen --------------------------------------------------------------
-  // Die Beträge als feste Zahlen, keine Formeln: sie dürfen vom Chef
-  // überschrieben sein (z. B. ein vereinbarter Gesamtpreis), und eine Formel
-  // würde das beim Öffnen wieder zurückrechnen. Fehlt jeder Preis, bleiben
-  // die Zellen leer wie bisher.
-  ensureRoom(5);
-  const s = next;
+  writeHeader();
+  let carried = 0;
+  let lastPriceRow: ReturnType<typeof addRow> | null = null;
+
+  for (const item of items) {
+    const lines = itemLines(item);
+    const height = lines.reduce((sum, line) => sum + line.height, 0);
+
+    // Eine Position zerfällt nie auf zwei Blätter. Unten muss noch der
+    // Übertrag Platz haben.
+    if (used + height > PAGE_PT - CARRY_PT && itemsOnPage > 0) {
+      newPage(carried);
+    }
+
+    for (const line of lines) {
+      const row = line.write();
+      if (row.getCell("f").value !== null && row.getCell("f").value !== undefined) lastPriceRow = row;
+    }
+    carried = roundCents(carried + (positionTotal(item) ?? 0));
+    itemsOnPage += 1;
+  }
+
+  // Strich unter dem letzten Betrag, über dem Nettobetrag.
+  if (lastPriceRow) underline(lastPriceRow, "thin");
+
+  // --- Summen ----------------------------------------------------------------
+  // Feste Zahlen, keine Formeln: sie dürfen vom Chef überschrieben sein (z. B.
+  // ein vereinbarter Gesamtpreis), und eine Formel würde das beim Öffnen
+  // wieder zurückrechnen. Fehlt jeder Preis, bleiben die Zellen leer.
   const totals = computeTotals({ invoice, items });
-
-  const nettoRow = writeRow(s, { a: "Nettobetrag gesamt:", d: "€", e: totals.netto });
-  nettoRow.font = { ...BASE_FONT, bold: true };
-
-  // Der Satz ist im Formular änderbar; numeric kommt als "20.00" an und
-  // soll auf der Rechnung als "20 %" stehen.
   const ustSatz = toNumber(invoice.ust_satz);
-  const ustRow = writeRow(s + 1, {
-    a: ustSatz === null ? "Ust von EUR" : `${ustSatz} % Ust von EUR`,
-    d: "€",
-    e: totals.ust,
+  const reverseCharge = ustSatz === 0;
+  const totalsHeight = LINE_PT * (reverseCharge ? 5 : 4) + GAP_PT;
+
+  if (used + totalsHeight > PAGE_PT) newPage(carried);
+
+  const netto = addRow(LINE_PT, { a: "Nettobetrag gesamt:" });
+  netto.font = { ...BASE_FONT, bold: true };
+  money(netto, totals.netto);
+
+  // "0 % Ust von EUR      4.704,11" — der Satz ist im Formular änderbar,
+  // numeric kommt als "20.00" an.
+  const ust = addRow(LINE_PT, {
+    a: ustSatz === null ? "Ust von EUR" : `${String(ustSatz).replace(".", ",")} % Ust von EUR`,
+    c: totals.netto,
   });
-  ustRow.getCell("e").border = { bottom: { style: "thin" } };
+  ust.getCell("c").numFmt = "#,##0.00";
+  // Linksbündig wie auf der Musterrechnung — Excel stellt Zahlen sonst rechts.
+  ust.getCell("c").alignment = { horizontal: "left", indent: 2 };
+  money(ust, totals.ust);
+  underline(ust, "thin");
 
-  const endRow = writeRow(s + 2, { a: "Rechnungsendbetrag:", d: "€", e: totals.end });
-  endRow.font = { ...BASE_FONT, bold: true };
-  endRow.getCell("e").border = { bottom: { style: "double" } };
+  const end = addRow(LINE_PT, { a: "Rechnungsendbetrag:" });
+  end.font = { ...BASE_FONT, bold: true };
+  money(end, totals.end);
+  underline(end, "double");
 
-  writeRow(s + 4, { a: "Zahlungsziel:", b: invoice.zahlungsziel ?? "" });
-  sheet.getRow(s + 4).getCell("a").font = { ...BASE_FONT, bold: true };
+  addRow(GAP_PT);
+  const ziel = addRow(LINE_PT, { a: "Zahlungsziel:", b: invoice.zahlungsziel ?? "" });
+  ziel.getCell("a").font = { ...BASE_FONT, bold: true };
 
-  // Beträge einheitlich mit zwei Nachkommastellen, rechtsbündig.
-  for (const rowNumber of [s, s + 1, s + 2]) {
-    const cell = sheet.getRow(rowNumber).getCell("e");
-    cell.numFmt = "#,##0.00";
-    cell.alignment = { horizontal: "right" };
-    sheet.getRow(rowNumber).getCell("d").alignment = { horizontal: "right" };
-  }
-
-  // "1" bei einer Seite wie bisher, sonst "1 von 2".
-  for (const { row, page: pageNumber } of pageNumberCells) {
-    sheet.getRow(row).getCell("e").value = page === 1 ? 1 : `${pageNumber} von ${page}`;
-  }
+  if (reverseCharge) addRow(LINE_PT, { a: REVERSE_CHARGE_TEXT });
 
   return await workbook.xlsx.writeBuffer();
 }

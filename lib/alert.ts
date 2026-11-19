@@ -19,17 +19,25 @@ export function showConfirm(
   title: string,
   message: string,
   onConfirm: () => void,
-  options?: { confirmText?: string; cancelText?: string; destructive?: boolean }
+  options?: {
+    confirmText?: string;
+    cancelText?: string;
+    destructive?: boolean;
+    /** Wird bei "Abbrechen" aufgerufen. */
+    onCancel?: () => void;
+  }
 ): void {
   if (Platform.OS === "web") {
     if (window.confirm(`${title}\n\n${message}`)) {
       onConfirm();
+    } else {
+      options?.onCancel?.();
     }
     return;
   }
 
   Alert.alert(title, message, [
-    { text: options?.cancelText ?? "Cancel", style: "cancel" },
+    { text: options?.cancelText ?? "Cancel", style: "cancel", onPress: options?.onCancel },
     {
       text: options?.confirmText ?? "OK",
       style: options?.destructive ? "destructive" : "default",

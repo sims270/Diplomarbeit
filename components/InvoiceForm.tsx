@@ -22,7 +22,13 @@ import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
-import { computeInvoiceTotals, formatAmount, type InvoiceTotals } from '@/lib/invoiceTotals';
+import {
+  computeInvoiceTotals,
+  dieselAmount,
+  formatAmount,
+  type InvoiceTotals,
+  positionTotal,
+} from '@/lib/invoiceTotals';
 import { PAYMENT_TERMS_OPTIONS } from '@/lib/transportauftragPdf';
 import { useEffect, useState } from 'react';
 import {
@@ -401,7 +407,8 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
   // und Endbetrag mit nichts weiter, während der Chef gerade tippt.
   const manualTotal = (value: string | null) => (value === null ? null : parseAmount(value));
   const totals = computeInvoiceTotals(
-    items.map((item) => parseAmount(item.preis)),
+    // Je Position Preis plus Dieselzuschlag — wie auf der gedruckten Rechnung.
+    items.map((item) => positionTotal(parseAmount(item.preis), parseAmount(item.dieselProzent))),
     parseAmount(header.ustSatz),
     {
       netto: manualTotal(header.nettoBetrag),
@@ -560,6 +567,32 @@ export function InvoiceForm({ orderId, orderNr, billingCompany }: InvoiceFormPro
             onChangeText={setItem(index, 'preis')}
             keyboardType="decimal-pad"
           />
+          {/* Steht auf der Rechnung über "pauschal", z. B. getauschte Paletten. */}
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'zusatztextLabel')}
+            value={item.zusatztext}
+            onChangeText={setItem(index, 'zusatztext')}
+          />
+          <TextInput
+            placeholderTextColor={c.placeholder}
+            keyboardAppearance={scheme}
+            style={styles.input}
+            placeholder={t('chefInvoice', 'dieselProzentLabel')}
+            value={item.dieselProzent}
+            onChangeText={setItem(index, 'dieselProzent')}
+            keyboardType="decimal-pad"
+          />
+          {(() => {
+            const diesel = dieselAmount(parseAmount(item.preis), parseAmount(item.dieselProzent));
+            return diesel === null ? null : (
+              <Text style={styles.dieselHint}>
+                {t('chefInvoice', 'dieselHint').replace('{amount}', formatAmount(diesel))}
+              </Text>
+            );
+          })()}
         </View>
       ))}
 
@@ -717,6 +750,12 @@ const createStyles = (theme: AppTheme) => {
       color: c.text,
     },
     input: u.input,
+    // "Dieselzuschlag: 101,50 €" unter dem Prozentfeld.
+    dieselHint: {
+      ...u.hint,
+      marginTop: -Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
     itemBlock: {
       borderRadius: Radius.lg,
       padding: Spacing.md,

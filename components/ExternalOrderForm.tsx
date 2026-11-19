@@ -14,12 +14,14 @@ import {
 } from '@/app/services/siteCompanyService';
 import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
+import { NewCompanyModal } from '@/components/NewCompanyModal';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Spacing } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
+import { useFormDraft } from '@/hooks/use-form-draft';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
@@ -87,6 +89,16 @@ interface ExternalOrderFormProps {
    * aus "An Firma" vorbelegt wird.
    */
   renderBeforeSubmit?: (fields: ExternalOrderFields) => ReactNode;
+  /**
+   * Nur beim Anlegen: Unter diesem Schlüssel merkt sich das Gerät die
+   * Eingaben, falls der Chef vor dem Speichern zurückgeht
+   * (hooks/use-form-draft.ts).
+   */
+  draftKey?: string;
+  /** Wird mit dem Entwurf gespeichert, z. B. { copyFrom, copyNr } bei einer Kopie. */
+  draftMeta?: Record<string, string>;
+  /** true = ein geöffneter Entwurf: bleibt stehen, auch wenn nichts geändert wird. */
+  draftKeepUnchanged?: boolean;
 }
 
 // Shared by app/chef/external-order/new.tsx (create) and [id].tsx (edit) —
@@ -97,6 +109,9 @@ export function ExternalOrderForm({
   submitLabel,
   onSubmit,
   renderBeforeSubmit,
+  draftKey,
+  draftMeta,
+  draftKeepUnchanged,
 }: ExternalOrderFormProps) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
@@ -116,6 +131,51 @@ export function ExternalOrderForm({
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
   const [companySearch, setCompanySearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // "Neue Firma anlegen" aus der Liste: für welches Feld, mit welchem Namen.
+  type CompanyField = 'loadingCompany' | 'clientCompany' | 'recipientCompany';
+  const [newCompanyFor, setNewCompanyFor] = useState<CompanyField | null>(null);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const canCreateCompany =
+    activePicker === 'loadingCompany' ||
+    activePicker === 'clientCompany' ||
+    activePicker === 'recipientCompany';
+  const startNewCompany = () => {
+    setNewCompanyName(companySearch);
+    setNewCompanyFor(activePicker as CompanyField);
+    setActivePicker(null);
+  };
+  const handleCompanyCreated = (company: { name: string; address: string }) => {
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'de');
+    if (newCompanyFor === 'recipientCompany') {
+      setCarrierCompanies((prev) => [...prev, company].sort(byName));
+    } else {
+      setSiteCompanies((prev) => [...prev, company].sort(byName));
+    }
+    setForm((prev) => {
+      if (newCompanyFor === 'recipientCompany') {
+        return {
+          ...prev,
+          recipientCompany: company.name,
+          recipientAddress: company.address || prev.recipientAddress,
+        };
+      }
+      if (newCompanyFor === 'clientCompany') {
+        return { ...prev, clientCompany: company.name, clientAddress: company.address };
+      }
+      return {
+        ...prev,
+        loadingCompany: company.name,
+        loadingAddress: company.address || prev.loadingAddress,
+      };
+    });
+    setNewCompanyFor(null);
+  };
+
+  const draft = useFormDraft(draftKey, form, {
+    meta: draftMeta,
+    keepUnchanged: draftKeepUnchanged,
+  });
 
   useEffect(() => {
     getCarrierCompanies().then(setCarrierCompanies);
@@ -245,6 +305,8 @@ export function ExternalOrderForm({
     setIsSaving(true);
     try {
       await onSubmit(form);
+      // Gespeichert: Der Entwurf hat ausgedient.
+      await draft.clear();
 
       // Best-effort, after the fact: remembers freshly typed companies for
       // next time's dropdowns. Never blocks saving if it fails (see
@@ -577,6 +639,15 @@ export function ExternalOrderForm({
                 autoFocus
               />
             )}
+            {/* Neue Firma samt Anschrift, UID und BMD-Konto direkt hier anlegen
+                (components/NewCompanyModal.tsx) — BMD ist noch nicht verbunden. */}
+            {canCreateCompany && (
+              <FluidPressable style={styles.vehicleOption} onPress={startNewCompany}>
+                <Text style={[styles.vehicleOptionText, { color: c.tint, fontWeight: '600' }]}>
+                  <MaterialIcons name="add" size={16} color={c.tint} /> {t('newCompany', 'option')}
+                </Text>
+              </FluidPressable>
+            )}
             {activePicker === 'clientCompany' && (
               <>
                 <FluidPressable style={styles.vehicleOption} onPress={() => setClientWithoutAddress('')}>
@@ -620,6 +691,19 @@ export function ExternalOrderForm({
           </View>
         </View>
       </Modal>
+
+      <NewCompanyModal
+        table={
+          newCompanyFor === 'recipientCompany'
+            ? 'carrier_companies'
+            : newCompanyFor
+              ? 'site_companies'
+              : null
+        }
+        initialName={newCompanyName}
+        onClose={() => setNewCompanyFor(null)}
+        onCreated={handleCompanyCreated}
+      />
     </>
   );
 }

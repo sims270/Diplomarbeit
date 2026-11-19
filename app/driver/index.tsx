@@ -229,6 +229,11 @@ export default function DriverDashboardScreen() {
                     </Text>
                   </View>
 
+                  {item.cargoDescription ? (
+                    <Text style={styles.metersText}>
+                      {t('driverDashboard', 'cargoDescription')}: {item.cargoDescription}
+                    </Text>
+                  ) : null}
                   {item.loadingMeters ? (
                     <Text style={styles.metersText}>
                       {t('driverDashboard', 'loadingMeters')}: {item.loadingMeters}

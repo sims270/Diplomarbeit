@@ -47,6 +47,9 @@ export interface Order {
   loadingTimeUntil: string;
   loadingCompany: string;
   loadingAddress: string;
+  /** Was geladen wird (20261119200000_add_cargo_description_to_orders.sql). */
+  cargoDescription: string;
+  /** In der App "Ladungslänge", z. B. "13,6 Ldm" — wie beim Fremdauftrag. */
   loadingMeters: string;
 
   unloadingDate: string;
@@ -118,6 +121,7 @@ function rowToOrder(row: any): Order {
     loadingTimeUntil: row.loading_time_until,
     loadingCompany: row.loading_company,
     loadingAddress: row.loading_address,
+    cargoDescription: row.cargo_description ?? '',
     loadingMeters: row.loading_meters,
     unloadingDate: fromDateColumn(row.unloading_date),
     unloadingTimeFrom: row.unloading_time_from,
@@ -141,6 +145,7 @@ function fieldsToRow(data: OrderFields): Record<string, unknown> {
     loading_time_until: data.loadingTimeUntil,
     loading_company: data.loadingCompany,
     loading_address: data.loadingAddress,
+    cargo_description: data.cargoDescription,
     loading_meters: data.loadingMeters,
     unloading_date: toDateColumn(data.unloadingDate),
     unloading_time_from: data.unloadingTimeFrom,

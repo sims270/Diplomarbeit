@@ -157,10 +157,21 @@ export default function EditExternalOrderScreen() {
           <FluidPressable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
           </FluidPressable>
-          <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
-            <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
-            <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
-          </FluidPressable>
+          <View style={styles.topActions}>
+            <FluidPressable
+              style={styles.deleteLink}
+              onPress={() =>
+                router.push({ pathname: '/chef/external-order/new', params: { copyFrom: order.id } })
+              }
+            >
+              <MaterialIcons name="content-copy" size={18} color={c.textSecondary} />
+              <Text style={styles.deleteLinkText}>{t('orderCopy', 'button')}</Text>
+            </FluidPressable>
+            <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
+              <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
+              <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
+            </FluidPressable>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -315,6 +326,12 @@ const createStyles = (theme: AppTheme) => {
     },
     backButton: u.backButton,
     backButtonText: u.backButtonText,
+    // Duplizieren und Löschen rechts oben, gleich unauffällig.
+    topActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
     topRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',

@@ -31,6 +31,7 @@ export default function ChefLayout() {
         <Stack.Screen name="bosses" />
         <Stack.Screen name="reminders" />
         <Stack.Screen name="invoices" />
+        <Stack.Screen name="drafts" />
       </Stack>
       {/* Unter dem Stack, damit die Leiste auf jeder Unterseite sichtbar bleibt. */}
       {user?.role === 'boss' && <ChefTabBar />}

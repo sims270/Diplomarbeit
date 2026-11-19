@@ -10,7 +10,11 @@ import {
   suggestUsername,
   todayIso,
 } from '@/app/services/externalDriverAccessService';
-import { addExternalOrder, type ExternalOrderFields } from '@/app/services/externalOrderService';
+import {
+  addExternalOrder,
+  type ExternalOrderFields,
+  getExternalOrderById,
+} from '@/app/services/externalOrderService';
 import { type AccessCredentials, AccessCredentialsModal } from '@/components/AccessCredentialsModal';
 import { ExternalAccessChooser, NEW_ACCESS } from '@/components/ExternalAccessChooser';
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
@@ -21,11 +25,22 @@ import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
+import { loadDraft, newDraftKey } from '@/lib/orderDrafts';
 import { describeSavedPdf } from '@/lib/orderPdfFile';
 import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+/** Womit das Formular startet und unter welchem Schlüssel es sich merkt. */
+interface StartValues {
+  key: string;
+  /** true = geöffneter Entwurf, bleibt auch ohne Änderung stehen. */
+  keep: boolean;
+  fields?: Partial<ExternalOrderFields>;
+  /** copyFrom und copyNr bei einer Kopie — für den Hinweis und die Entwurfsliste. */
+  meta: Record<string, string>;
+}
 
 export default function NewExternalOrderScreen() {
   const styles = useThemedStyles(createStyles);
@@ -61,6 +76,52 @@ export default function NewExternalOrderScreen() {
     username ?? suggestUsername(effectiveLabel(fields));
   const effectiveExpiresOn = (fields: ExternalOrderFields) =>
     expiresOn ?? suggestExpiresOn(fields.unloadingDate);
+
+  // Drei Wege hierher, wie beim eigenen Auftrag (app/chef/order/new.tsx):
+  // "Neu", "Duplizieren" (?copyFrom=<id>) und "Entwürfe" (?draft=<Schlüssel>).
+  // Bei der Kopie bleibt weg, was dem Frächter gehört: Kennzeichen, Fahrer,
+  // Zugang, Bestätigung — und die Transportnummer (neu aus der Datenbank).
+  const { copyFrom, draft } = useLocalSearchParams<{ copyFrom?: string; draft?: string }>();
+  const [start, setStart] = useState<StartValues | undefined>(
+    copyFrom || draft ? undefined : { key: newDraftKey('external'), keep: false, meta: {} }
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (draft) {
+      loadDraft(draft).then((stored) => {
+        if (cancelled) return;
+        setStart({
+          key: draft,
+          keep: true,
+          fields: (stored?.value ?? undefined) as Partial<ExternalOrderFields> | undefined,
+          meta: stored?.meta ?? {},
+        });
+      });
+    } else if (copyFrom) {
+      getExternalOrderById(copyFrom)
+        .then((source) => {
+          if (cancelled) return;
+          if (!source) {
+            setStart({ key: newDraftKey('external'), keep: false, meta: {} });
+            return;
+          }
+          const { orderNr, ...rest } = source;
+          setStart({
+            key: newDraftKey('external'),
+            keep: false,
+            fields: { ...rest, orderNr: '', licensePlate: '', driverName: '' },
+            meta: { copyFrom, copyNr: orderNr },
+          });
+        })
+        .catch(
+          () => !cancelled && setStart({ key: newDraftKey('external'), keep: false, meta: {} })
+        );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [copyFrom, draft]);
 
   const handleCreate = async (fields: ExternalOrderFields) => {
     // Alles, was den Zugang betrifft, vorher prüfen — ohne await, damit der
@@ -163,11 +224,28 @@ export default function NewExternalOrderScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
-        <ExternalOrderForm
-          submitLabel={t('chefExternalOrder', 'createButton')}
-          onSubmit={handleCreate}
-          renderBeforeSubmit={renderAccessSection}
-        />
+        {start === undefined ? (
+          <ActivityIndicator style={styles.loading} />
+        ) : (
+          <>
+            {start.keep ? (
+              <Text style={styles.copyHint}>{t('orderDraft', 'openedHint')}</Text>
+            ) : start.meta.copyNr ? (
+              <Text style={styles.copyHint}>
+                {t('orderCopy', 'hint').replace('{orderNr}', start.meta.copyNr)}
+              </Text>
+            ) : null}
+            <ExternalOrderForm
+              initialValues={start.fields}
+              submitLabel={t('chefExternalOrder', 'createButton')}
+              onSubmit={handleCreate}
+              draftKey={start.key}
+              draftMeta={start.meta}
+              draftKeepUnchanged={start.keep}
+              renderBeforeSubmit={renderAccessSection}
+            />
+          </>
+        )}
       </ScrollView>
 
       <AccessCredentialsModal
@@ -194,6 +272,14 @@ const createStyles = (theme: AppTheme) => {
       paddingBottom: Spacing.xxl,
     },
     backButton: u.backButton,
+    loading: {
+      marginTop: Spacing.xl,
+    },
+    copyHint: {
+      ...u.hint,
+      marginTop: 0,
+      marginBottom: Spacing.md,
+    },
     backButtonText: u.backButtonText,
     sectionTitle: u.sectionTitle,
     checkboxRow: {

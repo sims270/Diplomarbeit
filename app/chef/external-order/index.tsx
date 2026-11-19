@@ -6,6 +6,9 @@ import { shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
+import { listDrafts } from '@/lib/orderDrafts';
+import { matchesSearch, parseSearch } from '@/lib/orderSearch';
+import { OrderSearchField } from '@/components/OrderSearchField';
 import { isoToGerman } from '@/lib/dateFormat';
 import { currentMonth } from '@/lib/month';
 import { ALL_PERIOD, isOrderInPeriod } from '@/lib/orderPeriod';
@@ -24,6 +27,13 @@ export default function ExternalOrdersListScreen() {
   const styles = useThemedStyles(createStyles);
   const { c, columns } = useAppTheme();
   const router = useRouter();
+  // Anzahl der Entwürfe für den Button neben "Neu" — beim Zurückkommen neu gezählt.
+  const [draftCount, setDraftCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      listDrafts().then((drafts) => setDraftCount(drafts.filter((d) => d.kind === 'external').length));
+    }, [])
+  );
   const { t } = useTranslation();
   const [orders, setOrders] = useState<ExternalOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,9 +42,37 @@ export default function ExternalOrdersListScreen() {
   // Wie bei den eigenen Aufträgen: standardmäßig der laufende Monat.
   const [period, setPeriod] = useState(currentMonth);
 
+  // Suche: durchsucht alle Zeiträume, solange etwas im Feld steht.
+  const [search, setSearch] = useState('');
+  const searchWords = useMemo(() => parseSearch(search), [search]);
+  const isSearching = searchWords.length > 0;
+
   const visibleOrders = useMemo(
-    () => orders.filter((o) => isOrderInPeriod(o, period)),
-    [orders, period]
+    () =>
+      orders.filter(
+        (o) =>
+          (isSearching || isOrderInPeriod(o, period)) &&
+          matchesSearch(searchWords, ((o: ExternalOrder) =>
+  [
+    o.orderNr,
+    o.recipientCompany,
+    o.recipientContact,
+    o.recipientAddress,
+    o.loadingCompany,
+    o.loadingAddress,
+    o.loadingNumber,
+    o.unloadingCompany,
+    o.unloadingAddress,
+    o.cargoDescription,
+    o.loadingMeters,
+    o.clientCompany,
+    o.licensePlate,
+    o.driverName,
+    o.vehicleType,
+    o.notes,
+  ])(o), [o.loadingDate, o.unloadingDate])
+      ),
+    [orders, period, isSearching, searchWords]
   );
 
   const loadOrders = useCallback(async () => {
@@ -72,15 +110,27 @@ export default function ExternalOrdersListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
+        <OrderSearchField value={search} onChange={setSearch} />
         <OrderPeriodFilter period={period} onChange={setPeriod} />
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             {t('chefExternalOrdersList', 'title')} ({visibleOrders.length})
           </Text>
-          <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/external-order/new')}>
-            <Text style={styles.addButtonText}>{t('chefExternalOrdersList', 'addButton')}</Text>
-          </FluidPressable>
+          <View style={styles.headerButtons}>
+            {/* Angefangene, noch nicht gespeicherte Aufträge (app/chef/drafts.tsx). */}
+            <FluidPressable
+              style={styles.draftsButton}
+              onPress={() => router.push({ pathname: '/chef/drafts', params: { kind: 'external' } })}
+            >
+              <Text style={styles.draftsButtonText}>
+                {t('orderDraft', 'button')}{draftCount > 0 ? ` (${draftCount})` : ''}
+              </Text>
+            </FluidPressable>
+            <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/external-order/new')}>
+              <Text style={styles.addButtonText}>{t('chefExternalOrdersList', 'addButton')}</Text>
+            </FluidPressable>
+          </View>
         </View>
 
         {isLoading ? (
@@ -90,12 +140,16 @@ export default function ExternalOrdersListScreen() {
         ) : visibleOrders.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              {period === ALL_PERIOD
+              {isSearching
+                ? t('orderSearch', 'noResults').replace('{query}', search.trim())
+                : period === ALL_PERIOD
                 ? t('chefExternalOrdersList', 'emptyState')
                 : t('chefOrdersList', 'emptyPeriod')}
             </Text>
             <Text style={styles.emptyStateSubtext}>
-              {period === ALL_PERIOD
+              {isSearching
+                ? t('orderSearch', 'noResultsSub')
+                : period === ALL_PERIOD
                 ? t('chefExternalOrdersList', 'emptyStateSub')
                 : t('chefOrdersList', 'emptyPeriodSub')}
             </Text>
@@ -163,6 +217,19 @@ const createStyles = (theme: AppTheme) => {
       ...Typography.title2,
       color: c.text,
       flexShrink: 1,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    draftsButton: {
+      ...u.smallButton,
+      backgroundColor: theme.c.surfaceSecondary,
+    },
+    draftsButtonText: {
+      ...u.smallButtonText,
+      color: theme.c.text,
     },
     addButton: u.smallButton,
     addButtonText: u.smallButtonText,

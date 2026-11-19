@@ -19,6 +19,9 @@ import { Colors, Layout, Radius, shadow, Spacing, Typography } from '@/constants
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
+import { listDrafts } from '@/lib/orderDrafts';
+import { matchesSearch, parseSearch } from '@/lib/orderSearch';
+import { OrderSearchField } from '@/components/OrderSearchField';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman, timestampToGermanDate } from '@/lib/dateFormat';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -40,6 +43,13 @@ export default function OrdersListScreen() {
   const styles = useThemedStyles(createStyles);
   const { c, columns } = useAppTheme();
   const router = useRouter();
+  // Anzahl der Entwürfe für den Button neben "Neu" — beim Zurückkommen neu gezählt.
+  const [draftCount, setDraftCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      listDrafts().then((drafts) => setDraftCount(drafts.filter((d) => d.kind === 'own').length));
+    }, [])
+  );
   const { t } = useTranslation();
   const { isOfflineMode } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -62,22 +72,67 @@ export default function OrdersListScreen() {
     isOrderPeriod(params.period) ? params.period : currentMonth()
   );
   const statusFilter = params.status ?? null;
+
+  // Suche: durchsucht alle Zeiträume, solange etwas im Feld steht — sonst
+  // fände man einen Auftrag aus einem anderen Monat nie.
+  const [search, setSearch] = useState('');
+  const searchWords = useMemo(() => parseSearch(search), [search]);
+  const isSearching = searchWords.length > 0;
   const showsExternalOrders =
     statusFilter === 'pending' || statusFilter === 'assigned' || statusFilter === 'completed';
 
   // Von einer Kachel aus stehen auch die passenden Fremdaufträge in der
   // Liste — neueste zuerst, gemischt mit den eigenen.
   const monthOrders = useMemo<(Order | ExternalOrder)[]>(() => {
+    const inPeriod = (o: Order | ExternalOrder) => isSearching || isOrderInPeriod(o, period);
+    const ownMatches = (o: Order) =>
+      matchesSearch(
+        searchWords,
+        [
+          o.orderNr,
+          o.loadingCompany,
+          o.loadingAddress,
+          o.unloadingCompany,
+          o.unloadingAddress,
+          o.cargoDescription,
+          o.loadingMeters,
+          o.clientCompany,
+          drivers.find((d) => d.id === o.assignedTo)?.username,
+        ],
+        [o.loadingDate, o.unloadingDate]
+      );
+    const externalMatches = (o: ExternalOrder) =>
+      matchesSearch(searchWords, ((o: ExternalOrder) =>
+  [
+    o.orderNr,
+    o.recipientCompany,
+    o.recipientContact,
+    o.recipientAddress,
+    o.loadingCompany,
+    o.loadingAddress,
+    o.loadingNumber,
+    o.unloadingCompany,
+    o.unloadingAddress,
+    o.cargoDescription,
+    o.loadingMeters,
+    o.clientCompany,
+    o.licensePlate,
+    o.driverName,
+    o.vehicleType,
+    o.notes,
+  ])(o), [o.loadingDate, o.unloadingDate]);
+
     const own = orders.filter(
-      (o) => isOrderInPeriod(o, period) && (statusFilter === null || o.status === statusFilter)
+      (o) =>
+        inPeriod(o) && (statusFilter === null || o.status === statusFilter) && ownMatches(o)
     );
     if (!showsExternalOrders) return own;
 
     const external = externalOrders.filter(
-      (o) => externalOrderTileStatus(o) === statusFilter && isOrderInPeriod(o, period)
+      (o) => externalOrderTileStatus(o) === statusFilter && inPeriod(o) && externalMatches(o)
     );
     return [...own, ...external].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [orders, externalOrders, period, statusFilter, showsExternalOrders]);
+  }, [orders, externalOrders, period, statusFilter, showsExternalOrders, isSearching, searchWords, drivers]);
 
   const loadOrders = useCallback(async () => {
     setLoadError(false);
@@ -247,6 +302,7 @@ export default function OrdersListScreen() {
           <Text style={styles.backButtonText}>{`← ${t('common', 'back')}`}</Text>
         </FluidPressable>
 
+        <OrderSearchField value={search} onChange={setSearch} />
         <OrderPeriodFilter period={period} onChange={setPeriod} />
 
         {/* Der Status kommt von einer Kachel — das X führt zurück zu den Kacheln.
@@ -267,9 +323,20 @@ export default function OrdersListScreen() {
           <Text style={styles.sectionTitle}>
             {t('chefOrdersList', 'title')} ({monthOrders.length})
           </Text>
-          <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/order/new')}>
-            <Text style={styles.addButtonText}>{t('chefOrdersList', 'addButton')}</Text>
-          </FluidPressable>
+          <View style={styles.headerButtons}>
+            {/* Angefangene, noch nicht gespeicherte Aufträge (app/chef/drafts.tsx). */}
+            <FluidPressable
+              style={styles.draftsButton}
+              onPress={() => router.push({ pathname: '/chef/drafts', params: { kind: 'own' } })}
+            >
+              <Text style={styles.draftsButtonText}>
+                {t('orderDraft', 'button')}{draftCount > 0 ? ` (${draftCount})` : ''}
+              </Text>
+            </FluidPressable>
+            <FluidPressable style={styles.addButton} onPress={() => router.push('/chef/order/new')}>
+              <Text style={styles.addButtonText}>{t('chefOrdersList', 'addButton')}</Text>
+            </FluidPressable>
+          </View>
         </View>
 
         {isLoading ? (
@@ -279,10 +346,14 @@ export default function OrdersListScreen() {
         ) : monthOrders.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              {t('chefOrdersList', period === ALL_PERIOD ? 'emptyState' : 'emptyPeriod')}
+              {isSearching
+                ? t('orderSearch', 'noResults').replace('{query}', search.trim())
+                : t('chefOrdersList', period === ALL_PERIOD ? 'emptyState' : 'emptyPeriod')}
             </Text>
             <Text style={styles.emptyStateSubtext}>
-              {t('chefOrdersList', period === ALL_PERIOD ? 'emptyStateSub' : 'emptyPeriodSub')}
+              {isSearching
+                ? t('orderSearch', 'noResultsSub')
+                : t('chefOrdersList', period === ALL_PERIOD ? 'emptyStateSub' : 'emptyPeriodSub')}
             </Text>
           </View>
         ) : (
@@ -528,6 +599,19 @@ const createStyles = (theme: AppTheme) => {
       ...Typography.subhead,
       fontWeight: '600',
       color: c.onTint,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    draftsButton: {
+      ...u.smallButton,
+      backgroundColor: theme.c.surfaceSecondary,
+    },
+    draftsButtonText: {
+      ...u.smallButtonText,
+      color: theme.c.text,
     },
     addButton: u.smallButton,
     addButtonText: u.smallButtonText,

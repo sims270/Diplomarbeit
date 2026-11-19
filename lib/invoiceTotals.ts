@@ -22,6 +22,25 @@ function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Dieselzuschlag einer Position in Euro: Preis mal Prozentsatz, auf Cent
+ * gerundet (20261119210000_invoice_item_extras.sql). null ohne Zuschlag oder
+ * ohne Preis. Dieselbe Rechnung wie dieselAmount in der Edge Function.
+ */
+export function dieselAmount(preis: number | null, prozent: number | null): number | null {
+  if (preis === null || prozent === null || prozent === 0) return null;
+  return roundCents((preis * prozent) / 100);
+}
+
+/** Was eine Position kostet: Preis plus Dieselzuschlag; null ohne Preis. */
+export function positionTotal(preis: number | null, prozent: number | null): number | null {
+  if (preis === null) return null;
+  return roundCents(preis + (dieselAmount(preis, prozent) ?? 0));
+}
+
+/**
+ * `prices` sind die Beträge je Position samt Dieselzuschlag (positionTotal).
+ */
 export function computeInvoiceTotals(
   prices: (number | null)[],
   ustSatz: number | null,

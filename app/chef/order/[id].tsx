@@ -205,10 +205,21 @@ export default function ChefOrderDetailScreen() {
           <FluidPressable style={styles.backLink} onPress={() => router.back()}>
             <Text style={styles.backLinkText}>← {t('chefOrderDetail', 'back')}</Text>
           </FluidPressable>
-          <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
-            <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
-            <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
-          </FluidPressable>
+          <View style={styles.topActions}>
+            <FluidPressable
+              style={styles.deleteLink}
+              onPress={() =>
+                router.push({ pathname: '/chef/order/new', params: { copyFrom: order.id } })
+              }
+            >
+              <MaterialIcons name="content-copy" size={18} color={c.textSecondary} />
+              <Text style={styles.deleteLinkText}>{t('orderCopy', 'button')}</Text>
+            </FluidPressable>
+            <FluidPressable style={styles.deleteLink} onPress={() => setShowDelete(true)}>
+              <MaterialIcons name="delete-outline" size={18} color={c.textSecondary} />
+              <Text style={styles.deleteLinkText}>{t('deleteOrder', 'button')}</Text>
+            </FluidPressable>
+          </View>
         </View>
 
         <View style={styles.orderHeaderCard}>
@@ -392,6 +403,12 @@ const createStyles = (theme: AppTheme) => {
     contentInner: u.formColumn,
     backLink: u.backButton,
     backLinkText: u.backButtonText,
+    // Duplizieren und Löschen rechts oben, gleich unauffällig.
+    topActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
     topRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',

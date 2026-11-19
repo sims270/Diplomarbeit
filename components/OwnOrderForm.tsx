@@ -9,12 +9,14 @@ import {
 } from '@/app/services/siteCompanyService';
 import { addUnloadingCompanyIfNew, getUnloadingCompanies } from '@/app/services/unloadingCompanyService';
 import { DateField } from '@/components/DateField';
+import { NewCompanyModal } from '@/components/NewCompanyModal';
 import { TimeField } from '@/components/TimeField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Spacing } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
+import { useFormDraft } from '@/hooks/use-form-draft';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { useEffect, useState } from 'react';
@@ -51,6 +53,7 @@ const emptyFields: OrderFields = {
   loadingTimeUntil: '',
   loadingCompany: '',
   loadingAddress: '',
+  cargoDescription: '',
   loadingMeters: '',
   unloadingDate: '',
   unloadingTimeFrom: '',
@@ -67,6 +70,16 @@ interface OwnOrderFormProps {
   initialPrice?: string;
   submitLabel: string;
   onSubmit: (fields: OrderFields, price: string) => Promise<void>;
+  /**
+   * Nur beim Anlegen: Unter diesem Schlüssel merkt sich das Gerät die
+   * Eingaben, falls der Chef vor dem Speichern zurückgeht
+   * (hooks/use-form-draft.ts).
+   */
+  draftKey?: string;
+  /** Wird mit dem Entwurf gespeichert, z. B. { copyFrom, copyNr } bei einer Kopie. */
+  draftMeta?: Record<string, string>;
+  /** true = ein geöffneter Entwurf: bleibt stehen, auch wenn nichts geändert wird. */
+  draftKeepUnchanged?: boolean;
 }
 
 // Shared by app/chef/order/new.tsx (create) and [id].tsx (edit) — same
@@ -74,7 +87,15 @@ interface OwnOrderFormProps {
 // directory for Ladestelle/Entladestelle), minus everything that only
 // makes sense once a job leaves the company (recipient, freight terms,
 // vehicle, legal notes).
-export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, onSubmit }: OwnOrderFormProps) {
+export function OwnOrderForm({
+  initialValues,
+  initialPrice = '',
+  submitLabel,
+  onSubmit,
+  draftKey,
+  draftMeta,
+  draftKeepUnchanged,
+}: OwnOrderFormProps) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
@@ -86,6 +107,38 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
   const [activePicker, setActivePicker] = useState<PickerField | null>(null);
   const [companySearch, setCompanySearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // "Neue Firma anlegen" aus der Liste: für welches Feld, mit welchem Namen.
+  const [newCompanyFor, setNewCompanyFor] = useState<'loadingCompany' | 'clientCompany' | null>(
+    null
+  );
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const canCreateCompany = activePicker === 'loadingCompany' || activePicker === 'clientCompany';
+  const startNewCompany = () => {
+    setNewCompanyName(companySearch);
+    setNewCompanyFor(activePicker as 'loadingCompany' | 'clientCompany');
+    setActivePicker(null);
+  };
+  const handleCompanyCreated = (company: { name: string; address: string }) => {
+    setSiteCompanies((prev) =>
+      [...prev, company].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+    );
+    setForm((prev) =>
+      newCompanyFor === 'clientCompany'
+        ? { ...prev, clientCompany: company.name, clientAddress: company.address }
+        : {
+            ...prev,
+            loadingCompany: company.name,
+            loadingAddress: company.address || prev.loadingAddress,
+          }
+    );
+    setNewCompanyFor(null);
+  };
+
+  const draft = useFormDraft(draftKey, { form, price }, {
+    meta: draftMeta,
+    keepUnchanged: draftKeepUnchanged,
+  });
 
   useEffect(() => {
     getSiteCompanies().then(setSiteCompanies);
@@ -174,10 +227,14 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
     !pickerCompanies.some((option) => option.value.toLowerCase() === typedClient.toLowerCase());
 
   const handleSubmit = async () => {
-    const { loadingDate, loadingCompany, loadingAddress, unloadingDate, unloadingCompany, unloadingAddress } = form;
+    const {
+      loadingDate, loadingCompany, loadingAddress, cargoDescription,
+      unloadingDate, unloadingCompany, unloadingAddress,
+    } = form;
 
+    // Ladegut ist Pflicht wie beim Fremdauftrag: Ohne weiß der Fahrer nicht, was er lädt.
     if (
-      !loadingDate.trim() || !loadingCompany.trim() || !loadingAddress.trim() ||
+      !loadingDate.trim() || !loadingCompany.trim() || !loadingAddress.trim() || !cargoDescription.trim() ||
       !unloadingDate.trim() || !unloadingCompany.trim() || !unloadingAddress.trim()
     ) {
       showAlert(t('common', 'error'), t('chefOwnOrder', 'alertFillFields'));
@@ -195,6 +252,8 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
     setIsSaving(true);
     try {
       await onSubmit(form, price);
+      // Gespeichert: Der Entwurf hat ausgedient.
+      await draft.clear();
 
       // Best-effort, after the fact: remembers freshly typed site companies
       // for next time's dropdowns. Never blocks saving if it fails (see
@@ -318,6 +377,14 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
         placeholderTextColor={c.placeholder}
         keyboardAppearance={scheme}
         style={styles.input}
+        placeholder={t('chefOwnOrder', 'cargoDescriptionLabel')}
+        value={form.cargoDescription}
+        onChangeText={set('cargoDescription')}
+      />
+      <TextInput
+        placeholderTextColor={c.placeholder}
+        keyboardAppearance={scheme}
+        style={styles.input}
         placeholder={t('chefOwnOrder', 'loadingMetersLabel')}
         value={form.loadingMeters}
         onChangeText={set('loadingMeters')}
@@ -417,6 +484,15 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
                 autoFocus
               />
             )}
+            {/* Neue Firma samt Anschrift, UID und BMD-Konto direkt hier anlegen
+                (components/NewCompanyModal.tsx) — BMD ist noch nicht verbunden. */}
+            {canCreateCompany && (
+              <FluidPressable style={styles.vehicleOption} onPress={startNewCompany}>
+                <Text style={[styles.vehicleOptionText, { color: c.tint, fontWeight: '600' }]}>
+                  <MaterialIcons name="add" size={16} color={c.tint} /> {t('newCompany', 'option')}
+                </Text>
+              </FluidPressable>
+            )}
             {activePicker === 'clientCompany' && (
               <>
                 <FluidPressable style={styles.vehicleOption} onPress={() => setClientWithoutAddress('')}>
@@ -460,6 +536,13 @@ export function OwnOrderForm({ initialValues, initialPrice = '', submitLabel, on
           </View>
         </View>
       </Modal>
+
+      <NewCompanyModal
+        table={newCompanyFor ? 'site_companies' : null}
+        initialName={newCompanyName}
+        onClose={() => setNewCompanyFor(null)}
+        onCreated={handleCompanyCreated}
+      />
     </>
   );
 }
