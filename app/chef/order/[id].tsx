@@ -24,6 +24,7 @@ import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { timestampToGerman } from '@/lib/dateFormat';
 import { showAlert, showConfirm } from '@/lib/alert';
+import { describeSavedPdf } from '@/lib/orderPdfFile';
 import { exportOwnOrderPdf } from '@/lib/ownOrderExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -105,12 +106,18 @@ export default function ChefOrderDetailScreen() {
     const updated = await updateOrder(id, fields);
     const assignedDriver = drivers.find((d) => d.id === updated.assignedTo);
 
-    // Same reasoning as the create screen: keep this right after the click
-    // with nothing awaited ahead of it, so web's popup permission holds.
-    await Promise.all([
+    // Wie beim Anlegen: direkt nach dem Klick, damit der Browser beim ersten
+    // Mal den Ordner-Dialog noch zeigen darf.
+    const [, saved] = await Promise.all([
       saveOrderPrice(id, newPrice),
       exportOwnOrderPdf(updated, assignedDriver?.username),
     ]);
+    if (saved) {
+      showAlert(
+        t('common', 'success'),
+        describeSavedPdf(saved, t('orderPdf', 'savedToFolder'), t('orderPdf', 'downloaded'))
+      );
+    }
     router.back();
   };
 

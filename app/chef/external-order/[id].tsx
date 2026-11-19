@@ -10,6 +10,7 @@ import {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { DeleteOrderModal } from '@/components/DeleteOrderModal';
 import { ExternalAccessPanel } from '@/components/ExternalAccessPanel';
+import { ExternalOrderConfirmation } from '@/components/ExternalOrderConfirmation';
 import { ExternalOrderForm } from '@/components/ExternalOrderForm';
 import { billingCompanyOf } from '@/app/services/invoiceService';
 import { InvoiceForm } from '@/components/InvoiceForm';
@@ -21,6 +22,7 @@ import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-the
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
+import { describeSavedPdf } from '@/lib/orderPdfFile';
 import { timestampToGerman } from '@/lib/dateFormat';
 import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -49,9 +51,15 @@ export default function EditExternalOrderScreen() {
   const handleUpdate = async (fields: ExternalOrderFields) => {
     const updated = await updateExternalOrder(id, fields);
 
-    // Same reasoning as the create screen: keep this right after the click
-    // with nothing awaited ahead of it, so web's popup permission holds.
-    await exportTransportauftragPdf(updated);
+    // Wie beim Anlegen: direkt nach dem Klick, damit der Browser beim ersten
+    // Mal den Ordner-Dialog noch zeigen darf.
+    const saved = await exportTransportauftragPdf(updated);
+    if (saved) {
+      showAlert(
+        t('common', 'success'),
+        describeSavedPdf(saved, t('orderPdf', 'savedToFolder'), t('orderPdf', 'downloaded'))
+      );
+    }
     router.back();
   };
 
@@ -224,10 +232,17 @@ export default function EditExternalOrderScreen() {
 
         {/* Unabhängig vom Formular: Zuweisen, Verlängern und Löschen wirken
             sofort, nicht erst mit "Änderungen speichern". */}
+        <ExternalOrderConfirmation order={order} onChanged={setOrder} />
+
         <ExternalAccessPanel
-          orderId={order.id}
-          recipientCompany={order.recipientCompany}
-          unloadingDate={order.unloadingDate}
+          order={order}
+          onChanged={() =>
+            // Zuweisen oder Aufheben setzt in der Datenbank auch die
+            // Bestätigung zurück — der Kasten darüber soll das zeigen.
+            getExternalOrderById(order.id)
+              .then((found) => found && setOrder(found))
+              .catch(() => undefined)
+          }
         />
 
         <OrderDocuments orderId={order.id} note={t('externalAccess', 'documentsNote')} />

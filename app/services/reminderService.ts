@@ -8,16 +8,25 @@ import {
 } from './licensePlateService';
 import { getPermitStatus, getTrailers, type Trailer } from './trailerService';
 import { type ExternalAccess, getExpiredAccesses } from './externalDriverAccessService';
+import { getWithdrawnExternalOrders, type WithdrawnExternalOrder } from './externalOrderService';
 
 /**
  * Alle Erinnerungen des Chefs an einer Stelle: der 🔔-Button im Header
  * zählt sie, app/chef/reminders.tsx listet sie, und das Dashboard zeigt
  * eine Erinnerung am ersten Tag, an dem sie da ist, zusätzlich als Hinweis.
  */
-export type ReminderKind = 'service' | 'pickerl' | 'trailerPickerl' | 'permit' | 'expiredAccess';
+export type ReminderKind =
+  | 'withdrawnOrder'
+  | 'service'
+  | 'pickerl'
+  | 'trailerPickerl'
+  | 'permit'
+  | 'expiredAccess';
 
 /** Reihenfolge der Gruppen auf Dashboard und Erinnerungsseite. */
 export const REMINDER_KINDS: ReminderKind[] = [
+  // Zuerst: Da fehlt kurzfristig ein Frächter.
+  'withdrawnOrder',
   'service',
   'pickerl',
   'trailerPickerl',
@@ -58,13 +67,25 @@ export async function getReminders(): Promise<ReminderResult> {
       return [] as T[];
     });
 
-  const [vehicles, trailers, accesses] = await Promise.all([
+  const [vehicles, trailers, accesses, withdrawn] = await Promise.all([
     orEmpty<Vehicle>(getVehicles()),
     orEmpty<Trailer>(getTrailers()),
     orEmpty<ExternalAccess>(getExpiredAccesses()),
+    orEmpty<WithdrawnExternalOrder>(getWithdrawnExternalOrders()),
   ]);
 
   const reminders: Reminder[] = [];
+
+  // Frächter innerhalb der Stunde zurückgetreten
+  // (20261119190000_external_order_confirmation.sql). Verschwindet, sobald
+  // der Chef den Auftrag neu zuweist.
+  for (const order of withdrawn) {
+    reminders.push({
+      key: `withdrawn:${order.id}:${order.withdrawnAt}`,
+      kind: 'withdrawnOrder',
+      label: `Nr. ${order.orderNr}${order.recipientCompany ? ` (${order.recipientCompany})` : ''}`,
+    });
+  }
 
   // Ausgeflottete LKW bleiben außen vor — die fahren nicht mehr.
   for (const vehicle of vehicles.filter((v) => v.retiredAt === null)) {

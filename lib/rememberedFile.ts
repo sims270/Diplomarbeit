@@ -44,8 +44,16 @@ interface SaveFilePickerOptions {
   types: { description: string; accept: Record<string, string[]> }[];
 }
 
+interface DirectoryHandle {
+  name: string;
+  getFileHandle(name: string, options: { create: boolean }): Promise<FileHandle>;
+  queryPermission(options: { mode: 'readwrite' }): Promise<PermissionState>;
+  requestPermission(options: { mode: 'readwrite' }): Promise<PermissionState>;
+}
+
 type WindowWithPicker = Window & {
   showSaveFilePicker?: (options: SaveFilePickerOptions) => Promise<FileHandle>;
+  showDirectoryPicker?: (options: { id?: string; mode: 'readwrite' }) => Promise<DirectoryHandle>;
 };
 
 /** Wirft der Aufrufer weiter, wenn der Chef den Dateidialog abbricht — kein Fehler, nichts anzuzeigen. */
@@ -56,11 +64,11 @@ export class SaveCancelledError extends Error {
   }
 }
 
-/** Die Datei ist gerade in Excel geöffnet — Windows sperrt sie dann gegen Schreiben. */
+/** Die Datei ist gerade in Excel (oder einem PDF-Programm) geöffnet — Windows sperrt sie dann gegen Schreiben. */
 export class FileLockedError extends Error {
   constructor(fileName: string) {
     super(
-      `"${fileName}" ist gerade in Excel geöffnet. Bitte die Datei schließen und den Export noch einmal starten.`
+      `"${fileName}" ist gerade in einem anderen Programm geöffnet (z. B. Excel). Bitte die Datei schließen und den Export noch einmal starten.`
     );
     this.name = 'FileLockedError';
   }
@@ -90,12 +98,12 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function readHandle(key: string): Promise<FileHandle | null> {
+async function readHandle<T = FileHandle>(key: string): Promise<T | null> {
   try {
     const db = await openDb();
     return await new Promise((resolve) => {
       const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
-      request.onsuccess = () => resolve((request.result as FileHandle | undefined) ?? null);
+      request.onsuccess = () => resolve((request.result as T | undefined) ?? null);
       request.onerror = () => resolve(null);
     });
   } catch {
@@ -103,7 +111,7 @@ async function readHandle(key: string): Promise<FileHandle | null> {
   }
 }
 
-async function writeHandle(key: string, handle: FileHandle | null): Promise<void> {
+async function writeHandle(key: string, handle: FileHandle | DirectoryHandle | null): Promise<void> {
   try {
     const db = await openDb();
     await new Promise<void>((resolve) => {
@@ -222,4 +230,103 @@ export async function saveToRememberedFile(options: SaveOptions): Promise<string
   }
 
   return handle.name;
+}
+
+// ------------------------------------------------------------ Ordner
+//
+// Wie oben, nur für einen ganzen Ordner statt einer Datei: Die PDFs der
+// Aufträge landen jede unter ihrem eigenen Namen im selben Ordner. Den
+// Ordner wählt der Chef beim ersten Export einmal aus — und zwar je Laptop
+// und Browser, denn der gemerkte Handle liegt in der IndexedDB dieses
+// Browsers. Auf einem anderen Laptop fragt die App deshalb einmal neu.
+
+export function supportsRememberedFolder(): boolean {
+  return (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    typeof (window as WindowWithPicker).showDirectoryPicker === 'function'
+  );
+}
+
+/** Name des gemerkten Ordners — null, wenn auf diesem Gerät noch keiner gewählt ist. */
+export async function getRememberedFolderName(key: string): Promise<string | null> {
+  if (!supportsRememberedFolder()) return null;
+  return (await readHandle<DirectoryHandle>(key))?.name ?? null;
+}
+
+/**
+ * Lässt den Chef einen (anderen) Ordner wählen und merkt ihn. Gibt dessen
+ * Namen zurück. Muss direkt aus einem Klick heraus aufgerufen werden.
+ */
+export async function chooseRememberedFolder(key: string): Promise<string> {
+  const picker = (window as WindowWithPicker).showDirectoryPicker;
+  if (!picker) throw new Error('Dieser Browser kann nicht direkt in einen Ordner speichern.');
+
+  let handle: DirectoryHandle;
+  try {
+    // id: Der Dialog startet beim nächsten Mal wieder in diesem Ordner.
+    handle = await picker({ id: key, mode: 'readwrite' });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new SaveCancelledError();
+    }
+    throw error;
+  }
+  await writeHandle(key, handle);
+  return handle.name;
+}
+
+/**
+ * Schreibt eine Datei in den gemerkten Ordner, fragt beim ersten Mal nach
+ * dem Ordner. Gleicher Dateiname = die Datei wird überschrieben, etwa wenn
+ * ein Auftrag nach einer Änderung neu exportiert wird.
+ *
+ * Reihenfolge wie bei saveToRememberedFile: erst Ordner und Erlaubnis, dann
+ * den Inhalt erzeugen, dann schreiben.
+ */
+export async function saveToRememberedFolder(options: {
+  key: string;
+  fileName: string;
+  produce: () => Promise<Blob>;
+}): Promise<{ folderName: string; fileName: string }> {
+  let handle = await readHandle<DirectoryHandle>(options.key);
+
+  if (handle) {
+    let permission = await handle.queryPermission({ mode: 'readwrite' });
+    if (permission === 'prompt') {
+      permission = await handle.requestPermission({ mode: 'readwrite' });
+    }
+    if (permission !== 'granted') handle = null;
+  }
+
+  if (!handle) {
+    await chooseRememberedFolder(options.key);
+    handle = await readHandle<DirectoryHandle>(options.key);
+    if (!handle) throw new Error('Der Ordner konnte nicht gemerkt werden.');
+  }
+
+  const blob = await options.produce();
+
+  try {
+    const file = await handle.getFileHandle(options.fileName, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  } catch (error) {
+    const name = error instanceof DOMException ? error.name : '';
+    if (name === 'NoModificationAllowedError' || name === 'InvalidStateError') {
+      throw new FileLockedError(options.fileName);
+    }
+    // Ordner inzwischen verschoben oder gelöscht: vergessen, beim nächsten
+    // Export fragt die App neu.
+    if (name === 'NotFoundError') {
+      await writeHandle(options.key, null);
+      throw new Error(
+        `Der Ordner "${handle.name}" wurde nicht mehr gefunden — vermutlich verschoben oder gelöscht. Beim nächsten Export bitte den Ordner neu wählen.`
+      );
+    }
+    throw error;
+  }
+
+  return { folderName: handle.name, fileName: options.fileName };
 }

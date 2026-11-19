@@ -1,6 +1,23 @@
 import type { Order } from '@/app/services/orderService';
 import { dateToIso, isoToGerman } from '@/lib/dateFormat';
-import { escapeHtml, footer, formatTimeWindow, letterhead, PDF_STYLES } from '@/lib/pdfLayout';
+import {
+  escapeHtml,
+  fieldRow,
+  footer,
+  formatTimeWindow,
+  letterhead,
+  lines,
+  PDF_STYLES,
+} from '@/lib/pdfLayout';
+
+/** Firma und Anschrift untereinander; leere Teile fallen weg. */
+function place(company: string, address: string): string {
+  return [company, address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(lines)
+    .join('<br/>');
+}
 
 /**
  * Renders the Transportauftrag PDF for an internal job assigned to the
@@ -36,21 +53,22 @@ ${PDF_STYLES}
 </head>
 <body>
 
-  <div class="page">
+  <div class="page order">
     ${letterhead}
     <div class="dateRow"><span class="dateBlock">Stadlhof, ${today}<br/>Transportnummer ${escapeHtml(order.orderNr)}</span></div>
 
     <h1 class="title">TRANSPORTAUFTRAG</h1>
 
-    ${driverUsername ? `<div class="field-row"><span class="field-label">Fahrer:</span> ${escapeHtml(driverUsername)}</div>` : ''}
+    <!-- Gleiches Raster wie der Fremdauftrag (lib/transportauftragPdf.ts). -->
+    <div class="head">
+      ${driverUsername ? fieldRow('Fahrer:', escapeHtml(driverUsername)) : ''}
+    </div>
 
-    <table class="fields">
-      <tr><td class="label">Ladetermin:</td><td>${escapeHtml(loadingUntil)}</td></tr>
-      <tr><td class="label">Ladestelle:</td><td>${escapeHtml(order.loadingCompany)}<br/>${escapeHtml(order.loadingAddress)}</td></tr>
-      <tr><td class="label">Lademeter:</td><td>${escapeHtml(order.loadingMeters)}</td></tr>
-      <tr><td class="label">Entladetermin:</td><td>${escapeHtml(unloadingUntil)}</td></tr>
-      <tr><td class="label">Entladestelle:</td><td>${escapeHtml(order.unloadingCompany)}<br/>${escapeHtml(order.unloadingAddress)}</td></tr>
-    </table>
+    ${fieldRow('Ladetermin:', escapeHtml(loadingUntil), { gap: driverUsername ? 2 : 0, bold: true })}
+    ${fieldRow('Ladestelle:', place(order.loadingCompany, order.loadingAddress), { gap: 1 })}
+    ${fieldRow('Lademeter:', lines(order.loadingMeters), { gap: 2 })}
+    ${fieldRow('Entladetermin:', escapeHtml(unloadingUntil), { gap: 2, bold: true })}
+    ${fieldRow('Entladestelle:', place(order.unloadingCompany, order.unloadingAddress), { gap: 2 })}
 
     ${footer('Seite | 1')}
   </div>

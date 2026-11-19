@@ -8,6 +8,8 @@ import { Spacing } from '@/constants/theme';
 import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
+import { showAlert } from '@/lib/alert';
+import { describeSavedPdf } from '@/lib/orderPdfFile';
 import { exportOwnOrderPdf } from '@/lib/ownOrderExport';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -21,11 +23,19 @@ export default function NewOrderScreen() {
   const handleCreate = async (fields: OrderFields, price: string) => {
     const order = await addOrder({ ...fields, createdBy: user?.id || '' });
 
-    // Must run right after the click with no awaits ahead of it — on web
-    // this opens a popup window, and browsers silently block window.open
-    // once the "recent user gesture" allowance from the click has lapsed.
-    // Der Preis läuft deshalb parallel statt davor.
-    await Promise.all([saveOrderPrice(order.id, price), exportOwnOrderPdf(order)]);
+    // Direkt nach dem Klick: Beim ersten Mal zeigt der Browser den
+    // Ordner-Dialog, und das nur kurz nach einer Nutzeraktion. Der Preis
+    // läuft deshalb parallel statt davor.
+    const [, saved] = await Promise.all([
+      saveOrderPrice(order.id, price),
+      exportOwnOrderPdf(order),
+    ]);
+    if (saved) {
+      showAlert(
+        t('common', 'success'),
+        describeSavedPdf(saved, t('orderPdf', 'savedToFolder'), t('orderPdf', 'downloaded'))
+      );
+    }
     router.back();
   };
 

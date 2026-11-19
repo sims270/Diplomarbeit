@@ -2,23 +2,26 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   createTankEntry,
+  driverEditDeadline,
   getTankEntriesByDriver,
+  isEditableByDriver,
   parseGermanNumber,
   parseOdometer,
   type TankEntry,
+  updateTankEntry,
 } from '@/app/services/tankEntryService';
 import { DateField } from '@/components/DateField';
 import { BlurSurface } from '@/components/fluid/BlurSurface';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
-import { Radius, shadow, Spacing, Typography } from '@/constants/theme';
+import { Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { dateToIso, isoToGerman } from '@/lib/dateFormat';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,10 +46,11 @@ const FUEL_STATION_OPTIONS = [
 ];
 
 /**
- * Tankliste des Fahrers — ersetzt den Papierzettel im LKW. Erfassen und
- * eigene Einträge ansehen; ändern oder löschen ist bewusst nicht
- * vorgesehen (vgl. die fehlenden UPDATE-/DELETE-Policies in der
- * Migration).
+ * Tankliste des Fahrers — ersetzt den Papierzettel im LKW. Erfassen, eigene
+ * Einträge ansehen und bis drei Tage nach dem Erfassen ändern (die Frist
+ * prüft update_tank_entry in
+ * 20261119170000_tank_entry_driver_edit_and_delete.sql). Löschen darf nur
+ * der Chef.
  */
 export default function DriverTankListeScreen() {
   const styles = useThemedStyles(createStyles);
@@ -67,6 +71,10 @@ export default function DriverTankListeScreen() {
   const [fuelStation, setFuelStation] = useState('');
   const [isStationPickerOpen, setIsStationPickerOpen] = useState(false);
   const [isPlatePickerOpen, setIsPlatePickerOpen] = useState(false);
+  // Gesetzt, solange das Formular oben eine bestehende Tankung bearbeitet
+  // statt eine neue zu erfassen.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Der vom Chef zugeteilte LKW steht beim Öffnen schon im Feld — das ist
   // der Normalfall und spart das Abtippen, das auf dem Papierzettel die
@@ -129,6 +137,25 @@ export default function DriverTankListeScreen() {
     setFuelStation('');
   };
 
+  // Dasselbe Formular wie beim Erfassen, nur mit den Werten der Tankung —
+  // so gelten Auswahllisten und Prüfungen unverändert.
+  const startEdit = (entry: TankEntry) => {
+    const liters = (value: number) => value.toLocaleString('de-DE', { useGrouping: false });
+    setEditingId(entry.id);
+    setEntryDate(entry.entryDate);
+    setLicensePlate(entry.licensePlate);
+    setKmStand(String(entry.kmStand));
+    setLitersDiesel(liters(entry.litersDiesel));
+    setLitersAdBlue(entry.litersAdBlue === null ? '' : liters(entry.litersAdBlue));
+    setFuelStation(entry.fuelStation);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    resetForm();
+  };
+
   const handleSave = async () => {
     if (!entryDate || !licensePlate.trim() || !kmStand.trim() || !litersDiesel.trim()) {
       showAlert(t('common', 'error'), t('tankliste', 'errorRequiredFields'));
@@ -160,19 +187,29 @@ export default function DriverTankListeScreen() {
       }
     }
 
+    const input = {
+      entryDate,
+      licensePlate,
+      kmStand: parsedKm,
+      litersDiesel: parsedDiesel,
+      litersAdBlue: parsedAdBlue,
+      fuelStation,
+    };
+
     setIsSaving(true);
     try {
-      await createTankEntry({
-        entryDate,
-        licensePlate,
-        kmStand: parsedKm,
-        litersDiesel: parsedDiesel,
-        litersAdBlue: parsedAdBlue,
-        fuelStation,
-      });
+      if (editingId) {
+        await updateTankEntry(editingId, input);
+        setEditingId(null);
+      } else {
+        await createTankEntry(input);
+      }
       resetForm();
       await loadEntries();
-      showAlert(t('common', 'success'), t('tankliste', 'saveSuccess'));
+      showAlert(
+        t('common', 'success'),
+        t('tankliste', editingId ? 'editSuccess' : 'saveSuccess')
+      );
     } catch (error) {
       // Die Datenbank meldet Plausibilitätsfehler als feste Kennung
       // (20261119120000_tank_entry_plausibility.sql).
@@ -181,6 +218,8 @@ export default function DriverTankListeScreen() {
         TANK_UNKNOWN_PLATE: t('tankliste', 'errorUnknownPlate'),
         TANK_KM_JUMP: t('tankliste', 'errorKmJump'),
         TANK_FUTURE_DATE: t('tankliste', 'errorFutureDate'),
+        TANK_EDIT_EXPIRED: t('tankliste', 'errorEditExpired'),
+        TANK_EDIT_NOT_ALLOWED: t('tankliste', 'errorEditNotAllowed'),
       };
       showAlert(t('common', 'error'), known[message] ?? (message || t('tankliste', 'saveError')));
     } finally {
@@ -208,12 +247,18 @@ export default function DriverTankListeScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Laptop/Desktop: zwei Spalten nebeneinander */}
           <View style={styles.pair}>
             <View style={styles.pairItem}>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>{t('tankliste', 'formTitle')}</Text>
+                <Text style={styles.sectionTitle}>
+                  {t('tankliste', editingId ? 'editTitle' : 'formTitle')}
+                </Text>
 
                 <View style={styles.card}>
                   <Text style={styles.label}>{t('tankliste', 'fieldDate')}</Text>
@@ -304,9 +349,21 @@ export default function DriverTankListeScreen() {
                     {isSaving ? (
                       <ActivityIndicator size="small" color="white" />
                     ) : (
-                      <Text style={styles.saveButtonText}>{t('tankliste', 'saveButton')}</Text>
+                      <Text style={styles.saveButtonText}>
+                        {t('tankliste', editingId ? 'editSave' : 'saveButton')}
+                      </Text>
                     )}
                   </FluidPressable>
+
+                  {editingId && (
+                    <FluidPressable
+                      style={styles.cancelButton}
+                      onPress={cancelEdit}
+                      disabled={isSaving}
+                    >
+                      <Text style={styles.cancelButtonText}>{t('tankliste', 'editCancel')}</Text>
+                    </FluidPressable>
+                  )}
             </View>
           </View>
 
@@ -328,7 +385,10 @@ export default function DriverTankListeScreen() {
               </View>
             ) : (
               entries.map((entry) => (
-                <View key={entry.id} style={styles.entryCard}>
+                <View
+                  key={entry.id}
+                  style={[styles.entryCard, entry.id === editingId && styles.entryCardEditing]}
+                >
                   <View style={styles.entryHeader}>
                     <Text style={styles.entryDate}>{isoToGerman(entry.entryDate)}</Text>
                     <Text style={styles.entryPlate}>{entry.licensePlate}</Text>
@@ -361,6 +421,20 @@ export default function DriverTankListeScreen() {
                     <Text style={styles.entryLabel}>{t('tankliste', 'fieldFuelStation')}</Text>
                     <Text style={styles.entryValue}>{entry.fuelStation || '—'}</Text>
                   </View>
+
+                  {isEditableByDriver(entry) && entry.id !== editingId && (
+                    <View style={styles.entryEditRow}>
+                      <Text style={styles.entryEditHint}>
+                        {`${t('tankliste', 'editUntil')} ${driverEditDeadline(entry).toLocaleString(
+                          'de-DE',
+                          { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+                        )}`}
+                      </Text>
+                      <FluidPressable style={styles.entryEditLink} onPress={() => startEdit(entry)}>
+                        <Text style={styles.entryEditLinkText}>{t('tankliste', 'editButton')}</Text>
+                      </FluidPressable>
+                    </View>
+                  )}
                 </View>
               ))
             )}
@@ -531,6 +605,11 @@ const createStyles = (theme: AppTheme) => {
     },
     saveButtonDisabled: u.disabled,
     saveButtonText: u.primaryButtonText,
+    cancelButton: {
+      ...u.secondaryButton,
+      marginTop: Spacing.xs,
+    },
+    cancelButtonText: u.secondaryButtonText,
     loading: {
       marginTop: Spacing.lg,
     },
@@ -543,6 +622,36 @@ const createStyles = (theme: AppTheme) => {
       borderLeftWidth: 4,
       borderLeftColor: c.tintFill,
       ...shadow(1, scheme),
+    },
+    // Die Tankung, die oben gerade im Formular steht.
+    entryCardEditing: {
+      borderLeftColor: c.tint,
+      borderLeftWidth: 6,
+    },
+    entryEditRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+      paddingTop: Spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.separator,
+    },
+    entryEditHint: {
+      ...Typography.footnote,
+      color: c.textSecondary,
+      flexShrink: 1,
+    },
+    entryEditLink: {
+      minHeight: Layout.minTouch,
+      justifyContent: 'center',
+      paddingLeft: Spacing.sm,
+    },
+    entryEditLinkText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.tint,
     },
     entryHeader: {
       flexDirection: 'row',

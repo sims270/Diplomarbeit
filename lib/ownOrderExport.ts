@@ -1,53 +1,23 @@
 import type { Order } from '@/app/services/orderService';
+import { orderPdfFileName, saveOrderPdf, type SavedPdf } from '@/lib/orderPdfFile';
 import { buildOwnOrderHtml } from '@/lib/ownOrderPdf';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
 /**
- * expo-print's web implementation (ExponentPrint.web.ts) ignores the `html`
- * option entirely and just calls window.print() on whatever page is
- * currently open — so on web we bypass expo-print and open the document in
- * its own window/tab, then print *that*. Same approach as
- * transportauftragExport.ts.
- *
- * Must be called with as little async work ahead of it as possible: once a
- * browser's "recent user gesture" allowance for window.open lapses, the
- * popup gets silently blocked.
+ * Erzeugt die PDF eines eigenen Auftrags — gleich wie
+ * lib/transportauftragExport.ts: im Web in den Auftrags-Ordner dieses
+ * Laptops (sonst Download), am Handy über das Teilen-Menü.
  */
-function printHtmlInNewWindow(html: string, title: string): void {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    throw new Error(
-      'Pop-up wurde vom Browser blockiert. Bitte Pop-ups für diese Seite erlauben und erneut versuchen.'
-    );
-  }
-
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.document.title = title;
-
-  // Give the new document a moment to finish layout before printing — and
-  // wait for the embedded letterhead font (lib/briefkopfFont.ts), otherwise
-  // the header could be printed in the fallback font.
-  printWindow.setTimeout(() => {
-    printWindow.document.fonts.ready.then(() => {
-      printWindow.focus();
-      printWindow.print();
-    });
-  }, 250);
-}
-
-/**
- * Renders the order to PDF and hands it to the platform's share/print sheet.
- */
-export async function exportOwnOrderPdf(order: Order, driverUsername?: string): Promise<void> {
+export async function exportOwnOrderPdf(
+  order: Order,
+  driverUsername?: string
+): Promise<SavedPdf | null> {
   const html = buildOwnOrderHtml(order, driverUsername);
 
   if (Platform.OS === 'web') {
-    printHtmlInNewWindow(html, `Transportauftrag Nr. ${order.orderNr}`);
-    return;
+    return saveOrderPdf(html, orderPdfFileName('own', order.orderNr));
   }
 
   const { uri } = await Print.printToFileAsync({ html, base64: false });
@@ -61,4 +31,5 @@ export async function exportOwnOrderPdf(order: Order, driverUsername?: string): 
   } else {
     await Print.printAsync({ uri });
   }
+  return null;
 }

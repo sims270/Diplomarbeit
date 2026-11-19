@@ -36,6 +36,29 @@ export interface ExternalDriverOrder {
   notes: string;
   licensePlate: string;
   driverName: string;
+  /**
+   * Wann der Auftrag bestätigt wurde; null = noch offen
+   * (20261119190000_external_order_confirmation.sql).
+   */
+  confirmedAt: string | null;
+  /** 'app' = vom fremden Fahrer selbst, 'boss' = vom Chef eingetragen. */
+  confirmedVia: 'app' | 'boss' | null;
+}
+
+/** So lange nach der Bestätigung ist ein Rücktritt möglich. */
+export const WITHDRAW_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Bis wann der Rücktritt möglich ist — null, wenn gar nicht (nicht oder vom
+ * Chef bestätigt). Nur zum Anzeigen; ob es noch geht, entscheidet die
+ * Datenbank mit ihrer eigenen Uhr.
+ */
+export function withdrawDeadline(order: {
+  confirmedAt: string | null;
+  confirmedVia: string | null;
+}): Date | null {
+  if (!order.confirmedAt || order.confirmedVia !== 'app') return null;
+  return new Date(Date.parse(order.confirmedAt) + WITHDRAW_WINDOW_MS);
 }
 
 export interface MyExternalAccess {
@@ -71,6 +94,8 @@ function rowToOrder(row: any): ExternalDriverOrder {
     notes: row.notes ?? '',
     licensePlate: row.license_plate ?? '',
     driverName: row.driver_name ?? '',
+    confirmedAt: row.confirmed_at ?? null,
+    confirmedVia: row.confirmed_via ?? null,
   };
 }
 
@@ -116,5 +141,23 @@ export async function setMyOrderDriver(
     p_license_plate: licensePlate,
     p_driver_name: driverName,
   });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Bestätigt den Auftrag verbindlich. Kennzeichen und Fahrer müssen vorher
+ * gespeichert sein. Fehler kommen als feste Kennung (EXT_CONFIRM_…).
+ */
+export async function confirmMyOrder(id: string): Promise<void> {
+  const { error } = await supabase.rpc('confirm_external_order', { order_id: id });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Rücktritt — nur innerhalb einer Stunde nach der Bestätigung. Danach ist
+ * der Auftrag nicht mehr zugewiesen und verschwindet aus der Liste.
+ */
+export async function withdrawMyOrder(id: string): Promise<void> {
+  const { error } = await supabase.rpc('withdraw_external_order', { order_id: id });
   if (error) throw new Error(error.message);
 }

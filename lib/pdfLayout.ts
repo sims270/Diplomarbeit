@@ -109,67 +109,101 @@ export function footer(pageLabel: string): string {
   `;
 }
 
-// Shared <style> body for every generated document. Unused selectors
-// (e.g. table.signoff for a page-1-only document) are harmless.
+/** Mehrzeiliger Text: Zeilenumbrüche aus dem Formular bleiben Zeilenumbrüche. */
+export function lines(text: string): string {
+  return escapeHtml(text.trim()).replace(/\r?\n/g, '<br/>');
+}
+
+/**
+ * Eine Zeile "Bezeichnung:   Wert" auf Seite 1. gap ist der Abstand davor in
+ * Leerzeilen, wie im Word-Original (0, 1 oder 2). bold setzt die ganze Zeile
+ * fett (Lade- und Entladetermin), boldLabel nur die Bezeichnung.
+ */
+export function fieldRow(
+  label: string,
+  valueHtml: string,
+  options: { gap?: 0 | 1 | 2; bold?: boolean; boldLabel?: boolean } = {}
+): string {
+  const classes = ['row', options.gap ? `gap${options.gap}` : '', options.bold ? 'b' : '']
+    .filter(Boolean)
+    .join(' ');
+  const labelClass = options.boldLabel ? 'k b' : 'k';
+  return `<div class="${classes}"><div class="${labelClass}">${escapeHtml(label)}</div><div class="v">${valueHtml}</div></div>`;
+}
+
+/*
+ * Gemeinsames <style> für alle erzeugten Dokumente.
+ *
+ * Alle Maße in Punkt, 1:1 aus dem Word-Original der Firma ausgelesen
+ * ("TA.001", als PDF exportiert): Schriftgrößen, Ränder, Spalten und die
+ * Grundlinien jeder Zeile. Daraus ergeben sich die Werte unten:
+ *
+ * Seite 1 — Arial 11,04 pt, Zeilenabstand 12,65 pt (Word "einfach"). Linker
+ *   Rand 53,9 pt, Werte stehen in einer Spalte bei 161,9 pt (bei "An Firma"
+ *   und "z.H." schon bei 124,7 pt). Zwischen den Zeilen liegen eine oder zwei
+ *   Leerzeilen (gap1/gap2). Erste Grundlinie (Datum) 145,4 pt unter der
+ *   Blattkante, Titel 192,6 pt, "An Firma" 225,6 pt.
+ * Seiten 2 und 3 — Arial 8,04 pt, Zeilenabstand 9,2 pt, Blocksatz, Rand
+ *   links 25,6 pt. Einzelne Absätze in 9 pt.
+ *
+ * Die padding-top-Werte sind die Oberkante der ersten Zeile: Grundlinie
+ * minus Abstand Zeilenoberkante–Grundlinie (für Arial bei diesem
+ * Zeilenabstand gut 10 pt bzw. 7,4 pt).
+ */
 export const PDF_STYLES = `
-  /* Rand 0 statt 18mm/16mm: Der Browser druckt seine eigene Kopf- und
-     Fußzeile (Datum, Uhrzeit, Dokumenttitel, URL) in genau diesen Rand.
-     Ohne Rand hat er dafür keinen Platz mehr und lässt sie weg — anders
-     ist das per CSS nicht abschaltbar. Die Seitenränder übernimmt dafür
-     das padding von .page, das Druckbild bleibt also gleich.
-     Sollte die Browser-Zeile trotzdem erscheinen, ist im Druckdialog
-     "Kopf- und Fußzeilen" angehakt und muss dort abgewählt werden. */
+  /* Rand 0: Der Browser druckt seine eigene Kopf- und Fußzeile (Datum, URL)
+     in den Seitenrand. Ohne Rand lässt er sie weg; die Ränder stecken im
+     padding von .page. Sollte die Zeile trotzdem erscheinen, ist im
+     Druckdialog "Kopf- und Fußzeilen" angehakt. */
   @page { size: A4; margin: 0; }
-  /* Kept close to the browser default line-height (not the airier 1.4-1.5
-     that page 1's spacious form invites) — pages 2/3 pack in a lot of
-     dense legal text that already barely fits one A4 page each; a global
-     bump there would spill it onto extra pages. */
-  /* margin:0 ist Pflicht, seit @page keinen Rand mehr hat: der
-     Standardrand des Browsers (8px) käme sonst zur Seitenhöhe hinzu und
-     schöbe hinter jedes Blatt eine leere Seite. */
+  /* margin:0 ist Pflicht: Der Standardrand des Browsers käme sonst zur
+     Seitenhöhe hinzu und schöbe hinter jedes Blatt eine leere Seite. */
   html, body { margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.25; color: #111; }
-  /* Die Seite füllt jetzt das ganze A4-Blatt (297mm) statt nur die Fläche
-     innerhalb der alten @page-Ränder — die Ränder stecken im padding.
-     Dadurch liegt bottom:0 der Fußzeile wirklich am Blattende und nicht
-     mehr rund 30mm darüber.
-     294mm statt 297mm lässt bewusst 3mm Luft: bei einer exakten
-     Übereinstimmung schiebt schon eine Rundung in der mm->px-Umrechnung
-     eine fast leere Zusatzseite heraus. */
-  /* Oben 40mm: Platz für den Briefkopf (letzte Zeile bei 36,2mm) plus Abstand.
-     Unten 36mm: Der Brieffuß beginnt bei rund 260mm, der Text der Seite
-     muss davor enden (294mm - 36mm = 258mm). */
-  .page { position: relative; min-height: 294mm; box-sizing: border-box; padding: 40mm 16mm 36mm; page-break-after: always; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; }
+  /* 294mm statt 297mm: Bei exakter Übereinstimmung schiebt schon eine
+     Rundung eine fast leere Zusatzseite heraus. */
+  .page { position: relative; min-height: 294mm; box-sizing: border-box; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  /* Die AGB-Seiten 2 und 3 des Transportauftrags: dichter Text, der mit dem
-     Original-Briefkopf genau eine Seite füllt — eine Spur kleiner gesetzt,
-     damit er auch bei leicht anderen Schriftmaßen (iOS/Android) nicht auf
-     eine vierte Seite rutscht. */
-  .page.legal { font-size: 10.5px; }
   /* Die Original-Schreibschrift des Firmenpapiers, eingebettet. */
   @font-face { font-family: 'HochreiterBriefkopf'; src: url(data:font/ttf;base64,${BRIEFKOPF_FONT_BASE64}) format('truetype'); }
   /* Kopf und Fuß liegen absolut auf dem Blatt (Koordinaten siehe letterhead/
      footer), left:0 ist die Blattkante, nicht der Innenrand der Seite. */
   .letterhead, .footer { position: absolute; left: 0; display: block; font-family: 'HochreiterBriefkopf', 'Segoe Print', cursive; fill: #000; }
   .letterhead { top: 0; }
-  hr { border: none; border-top: 1px solid #999; margin: 6px 0 8px; }
-  .dateRow { text-align: right; font-size: 12px; margin: 10px 0 4px; }
-  /* Nummer mittig unter dem Datum, der Block selbst rechtsbündig — wie auf dem Firmenpapier. */
+  .b { font-weight: 700; }
+
+  /* ---- Seite 1 ---- */
+  .page.order { padding: 134.8pt 35.3pt 0 53.9pt; font-size: 11.04pt; line-height: 12.65pt; }
+  .dateRow { text-align: right; line-height: 13.6pt; }
+  /* Nummer mittig unter dem Datum, der Block selbst rechtsbündig. */
   .dateBlock { display: inline-block; text-align: center; }
-  h1.title { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 24px; letter-spacing: 1px; margin: 18px 0 26px; }
-  .field-row { margin-bottom: 14px; }
-  .field-label { font-weight: 700; display: inline-block; min-width: 110px; }
-  table.fields { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-  table.fields td { vertical-align: top; padding: 6px 0; font-size: 12px; }
-  table.fields td.label { font-weight: 700; width: 150px; white-space: nowrap; }
-  p { margin: 0 0 10px; text-align: justify; }
-  .bold-block { font-weight: 700; }
-  .center { text-align: center; }
-  .bold { font-weight: 700; }
-  h2.section { font-weight: 700; text-align: center; margin: 16px 0 8px; }
-  .signBlock { margin-top: 18px; }
-  .signName { font-family: Georgia, 'Times New Roman', serif; font-style: italic; }
-  table.signoff { width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid #333; }
-  table.signoff td { border: 1px solid #333; padding: 6px 8px; font-size: 11px; }
-  table.signoff td.k { font-weight: 700; width: 30%; }
+  h1.title { margin: 11.6pt 0 0; text-align: center; font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700; font-size: 20.04pt; line-height: 24pt; }
+  .head { margin-top: 17.85pt; }
+  .row { display: flex; }
+  .row .k { flex: 0 0 108pt; }
+  .head .row .k { flex-basis: 70.8pt; }
+  .row .v { flex: 1; min-width: 0; }
+  .gap1 { margin-top: 12.65pt; }
+  .gap2 { margin-top: 25.3pt; }
+  /* "€ 3.000,00" und dahinter "pauschal" an fester Stelle, wie der Tabulator im Original. */
+  .amount { display: inline-block; min-width: 72pt; }
+
+  /* ---- Seiten 2 und 3 (Geschäftsbedingungen) ---- */
+  .page.legal { padding: 128.3pt 26pt 0 25.6pt; font-size: 8.04pt; line-height: 9.2pt; }
+  .page.legal.p3 { padding-top: 137.1pt; }
+  .legal p { margin: 0 0 10.4pt; text-align: justify; }
+  .legal .size9 { font-size: 9pt; line-height: 10.4pt; }
+  /* "Versicherung:" mit hängendem Text, wie im Original. */
+  .legal .hang { display: flex; margin: 0 0 9pt; font-size: 9pt; line-height: 10.4pt; text-align: justify; }
+  .legal .hang .k { flex: 0 0 84.9pt; font-weight: 700; }
+  .legal .hang .v { flex: 1; }
+  .legal h2 { margin: 0 0 8pt; font-size: 9pt; line-height: 10.4pt; font-weight: 700; text-align: center; }
+  .legal h2.spaced { margin-top: 19pt; }
+  .legal .center { text-align: center; }
+  /* Unterschrift etwas rechts der Mitte, wie im Original. */
+  .signature { padding-left: 110pt; text-align: center; margin-top: 11pt; }
+  .signature .name { font-size: 9.96pt; line-height: 11pt; }
+  .signature .note { font-size: 6pt; line-height: 7.8pt; font-weight: 700; }
+  /* Rücktrittsregel unter der Unterschrift, wo früher "Bitte bestätigen …" stand. */
+  .legal .confirmNote { margin-top: 20pt; }
 `;

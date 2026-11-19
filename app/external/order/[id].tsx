@@ -1,8 +1,12 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   completeMyOrder,
+  confirmMyOrder,
   type ExternalDriverOrder,
   getMyOrder,
   setMyOrderDriver,
+  withdrawDeadline,
+  withdrawMyOrder,
 } from '@/app/services/externalDriverOrderService';
 import { OrderDocuments } from '@/components/OrderDocuments';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
@@ -12,7 +16,7 @@ import { uiStyles } from '@/constants/ui-styles';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
-import { isoToGerman } from '@/lib/dateFormat';
+import { dateToTimeString, isoToGerman, timestampToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -42,6 +46,16 @@ export default function ExternalOrderDetailScreen() {
   const [licensePlate, setLicensePlate] = useState('');
   const [driverName, setDriverName] = useState('');
   const [isSavingDriver, setIsSavingDriver] = useState(false);
+  // Bestätigung (20261119190000_external_order_confirmation.sql).
+  const [accepted, setAccepted] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  // Damit der Rücktritt-Button nach Ablauf der Stunde von selbst verschwindet.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -112,6 +126,80 @@ export default function ExternalOrderDetailScreen() {
     }
   };
 
+  // Die Datenbank meldet feste Kennungen; hier werden sie zu Sätzen.
+  const confirmationError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : '';
+    const known: Record<string, string> = {
+      EXT_CONFIRM_NOT_ALLOWED: t('orderConfirmation', 'errorNotAllowed'),
+      EXT_CONFIRM_ALREADY: t('orderConfirmation', 'errorAlready'),
+      EXT_CONFIRM_DRIVER_MISSING: t('orderConfirmation', 'driverMissing'),
+      EXT_WITHDRAW_EXPIRED: t('orderConfirmation', 'errorWithdrawExpired'),
+      EXT_WITHDRAW_NOT_ALLOWED: t('orderConfirmation', 'errorWithdrawNotAllowed'),
+    };
+    return known[message] ?? (message || t('orderConfirmation', 'errorNotAllowed'));
+  };
+
+  const handleConfirm = async () => {
+    if (!order) return;
+    if (!accepted) {
+      showAlert(t('common', 'error'), t('orderConfirmation', 'needCheckbox'));
+      return;
+    }
+    if (!licensePlate.trim() || !driverName.trim()) {
+      showAlert(t('common', 'error'), t('orderConfirmation', 'driverMissing'));
+      return;
+    }
+
+    setIsConfirming(true);
+    try {
+      // Die Datenbank prüft die gespeicherten Werte — getippte, aber noch
+      // nicht gespeicherte gehen deshalb zuerst mit.
+      if (licensePlate !== order.licensePlate || driverName !== order.driverName) {
+        await setMyOrderDriver(order.id, licensePlate, driverName);
+      }
+      await confirmMyOrder(order.id);
+      const updated = await getMyOrder(order.id);
+      setOrder(updated ?? null);
+      const deadline = updated ? withdrawDeadline(updated) : null;
+      showAlert(
+        t('common', 'success'),
+        t('orderConfirmation', 'confirmedSuccess').replace(
+          '{time}',
+          deadline ? dateToTimeString(deadline) : ''
+        )
+      );
+    } catch (error) {
+      showAlert(t('common', 'error'), confirmationError(error));
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleWithdraw = () => {
+    if (!order) return;
+    showConfirm(
+      t('orderConfirmation', 'withdrawConfirmTitle'),
+      t('orderConfirmation', 'withdrawConfirmMessage').replace('{orderNr}', order.orderNr),
+      async () => {
+        setIsWithdrawing(true);
+        try {
+          await withdrawMyOrder(order.id);
+          showAlert(t('common', 'success'), t('orderConfirmation', 'withdrawn'));
+          // Der Auftrag ist ihm entzogen und hier nicht mehr abrufbar.
+          router.back();
+        } catch (error) {
+          showAlert(t('common', 'error'), confirmationError(error));
+          setIsWithdrawing(false);
+        }
+      },
+      {
+        confirmText: t('orderConfirmation', 'withdrawConfirm'),
+        cancelText: t('common', 'cancel'),
+        destructive: true,
+      }
+    );
+  };
+
   const renderRow = (label: string, value: string) => (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
@@ -120,6 +208,88 @@ export default function ExternalOrderDetailScreen() {
   );
 
   const formatDate = (date: string) => (date ? isoToGerman(date) : EMPTY);
+
+  /**
+   * Kasten "Auftragsbestätigung" ganz oben: offen → Häkchen und Button;
+   * bestätigt → Zeitpunkt und, eine Stunde lang, der Rücktritt.
+   */
+  const renderConfirmation = (current: ExternalDriverOrder) => {
+    if (current.confirmedAt) {
+      const confirmedOn = timestampToGerman(current.confirmedAt);
+      const deadline = withdrawDeadline(current);
+      const canWithdraw = deadline !== null && deadline.getTime() > now && !isCompleted;
+      const text =
+        current.confirmedVia === 'boss'
+          ? t('orderConfirmation', 'confirmedByBoss').replace('{date}', confirmedOn)
+          : canWithdraw
+            ? t('orderConfirmation', 'confirmedWithdrawable')
+                .replace('{date}', confirmedOn)
+                .replace('{time}', dateToTimeString(deadline))
+            : t('orderConfirmation', 'confirmedBinding').replace('{date}', confirmedOn);
+
+      return (
+        <View style={[styles.section, styles.confirmDone]}>
+          <Text style={styles.sectionTitle}>
+            <MaterialIcons name="verified" size={20} color={c.success} />{' '}
+            {t('orderConfirmation', 'sectionTitle')}
+          </Text>
+          <Text style={styles.confirmText}>{text}</Text>
+          {canWithdraw && (
+            <FluidPressable
+              style={[styles.withdrawButton, isWithdrawing && styles.completeButtonDisabled]}
+              onPress={handleWithdraw}
+              disabled={isWithdrawing}
+            >
+              {isWithdrawing ? (
+                <ActivityIndicator color={c.danger} />
+              ) : (
+                <Text style={styles.withdrawButtonText}>
+                  {t('orderConfirmation', 'withdrawButton')}
+                </Text>
+              )}
+            </FluidPressable>
+          )}
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.section, styles.confirmPending]}>
+        <Text style={styles.sectionTitle}>{t('orderConfirmation', 'sectionTitle')}</Text>
+        <Text style={styles.confirmText}>
+          {t('orderConfirmation', 'pendingText').replace('{orderNr}', current.orderNr)}
+        </Text>
+        <FluidPressable
+          style={styles.checkboxRow}
+          onPress={() => setAccepted((prev) => !prev)}
+          disabled={isConfirming}
+        >
+          <MaterialIcons
+            name={accepted ? 'check-box' : 'check-box-outline-blank'}
+            size={26}
+            color={accepted ? c.tint : c.textSecondary}
+          />
+          <Text style={styles.checkboxText}>{t('orderConfirmation', 'checkbox')}</Text>
+        </FluidPressable>
+        <FluidPressable
+          style={[
+            styles.completeButton,
+            (!accepted || isConfirming) && styles.completeButtonDisabled,
+          ]}
+          onPress={handleConfirm}
+          disabled={isConfirming}
+        >
+          {isConfirming ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.completeButtonText}>
+              {t('orderConfirmation', 'confirmButton')}
+            </Text>
+          )}
+        </FluidPressable>
+      </View>
+    );
+  };
 
   const header = (
     <Header title="TRANSLOG PRO" subtitle={t('driverOrderDetail', 'headerSubtitle')} />
@@ -175,6 +345,8 @@ export default function ExternalOrderDetailScreen() {
             </Text>
           </View>
         </View>
+
+        {(!isCompleted || order.confirmedAt) && renderConfirmation(order)}
 
         {/* Laptop/Desktop: zwei Spalten nebeneinander */}
         <View style={styles.pair}>
@@ -405,6 +577,42 @@ const createStyles = (theme: AppTheme) => {
     },
     completeButtonDisabled: u.disabled,
     completeButtonText: u.primaryButtonText,
+    // Offene Bestätigung fällt auf, erledigte tritt zurück.
+    confirmPending: {
+      borderLeftWidth: 4,
+      borderLeftColor: c.tintFill,
+    },
+    confirmDone: {
+      borderLeftWidth: 4,
+      borderLeftColor: c.success,
+    },
+    confirmText: {
+      ...Typography.subhead,
+      color: c.text,
+      marginBottom: Spacing.sm,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.xs,
+      minHeight: Layout.minTouch,
+      marginBottom: Spacing.sm,
+    },
+    checkboxText: {
+      ...Typography.subhead,
+      fontWeight: '600',
+      color: c.text,
+      flex: 1,
+      paddingTop: 3,
+    },
+    withdrawButton: {
+      ...u.secondaryButton,
+      backgroundColor: c.dangerSoft,
+    },
+    withdrawButtonText: {
+      ...u.secondaryButtonText,
+      color: c.danger,
+    },
     completedNote: {
       ...Typography.callout,
       textAlign: 'center',

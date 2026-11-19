@@ -21,6 +21,7 @@ import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
+import { describeSavedPdf } from '@/lib/orderPdfFile';
 import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -87,15 +88,19 @@ export default function NewExternalOrderScreen() {
 
     const order = await addExternalOrder({ ...fields, createdBy: user?.id || '' });
 
-    // Must run right after the click with no awaits ahead of it — on web
-    // this opens a popup window, and browsers silently block window.open
-    // once the "recent user gesture" allowance from the click has lapsed.
-    // addExternalOrder above is a single fast insert, so it stays within
-    // that window.
-    await exportTransportauftragPdf(order);
+    // Direkt nach dem Klick: Beim ersten Mal zeigt der Browser den
+    // Ordner-Dialog, und das nur kurz nach einer Nutzeraktion.
+    // addExternalOrder davor ist ein einzelnes, schnelles Insert.
+    const saved = await exportTransportauftragPdf(order);
+    if (saved) {
+      showAlert(
+        t('common', 'success'),
+        describeSavedPdf(saved, t('orderPdf', 'savedToFolder'), t('orderPdf', 'downloaded'))
+      );
+    }
 
     // Der Zugang kommt erst nach dem PDF: Das Anlegen läuft über eine Edge
-    // Function und dauert zu lange für das Popup.
+    // Function und dauert zu lange für den Ordner-Dialog.
     if (assignAccess) {
       try {
         if (effectiveChoice === NEW_ACCESS) {

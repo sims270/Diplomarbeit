@@ -7,6 +7,7 @@ import { type AppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
+import { openEmailDraft } from '@/lib/credentialsEmail';
 import { Modal, Platform, Share, StyleSheet, Text, View } from 'react-native';
 
 export interface AccessCredentials {
@@ -31,12 +32,25 @@ export function AccessCredentialsModal({ credentials, onClose }: AccessCredentia
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
 
+  const buildMessage = (creds: AccessCredentials) =>
+    t('externalAccess', 'shareMessage')
+      .replace('{username}', creds.username)
+      .replace('{password}', creds.password)
+      .replace('{expiresOn}', isoToGerman(creds.expiresOn));
+
+  // Neue Mail in Outlook, siehe lib/credentialsEmail.ts.
+  const handleEmail = async () => {
+    if (!credentials) return;
+    const opened = await openEmailDraft(
+      t('externalAccess', 'emailSubject'),
+      buildMessage(credentials)
+    );
+    if (!opened) showAlert(t('externalAccess', 'emailUnavailable'));
+  };
+
   const handleShare = async () => {
     if (!credentials) return;
-    const message = t('externalAccess', 'shareMessage')
-      .replace('{username}', credentials.username)
-      .replace('{password}', credentials.password)
-      .replace('{expiresOn}', isoToGerman(credentials.expiresOn));
+    const message = buildMessage(credentials);
 
     try {
       await Share.share({ message });
@@ -95,6 +109,10 @@ export function AccessCredentialsModal({ credentials, onClose }: AccessCredentia
           <Text style={styles.hint}>{t('externalAccess', 'credentialsHint')}</Text>
 
           <View style={styles.buttonRow}>
+            <FluidPressable style={styles.shareButton} onPress={handleEmail}>
+              <MaterialIcons name="email" size={18} style={styles.shareButtonText} />
+              <Text style={styles.shareButtonText}>{t('externalAccess', 'emailButton')}</Text>
+            </FluidPressable>
             <FluidPressable style={styles.shareButton} onPress={handleShare}>
               <Text style={styles.shareButtonText}>{t('externalAccess', 'shareButton')}</Text>
             </FluidPressable>
@@ -148,19 +166,25 @@ const createStyles = (theme: AppTheme) => {
       ...u.hint,
       marginTop: Spacing.md,
     },
+    // Drei Buttons: am Handy darf "Fertig" in die nächste Zeile rutschen.
     buttonRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: Spacing.xs,
       marginTop: Spacing.lg,
     },
     shareButton: {
       ...u.secondaryButton,
-      flex: 1,
+      flexDirection: 'row',
+      gap: Spacing.xs,
+      flexGrow: 1,
+      flexBasis: 120,
     },
     shareButtonText: u.secondaryButtonText,
     doneButton: {
       ...u.primaryButton,
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: 120,
     },
     doneButtonText: u.primaryButtonText,
   });

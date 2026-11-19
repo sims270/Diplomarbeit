@@ -17,10 +17,11 @@
 // Supabase Edge Function: reset-external-driver-password
 //
 // Lets an authenticated "boss" account give a subcontractor driver's
-// account ("fremder Fahrer") a new random password. Das Passwort wird
-// nirgends gespeichert und nur in dieser Antwort zurückgegeben — hat der
-// fremde Fahrer es vergessen, gibt es kein Nachschauen, nur ein neues. Das
-// alte Passwort gilt ab sofort nicht mehr.
+// account ("fremder Fahrer") a new random password. Das Passwort wird in
+// external_driver_accounts.password gespeichert, damit der Chef es beim
+// Teilen eines Auftrags wieder mitschicken kann; es verschwindet mit dem
+// Zugang (20261119180000_store_external_driver_password.sql). Das alte
+// Passwort gilt ab sofort nicht mehr.
 //
 // Deploy: supabase functions deploy reset-external-driver-password
 
@@ -194,6 +195,16 @@ Deno.serve(async (req) => {
   });
   if (updateError) {
     return internalError("reset-external-driver-password", updateError);
+  }
+
+  // Erst nach dem erfolgreichen Setzen speichern, sonst stünde ein
+  // Passwort in der Tabelle, mit dem die Anmeldung scheitert.
+  const { error: storeError } = await adminClient
+    .from("external_driver_accounts")
+    .update({ password })
+    .eq("user_id", userId);
+  if (storeError) {
+    return internalError("reset-external-driver-password", storeError);
   }
 
   return json({ success: true, password });

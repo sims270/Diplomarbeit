@@ -26,6 +26,12 @@ export interface ExternalAccess {
   /** Wie viele Fremdaufträge diesem Zugang zugewiesen sind */
   orderCount: number;
   isActive: boolean;
+  /**
+   * Gespeichertes Passwort (20261119180000_store_external_driver_password.sql).
+   * null bei Zugängen aus der Zeit, als es nicht gespeichert wurde — bis der
+   * Chef einmal ein neues erstellt.
+   */
+  password: string | null;
 }
 
 export interface ExternalAccessCredentials {
@@ -174,7 +180,7 @@ export async function getAccesses(): Promise<ExternalAccess[]> {
   const [accounts, assignments] = await Promise.all([
     supabase
       .from('external_driver_accounts')
-      .select('user_id, username, label, expires_on, created_at')
+      .select('user_id, username, label, expires_on, created_at, password')
       .order('label'),
     supabase
       .from('external_orders')
@@ -199,6 +205,7 @@ export async function getAccesses(): Promise<ExternalAccess[]> {
     createdAt: row.created_at,
     orderCount: counts.get(row.user_id) ?? 0,
     isActive: isActiveOn(row.expires_on),
+    password: row.password ?? null,
   }));
 }
 
@@ -207,9 +214,8 @@ export async function getExpiredAccesses(): Promise<ExternalAccess[]> {
 }
 
 /**
- * Vergibt ein neues Zufallspasswort und gibt es zurück. Das Passwort wird
- * nirgends gespeichert — es ist nur in dieser Antwort zu sehen, das alte
- * gilt ab sofort nicht mehr.
+ * Vergibt ein neues Zufallspasswort und gibt es zurück. Die Edge Function
+ * speichert es auch am Zugang; das alte gilt ab sofort nicht mehr.
  */
 export async function resetAccessPassword(userId: string): Promise<string> {
   const data = await invokeFunction<{ password: string }>('reset-external-driver-password', {

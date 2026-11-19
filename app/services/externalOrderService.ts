@@ -77,6 +77,18 @@ export interface ExternalOrder {
   customerPrice: string;
   /** Zugang des fremden Fahrers; null = noch niemandem zugewiesen. */
   assignedExternalUserId: string | null;
+  /**
+   * Bestätigung des Transportauftrags
+   * (20261119190000_external_order_confirmation.sql). null = noch nicht
+   * bestätigt. Setzen nur die Datenbankfunktionen, nie das Formular.
+   */
+  confirmedAt: string | null;
+  /** 'app' = der Frächter in seiner App, 'boss' = vom Chef eingetragen (Telefon/Mail). */
+  confirmedVia: 'app' | 'boss' | null;
+  /** Gesetzt, wenn der Frächter zurückgetreten ist und noch niemand Neues zugewiesen wurde. */
+  withdrawnAt: string | null;
+  /** Name des Zugangs, der zurückgetreten ist. */
+  withdrawnByLabel: string;
 }
 
 /**
@@ -96,7 +108,16 @@ export function externalOrderTileStatus(order: ExternalOrder): 'pending' | 'assi
 // Status und Abschluss gehören nicht ins Formular — die setzt das Erledigen.
 export type ExternalOrderFields = Omit<
   ExternalOrder,
-  'id' | 'createdAt' | 'updatedAt' | 'status' | 'completedAt' | 'assignedExternalUserId'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'status'
+  | 'completedAt'
+  | 'assignedExternalUserId'
+  | 'confirmedAt'
+  | 'confirmedVia'
+  | 'withdrawnAt'
+  | 'withdrawnByLabel'
 >;
 
 // external_orders.loading_date/unloading_date are real `date` columns —
@@ -145,6 +166,10 @@ function rowToOrder(row: any): ExternalOrder {
     completedAt: row.completed_at ?? null,
     customerPrice: row.customer_price == null ? '' : formatAmount(Number(row.customer_price)),
     assignedExternalUserId: row.assigned_external_user_id ?? null,
+    confirmedAt: row.confirmed_at ?? null,
+    confirmedVia: row.confirmed_via ?? null,
+    withdrawnAt: row.withdrawn_at ?? null,
+    withdrawnByLabel: row.withdrawn_by_label ?? '',
   };
 }
 
@@ -280,4 +305,57 @@ export async function updateExternalOrder(
 
 export async function deleteExternalOrder(id: string): Promise<void> {
   await deleteOrderWithDocuments(id, true);
+}
+
+/**
+ * Trägt ein, dass der Frächter telefonisch oder per Mail bestätigt hat —
+ * für Frächter ohne App-Zugang. Gibt den neuen Stand zurück.
+ */
+export async function bossConfirmExternalOrder(id: string): Promise<ExternalOrder> {
+  const { error } = await supabase.rpc('boss_confirm_external_order', { order_id: id });
+  if (error) throw new Error(error.message);
+  const updated = await getExternalOrderById(id);
+  if (!updated) throw new Error('Auftrag nicht gefunden');
+  return updated;
+}
+
+/** Nimmt eine vom Chef eingetragene Bestätigung zurück (etwa nach einem Fehlklick). */
+export async function bossResetExternalOrderConfirmation(id: string): Promise<ExternalOrder> {
+  const { error } = await supabase.rpc('boss_reset_external_order_confirmation', { order_id: id });
+  if (error) throw new Error(error.message);
+  const updated = await getExternalOrderById(id);
+  if (!updated) throw new Error('Auftrag nicht gefunden');
+  return updated;
+}
+
+export interface WithdrawnExternalOrder {
+  id: string;
+  orderNr: string;
+  recipientCompany: string;
+  withdrawnAt: string;
+  withdrawnByLabel: string;
+}
+
+/**
+ * Fremdaufträge, von denen der Frächter zurückgetreten ist und die noch
+ * niemand Neues hat — für die Erinnerungen des Chefs. Sobald er neu
+ * zuweist, löscht die Datenbank den Vermerk, und die Erinnerung ist weg.
+ */
+export async function getWithdrawnExternalOrders(): Promise<WithdrawnExternalOrder[]> {
+  const { data, error } = await supabase
+    .from('external_orders')
+    .select('id, order_nr, recipient_company, withdrawn_at, withdrawn_by_label')
+    .not('withdrawn_at', 'is', null)
+    .is('assigned_external_user_id', null)
+    .neq('status', 'completed')
+    .order('withdrawn_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    orderNr: row.order_nr,
+    recipientCompany: row.recipient_company ?? '',
+    withdrawnAt: row.withdrawn_at,
+    withdrawnByLabel: row.withdrawn_by_label ?? '',
+  }));
 }

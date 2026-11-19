@@ -21,16 +21,23 @@ import { uiStyles } from '@/constants/ui-styles';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert, showConfirm } from '@/lib/alert';
+import type { ExternalOrder } from '@/app/services/externalOrderService';
+import { loginUrl, openEmailDraft } from '@/lib/credentialsEmail';
+import { describeSavedPdf, type SavedPdf } from '@/lib/orderPdfFile';
+import { exportTransportauftragPdf } from '@/lib/transportauftragExport';
 import { isoToGerman } from '@/lib/dateFormat';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 interface ExternalAccessPanelProps {
-  orderId: string;
-  /** "An Firma" des Auftrags — Vorschlag für den Namen eines neuen Zugangs */
-  recipientCompany: string;
-  /** Grundlage für den Vorschlag "gültig bis" */
-  unloadingDate: string;
+  /**
+   * Der gespeicherte Fremdauftrag. Daraus: "An Firma" als Vorschlag für den
+   * Namen eines neuen Zugangs, das Entladedatum für "gültig bis", und beim
+   * Teilen Nummer und PDF.
+   */
+  order: ExternalOrder;
+  /** Nach jeder Aktion (Zuweisen, Aufheben, …), damit der Bildschirm den Auftrag neu lädt. */
+  onChanged?: () => void;
 }
 
 /**
@@ -40,11 +47,8 @@ interface ExternalAccessPanelProps {
  * Zugang löschen — oder, solange keiner zugewiesen ist, einen wählen bzw.
  * neu anlegen. Jede Aktion wirkt sofort, unabhängig vom Formular darüber.
  */
-export function ExternalAccessPanel({
-  orderId,
-  recipientCompany,
-  unloadingDate,
-}: ExternalAccessPanelProps) {
+export function ExternalAccessPanel({ order, onChanged }: ExternalAccessPanelProps) {
+  const { id: orderId, orderNr, recipientCompany, unloadingDate } = order;
   const styles = useThemedStyles(createStyles);
   const { c } = useAppTheme();
   const { t } = useTranslation();
@@ -98,6 +102,7 @@ export function ExternalAccessPanel({
     } finally {
       setIsBusy(false);
       await load();
+      onChanged?.();
     }
   };
 
@@ -157,6 +162,81 @@ export function ExternalAccessPanel({
         }),
       {
         confirmText: t('externalAccess', 'resetPasswordConfirmButton'),
+        cancelText: t('common', 'cancel'),
+      }
+    );
+  };
+
+  /**
+   * Öffnet in Outlook eine Mail mit Auftragsnummer und Zugangsdaten und sagt
+   * dem Chef danach, wo die PDF liegt — anhängen muss er sie selbst, über
+   * einen mailto-Link geht das nicht.
+   */
+  const sendOrderEmail = async (creds: AccessCredentials, saved: SavedPdf | null) => {
+    const link = loginUrl();
+    const body = [
+      t('externalAccess', 'shareOrderIntro').replace('{orderNr}', orderNr),
+      '',
+      t('externalAccess', 'shareMessage')
+        .replace('{username}', creds.username)
+        .replace('{password}', creds.password)
+        .replace('{expiresOn}', isoToGerman(creds.expiresOn)),
+      ...(link ? [`${t('externalAccess', 'shareOrderLogin')} ${link}`] : []),
+    ].join('\n');
+
+    const opened = await openEmailDraft(
+      t('externalAccess', 'shareOrderSubject').replace('{orderNr}', orderNr),
+      body
+    );
+    if (!opened) {
+      showAlert(t('externalAccess', 'emailUnavailable'));
+      return;
+    }
+    if (saved) {
+      showAlert(
+        t('common', 'success'),
+        `${describeSavedPdf(saved, t('orderPdf', 'savedToFolder'), t('orderPdf', 'downloaded'))}\n\n${t('orderPdf', 'attachHint')}`
+      );
+    }
+  };
+
+  /**
+   * Schickt dem fremden Fahrer den Auftrag mit seinen Zugangsdaten per Mail
+   * (Outlook, lib/credentialsEmail.ts) — mit dem gespeicherten Passwort, das
+   * sich dabei nicht ändert. Vorher wird die PDF in den Auftrags-Ordner
+   * gespeichert (lib/orderPdfFile.ts), und zwar zuerst: Den Ordner-Dialog
+   * zeigt der Browser nur kurz nach dem Klick.
+   *
+   * Nur alte Zugänge ohne gespeichertes Passwort bekommen nach Rückfrage
+   * einmal ein neues; dann geht zusätzlich der Dialog mit den Daten auf,
+   * falls Outlook nicht aufgeht.
+   */
+  const handleShareOrder = (access: ExternalAccess) => {
+    const storedPassword = access.password;
+    if (storedPassword) {
+      run(async () => {
+        const saved = await exportTransportauftragPdf(order);
+        await sendOrderEmail(
+          { username: access.username, password: storedPassword, expiresOn: access.expiresOn },
+          saved
+        );
+      });
+      return;
+    }
+
+    showConfirm(
+      t('externalAccess', 'shareOrderConfirmTitle'),
+      t('externalAccess', 'shareOrderConfirmMessage').replace('{username}', access.username),
+      () =>
+        run(async () => {
+          const saved = await exportTransportauftragPdf(order);
+          const password = await resetAccessPassword(access.userId);
+          const creds = { username: access.username, password, expiresOn: access.expiresOn };
+          setCredentials(creds);
+          await sendOrderEmail(creds, saved);
+        }),
+      {
+        confirmText: t('externalAccess', 'shareOrderConfirmButton'),
         cancelText: t('common', 'cancel'),
       }
     );
@@ -252,6 +332,22 @@ export function ExternalAccessPanel({
               onExtend={(days) => handleExtend(assigned, days)}
               disabled={isBusy}
             />
+          ) : null}
+
+          {/* Abgelaufen: erst verlängern, sonst käme der Fahrer mit den
+              Daten gar nicht hinein. */}
+          {assigned.isActive ? (
+            <FluidPressable
+              style={[styles.assignButton, isBusy && styles.disabled]}
+              onPress={() => handleShareOrder(assigned)}
+              disabled={isBusy}
+            >
+              {isBusy ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.assignButtonText}>{t('externalAccess', 'shareOrderButton')}</Text>
+              )}
+            </FluidPressable>
           ) : null}
         </>
       ) : (
@@ -359,7 +455,7 @@ const createStyles = (theme: AppTheme) => {
     },
     assignButton: {
       ...u.primaryButton,
-      marginTop: Spacing.sm,
+      marginTop: Spacing.md,
     },
     assignButtonText: u.primaryButtonText,
     disabled: u.disabled,

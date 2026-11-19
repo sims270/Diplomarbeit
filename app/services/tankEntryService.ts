@@ -14,7 +14,8 @@ import { Platform } from 'react-native';
  * supabase/migrations/20260909100000_create_tank_entries.sql: der Fahrer
  * nur seine eigenen, der Chef alle. Die Abfragen hier filtern zusätzlich
  * explizit — nicht weil RLS das nicht könnte, sondern damit an der
- * Aufrufstelle lesbar bleibt, welche Daten gemeint sind.
+ * Aufrufstelle lesbar bleibt, welche Daten gemeint sind. Ändern und Löschen
+ * laufen über Funktionen (siehe updateTankEntry, deleteTankEntry).
  */
 export interface TankEntry {
   id: string;
@@ -190,15 +191,31 @@ export async function setTankEntryPrices(
   if (error) throw new Error(error.message);
 }
 
+/** So lange nach dem Erfassen darf der Fahrer eine Tankung noch ändern. */
+export const DRIVER_EDIT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
 /**
- * Ändert die Angaben des Fahrers zu einer Tankung (Datum, Kennzeichen,
- * km-Stand, Liter, Tankstelle) — nur für den Chef, etwa bei einem
- * Tippfehler.
+ * Bis wann der Fahrer diese Tankung noch ändern darf. Nur für die Anzeige:
+ * Entscheiden tut update_tank_entry in der Datenbank
+ * (20261119170000_tank_entry_driver_edit_and_delete.sql), mit derselben Frist.
+ */
+export function driverEditDeadline(entry: TankEntry): Date {
+  return new Date(Date.parse(entry.createdAt) + DRIVER_EDIT_WINDOW_MS);
+}
+
+export function isEditableByDriver(entry: TankEntry, now: Date = new Date()): boolean {
+  return now.getTime() < driverEditDeadline(entry).getTime();
+}
+
+/**
+ * Ändert die Angaben zu einer Tankung (Datum, Kennzeichen, km-Stand, Liter,
+ * Tankstelle). Der Chef darf das immer, der Fahrer bei seinen eigenen
+ * Tankungen bis drei Tage nach dem Erfassen.
  *
  * Wie bei den Preisen über eine Funktion statt einer UPDATE-Policy
- * (siehe 20260915100000_boss_can_edit_tank_entries.sql): Der Fahrer kann
- * seine Einträge weiterhin nicht ändern, und die Preise bleiben Sache von
- * set_tank_entry_prices.
+ * (siehe 20261119170000_tank_entry_driver_edit_and_delete.sql): So kommt der
+ * Fahrer nicht an die Preise, und der km-Stand am LKW läuft mit. Fehler des
+ * Fahrers kommen als feste Kennung (TANK_EDIT_EXPIRED, TANK_KM_JUMP, …).
  */
 export async function updateTankEntry(entryId: string, input: NewTankEntry): Promise<void> {
   const { error } = await supabase.rpc('update_tank_entry', {
@@ -210,6 +227,17 @@ export async function updateTankEntry(entryId: string, input: NewTankEntry): Pro
     liters_adblue: input.litersAdBlue,
     fuel_station: input.fuelStation.trim(),
   });
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Löscht eine Tankung — nur der Chef, ohne Frist. Über eine Funktion, damit
+ * der km-Stand am LKW neu bestimmt wird
+ * (20261119170000_tank_entry_driver_edit_and_delete.sql).
+ */
+export async function deleteTankEntry(entryId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_tank_entry', { entry_id: entryId });
 
   if (error) throw new Error(error.message);
 }

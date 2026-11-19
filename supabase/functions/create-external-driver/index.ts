@@ -7,9 +7,11 @@
 // Fremdaufträge der Zugang sieht, weist die App danach getrennt zu
 // (external_orders.assigned_external_user_id).
 //
-// Das Passwort wird nirgends gespeichert: Der Chef sieht es genau einmal,
-// in der Antwort dieser Function. Hat der fremde Fahrer es vergessen, lässt
-// der Chef ein neues erstellen (reset-external-driver-password).
+// Das Passwort wird in external_driver_accounts.password gespeichert, damit
+// der Chef es beim Teilen eines Auftrags wieder mitschicken kann. Es
+// verschwindet mit dem Zugang — beim Löschen durch den Chef oder
+// automatisch nach Ablauf (20261119180000_store_external_driver_password.sql).
+// Ein neues Passwort vergibt reset-external-driver-password.
 //
 // Deploy: supabase functions deploy create-external-driver
 
@@ -157,6 +159,7 @@ Deno.serve(async (req) => {
         username: created.username,
         label,
         expires_on: expiresOn,
+        password,
         created_by: caller.id,
       });
 

@@ -43,9 +43,16 @@ export function ReminderGroups({ reminders, variant, newKeys, onChanged }: Remin
       icon?: ComponentProps<typeof MaterialIcons>['name'];
       one: string;
       many: string;
-      route: '/chef/vehicles' | '/chef/trailers';
+      route: '/chef/vehicles' | '/chef/trailers' | '/chef/external-order';
     }
   > = {
+    withdrawnOrder: {
+      title: t('orderConfirmation', 'reminderTitle'),
+      icon: 'person-off',
+      one: t('orderConfirmation', 'reminderOne'),
+      many: t('orderConfirmation', 'reminderMany'),
+      route: '/chef/external-order',
+    },
     service: {
       title: t('vehicles', 'serviceBannerTitle'),
       icon: 'build',

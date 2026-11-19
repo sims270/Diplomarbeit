@@ -1,5 +1,13 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { ActivityIndicator, StyleSheet, View, Text, ScrollView } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View, Text, ScrollView } from 'react-native';
+import { showAlert } from '@/lib/alert';
+import { ORDER_PDF_FOLDER_KEY } from '@/lib/orderPdfFile';
+import {
+  chooseRememberedFolder,
+  getRememberedFolderName,
+  SaveCancelledError,
+  supportsRememberedFolder,
+} from '@/lib/rememberedFile';
 import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Header } from '@/components/header';
 import { shadow, Spacing, Typography } from '@/constants/theme';
@@ -21,6 +29,21 @@ export default function ChefProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
+  // Ordner für die Auftrags-PDFs auf diesem Laptop (lib/orderPdfFile.ts).
+  const [pdfFolder, setPdfFolder] = useState<string | null>(null);
+
+  useEffect(() => {
+    getRememberedFolderName(ORDER_PDF_FOLDER_KEY).then(setPdfFolder);
+  }, []);
+
+  const handleChoosePdfFolder = async () => {
+    try {
+      setPdfFolder(await chooseRememberedFolder(ORDER_PDF_FOLDER_KEY));
+    } catch (error) {
+      if (error instanceof SaveCancelledError) return;
+      showAlert(t('common', 'error'), error instanceof Error ? error.message : '');
+    }
+  };
   // null = noch nicht geladen oder nicht ermittelbar (Offline-Modus, Fehler)
   const [driverCount, setDriverCount] = useState<number | null>(null);
   // Eigene Aufträge im laufenden Monat — Monat wie auf dem Dashboard:
@@ -212,6 +235,29 @@ export default function ChefProfileScreen() {
                 <Text style={styles.createButtonText}>{t('chefProfile', 'bossesCardButton')}</Text>
               </FluidPressable>
             </View>
+
+            {/* Nur im Browser: Am Handy gehen PDFs über das Teilen-Menü. */}
+            {Platform.OS === 'web' && (
+              <View style={styles.settingsSection}>
+                <Text style={styles.sectionTitle}>{t('orderPdf', 'folderTitle')}</Text>
+                {supportsRememberedFolder() ? (
+                  <>
+                    <Text style={styles.sectionDescription}>{t('orderPdf', 'folderDesc')}</Text>
+                    <Text style={styles.sectionDescription}>
+                      <MaterialIcons name="folder" size={15} />{' '}
+                      {pdfFolder ?? t('orderPdf', 'folderNone')}
+                    </Text>
+                    <FluidPressable style={styles.createButton} onPress={handleChoosePdfFolder}>
+                      <Text style={styles.createButtonText}>
+                        {t('orderPdf', pdfFolder ? 'folderChange' : 'folderChoose')}
+                      </Text>
+                    </FluidPressable>
+                  </>
+                ) : (
+                  <Text style={styles.sectionDescription}>{t('orderPdf', 'folderUnsupported')}</Text>
+                )}
+              </View>
+            )}
           </>
         )}
       </ScrollView>

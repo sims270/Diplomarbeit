@@ -86,10 +86,13 @@ export default function ExternalDriverHomeScreen() {
               { backgroundColor: isCompleted ? Colors.ui.green : Colors.ui.orange },
             ]}
           >
+            {/* Solange nicht bestätigt, steht das als Nächstes an — statt "Offen". */}
             <Text style={styles.statusBadgeText}>
               {isCompleted
                 ? t('externalDriver', 'statusCompleted')
-                : t('externalDriver', 'statusPending')}
+                : order.confirmedAt
+                  ? t('externalDriver', 'statusPending')
+                  : t('orderConfirmation', 'listBadgePending')}
             </Text>
           </View>
         </View>

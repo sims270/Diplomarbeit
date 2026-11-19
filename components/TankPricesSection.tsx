@@ -1,6 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/app/context/AuthContext';
 import {
+  deleteTankEntry,
   getAllTankEntries,
   parseGermanNumber,
   parseOdometer,
@@ -14,7 +15,7 @@ import { Layout, Radius, shadow, Spacing, Typography } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
 import { useTranslation } from '@/hooks/use-translation';
-import { showAlert } from '@/lib/alert';
+import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman } from '@/lib/dateFormat';
 import { plateKey } from '@/lib/plateKey';
 import { useFocusEffect } from 'expo-router';
@@ -164,6 +165,8 @@ export function TankPricesSection({
   const handleSaved = (updated: TankEntry) =>
     setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
 
+  const handleDeleted = (id: string) => setEntries((prev) => prev.filter((e) => e.id !== id));
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -213,7 +216,12 @@ export function TankPricesSection({
         rows.map((row) => (
           <View key={row[0].id} style={columns > 1 ? styles.gridRow : undefined}>
             {row.map((item) => (
-              <PriceRow key={item.id} entry={item} onSaved={handleSaved} />
+              <PriceRow
+                key={item.id}
+                entry={item}
+                onSaved={handleSaved}
+                onDeleted={handleDeleted}
+              />
             ))}
           </View>
         ))
@@ -230,13 +238,16 @@ export function TankPricesSection({
 function PriceRow({
   entry,
   onSaved,
+  onDeleted,
 }: {
   entry: TankEntry;
   onSaved: (entry: TankEntry) => void;
+  onDeleted: (id: string) => void;
 }) {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
   const { t } = useTranslation();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [priceAdBluePerLiter, setPriceAdBluePerLiter] = useState(
     formatInput(entry.priceAdBluePerLiter, 4)
   );
@@ -331,6 +342,30 @@ function PriceRow({
     }
   };
 
+  const handleDelete = () =>
+    showConfirm(
+      t('chefTankliste', 'deleteConfirmTitle'),
+      t('chefTankliste', 'deleteConfirmMessage'),
+      async () => {
+        setIsDeleting(true);
+        try {
+          await deleteTankEntry(entry.id);
+          onDeleted(entry.id);
+        } catch (error) {
+          showAlert(
+            t('common', 'error'),
+            error instanceof Error ? error.message : t('chefTankliste', 'alertDeleteFailed')
+          );
+          setIsDeleting(false);
+        }
+      },
+      {
+        confirmText: t('chefTankliste', 'deleteConfirm'),
+        cancelText: t('chefTankliste', 'editCancel'),
+        destructive: true,
+      }
+    );
+
   return (
     <View style={[styles.card, complete && styles.cardComplete]}>
       <View style={styles.cardHeader}>
@@ -361,9 +396,18 @@ function PriceRow({
           }}
         />
       ) : (
-        <FluidPressable style={styles.editLink} onPress={() => setIsEditing(true)}>
-          <Text style={styles.editLinkText}>{t('chefTankliste', 'editButton')}</Text>
-        </FluidPressable>
+        <View style={styles.editLinks}>
+          <FluidPressable style={styles.editLink} onPress={() => setIsEditing(true)}>
+            <Text style={styles.editLinkText}>{t('chefTankliste', 'editButton')}</Text>
+          </FluidPressable>
+          <FluidPressable style={styles.editLink} onPress={handleDelete} disabled={isDeleting}>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={c.danger} />
+            ) : (
+              <Text style={styles.deleteLinkText}>{t('chefTankliste', 'deleteButton')}</Text>
+            )}
+          </FluidPressable>
+        </View>
       )}
 
       {/* Reihenfolge wie in der Excel-Datei: AdBlue-Preise stehen dort
@@ -781,17 +825,28 @@ const createStyles = (theme: AppTheme) => {
     },
     saveButtonText: u.primaryButtonText,
     buttonDisabled: u.disabled,
-    editLink: {
-      alignSelf: 'flex-start',
-      minHeight: Layout.minTouch,
-      justifyContent: 'center',
+    // Ändern links, Löschen rechts — mit Abstand, damit man sich nicht vertippt.
+    editLinks: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
       marginTop: -Spacing.xs,
       marginBottom: Spacing.xs,
+    },
+    editLink: {
+      minHeight: Layout.minTouch,
+      justifyContent: 'center',
     },
     editLinkText: {
       ...Typography.footnote,
       fontWeight: '600',
       color: c.tint,
+    },
+    deleteLinkText: {
+      ...Typography.footnote,
+      fontWeight: '600',
+      color: c.danger,
     },
     editForm: {
       borderTopWidth: StyleSheet.hairlineWidth,
