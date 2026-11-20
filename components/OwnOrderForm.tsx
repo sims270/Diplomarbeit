@@ -16,6 +16,7 @@ import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Spacing } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
+import { EuroAmountInput } from '@/components/EuroAmountInput';
 import { useFormDraft } from '@/hooks/use-form-draft';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
@@ -55,6 +56,7 @@ const emptyFields: OrderFields = {
   loadingAddress: '',
   cargoDescription: '',
   loadingMeters: '',
+  referenceNumber: '',
   unloadingDate: '',
   unloadingTimeFrom: '',
   unloadingTimeUntil: '',
@@ -313,14 +315,11 @@ export function OwnOrderForm({
       </Text>
 
       <Text style={styles.sectionTitle}>{t('chefOwnOrder', 'priceLabel')}</Text>
-      <TextInput
-        placeholderTextColor={c.placeholder}
-        keyboardAppearance={scheme}
+      <EuroAmountInput
         style={styles.input}
         placeholder={t('chefOwnOrder', 'pricePlaceholder')}
         value={price}
         onChangeText={setPrice}
-        keyboardType="decimal-pad"
       />
       <Text style={styles.cargoTypeHint}>{t('chefOwnOrder', 'priceHint')}</Text>
 
@@ -385,9 +384,9 @@ export function OwnOrderForm({
         placeholderTextColor={c.placeholder}
         keyboardAppearance={scheme}
         style={styles.input}
-        placeholder={t('chefOwnOrder', 'loadingMetersLabel')}
-        value={form.loadingMeters}
-        onChangeText={set('loadingMeters')}
+        placeholder={t('chefOwnOrder', 'referenceNumberLabel')}
+        value={form.referenceNumber}
+        onChangeText={set('referenceNumber')}
       />
 
         </View>

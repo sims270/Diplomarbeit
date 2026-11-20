@@ -21,10 +21,11 @@ import { FluidPressable } from '@/components/fluid/FluidPressable';
 import { Spacing } from '@/constants/theme';
 import { type AppTheme, useAppTheme, useThemedStyles } from '@/hooks/use-app-theme';
 import { uiStyles } from '@/constants/ui-styles';
+import { EuroAmountInput } from '@/components/EuroAmountInput';
 import { useFormDraft } from '@/hooks/use-form-draft';
 import { useTranslation } from '@/hooks/use-translation';
 import { showAlert } from '@/lib/alert';
-import { PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
+import { formatEuro, PAYMENT_TERMS_OPTIONS, VEHICLE_TYPE_OPTIONS } from '@/lib/transportauftragPdf';
 import { type ReactNode, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -79,6 +80,11 @@ const emptyFields: ExternalOrderFields = {
 // zeigen wie neue den grauen Platzhalter, damit klar ist, was einzutragen ist.
 const blankIfZero = (amount: string) => (amount.trim() === '0,00' ? '' : amount);
 
+const formatStoredAmount = (amount: string) => {
+  const value = blankIfZero(amount);
+  return value.trim() ? formatEuro(value) : value;
+};
+
 interface ExternalOrderFormProps {
   initialValues?: Partial<ExternalOrderFields>;
   submitLabel: string;
@@ -121,8 +127,10 @@ export function ExternalOrderForm({
     const initial = { ...emptyFields, ...initialValues };
     return {
       ...initial,
-      freightRate: blankIfZero(initial.freightRate),
-      deadlineSurcharge: blankIfZero(initial.deadlineSurcharge),
+      // Ältere Aufträge haben z. B. "1250" gespeichert — gleich wie eine neue
+      // Eingabe als "1.250,00" anzeigen.
+      freightRate: formatStoredAmount(initial.freightRate),
+      deadlineSurcharge: formatStoredAmount(initial.deadlineSurcharge),
     };
   });
   const [carrierCompanies, setCarrierCompanies] = useState<CarrierCompany[]>([]);
@@ -518,30 +526,23 @@ export function ExternalOrderForm({
       <View style={styles.pair}>
         <View style={styles.pairItem}>
           <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'customerPriceLabel')}</Text>
-          <TextInput
-            placeholderTextColor={c.placeholder}
-            keyboardAppearance={scheme}
+          <EuroAmountInput
             style={styles.input}
             placeholder={t('chefExternalOrder', 'customerPricePlaceholder')}
             value={form.customerPrice}
             onChangeText={set('customerPrice')}
-            keyboardType="decimal-pad"
           />
           <Text style={styles.hint}>{t('chefExternalOrder', 'customerPriceHint')}</Text>
 
           <Text style={styles.sectionTitle}>{t('chefExternalOrder', 'conditionsSection')}</Text>
-          <TextInput
-            placeholderTextColor={c.placeholder}
-            keyboardAppearance={scheme}
+          <EuroAmountInput
             style={styles.input}
             placeholder={t('chefExternalOrder', 'freightRateLabel')}
             value={form.freightRate}
             onChangeText={set('freightRate')}
             keyboardType="numeric"
           />
-          <TextInput
-            placeholderTextColor={c.placeholder}
-            keyboardAppearance={scheme}
+          <EuroAmountInput
             style={styles.input}
             placeholder={t('chefExternalOrder', 'deadlineSurchargeLabel')}
             value={form.deadlineSurcharge}

@@ -66,6 +66,7 @@ ${PDF_STYLES}
 
     ${fieldRow('Ladetermin:', escapeHtml(loadingUntil), { gap: driverUsername ? 2 : 0, bold: true })}
     ${fieldRow('Ladestelle:', place(order.loadingCompany, order.loadingAddress), { gap: 1 })}
+    ${order.referenceNumber.trim() ? fieldRow('Referenznummer:', lines(order.referenceNumber), { gap: 2 }) : ''}
     ${fieldRow('Ladegut:', place(order.cargoDescription, order.loadingMeters), { gap: 2 })}
     ${fieldRow('Entladetermin:', escapeHtml(unloadingUntil), { gap: 2, bold: true })}
     ${fieldRow('Entladestelle:', place(order.unloadingCompany, order.unloadingAddress), { gap: 2 })}

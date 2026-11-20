@@ -295,7 +295,11 @@ export default function DriverOrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('driverOrderDetail', 'cargoSection')}</Text>
           {renderRow(t('driverOrderDetail', 'cargoDescriptionLabel'), order.cargoDescription)}
-          {renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)}
+          {renderRow(t('driverOrderDetail', 'referenceNumberLabel'), order.referenceNumber)}
+          {/* Lademeter gibt es nur noch bei Altaufträgen. */}
+          {order.loadingMeters
+            ? renderRow(t('driverOrderDetail', 'loadingMetersLabel'), order.loadingMeters)
+            : null}
           {renderRow(
             t('driverOrderDetail', 'cargoTypeLabel'),
             t(

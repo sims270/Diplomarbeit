@@ -254,7 +254,7 @@ ${PDF_STYLES}
 
     ${fieldRow('Ladetermin:', escapeHtml(loadingUntil), { gap: 2, bold: true })}
     ${fieldRow('Ladestelle:', place(order.loadingCompany, order.loadingAddress), { gap: 1 })}
-    ${fieldRow('Ladenummer:', lines(order.loadingNumber), { gap: 2 })}
+    ${fieldRow('Referenznummer:', lines(order.loadingNumber), { gap: 2 })}
     ${fieldRow('Ladegut:', cargo, { gap: 1 })}
     ${fieldRow('Entladetermin:', escapeHtml(unloadingUntil), { gap: 2, bold: true })}
     ${fieldRow('Entladestelle:', place(order.unloadingCompany, order.unloadingAddress), { gap: 2 })}

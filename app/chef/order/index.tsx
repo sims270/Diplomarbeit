@@ -96,6 +96,7 @@ export default function OrdersListScreen() {
           o.unloadingAddress,
           o.cargoDescription,
           o.loadingMeters,
+          o.referenceNumber,
           o.clientCompany,
           drivers.find((d) => d.id === o.assignedTo)?.username,
         ],

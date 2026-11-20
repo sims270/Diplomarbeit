@@ -49,8 +49,14 @@ export interface Order {
   loadingAddress: string;
   /** Was geladen wird (20261119200000_add_cargo_description_to_orders.sql). */
   cargoDescription: string;
-  /** In der App "Ladungslänge", z. B. "13,6 Ldm" — wie beim Fremdauftrag. */
+  /**
+   * Lademeter, z. B. "13,6 Ldm". Im Formular durch die Referenznummer
+   * ersetzt; bleibt für Altaufträge erhalten und wird beim Speichern
+   * unverändert zurückgeschrieben.
+   */
   loadingMeters: string;
+  /** Referenznummer (20261120100000_add_reference_number_to_orders.sql). */
+  referenceNumber: string;
 
   unloadingDate: string;
   unloadingTimeFrom: string;
@@ -123,6 +129,7 @@ function rowToOrder(row: any): Order {
     loadingAddress: row.loading_address,
     cargoDescription: row.cargo_description ?? '',
     loadingMeters: row.loading_meters,
+    referenceNumber: row.reference_number ?? '',
     unloadingDate: fromDateColumn(row.unloading_date),
     unloadingTimeFrom: row.unloading_time_from,
     unloadingTimeUntil: row.unloading_time_until,
@@ -147,6 +154,7 @@ function fieldsToRow(data: OrderFields): Record<string, unknown> {
     loading_address: data.loadingAddress,
     cargo_description: data.cargoDescription,
     loading_meters: data.loadingMeters,
+    reference_number: data.referenceNumber.trim(),
     unloading_date: toDateColumn(data.unloadingDate),
     unloading_time_from: data.unloadingTimeFrom,
     unloading_time_until: data.unloadingTimeUntil,

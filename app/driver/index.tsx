@@ -234,6 +234,12 @@ export default function DriverDashboardScreen() {
                       {t('driverDashboard', 'cargoDescription')}: {item.cargoDescription}
                     </Text>
                   ) : null}
+                  {item.referenceNumber ? (
+                    <Text style={styles.metersText}>
+                      {t('driverDashboard', 'referenceNumber')}: {item.referenceNumber}
+                    </Text>
+                  ) : null}
+                  {/* Nur noch bei Altaufträgen gefüllt. */}
                   {item.loadingMeters ? (
                     <Text style={styles.metersText}>
                       {t('driverDashboard', 'loadingMeters')}: {item.loadingMeters}
