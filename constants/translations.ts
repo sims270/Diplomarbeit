@@ -13,6 +13,8 @@ export const translations = {
       offlineMode: 'OFFLINE-MODUS',
       offlineModeHint:
         'Server nicht erreichbar — lokale Demo-Daten. Fahrerverwaltung ist deaktiviert.',
+      testEnvironment: 'TESTUMGEBUNG',
+      testEnvironmentHint: 'Nur Testdaten, nichts hier wirkt im echten Betrieb.',
     },
     login: {
       title: 'Login',
@@ -1172,6 +1174,8 @@ export const translations = {
       offlineMode: 'OFFLINE MODE',
       offlineModeHint:
         'Server unreachable — local demo data. Driver management is disabled.',
+      testEnvironment: 'TEST ENVIRONMENT',
+      testEnvironmentHint: 'Test data only, nothing here affects real operations.',
     },
     login: {
       title: 'Login',

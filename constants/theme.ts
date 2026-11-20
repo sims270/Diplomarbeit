@@ -57,6 +57,10 @@ const light = {
   overlay: 'rgba(0, 0, 0, 0.4)',
   bar: 'rgba(249, 249, 249, 0.86)',
   barSolid: '#F9F9F9',
+  // Banner der Testumgebung: bewusst Gelb statt Rot, damit es sich von
+  // Fehlermeldungen und dem Corporate-Rot abhebt (Text über 10:1).
+  testBanner: '#F5B700',
+  onTestBanner: '#111111',
 };
 
 const dark: typeof light = {
@@ -86,6 +90,8 @@ const dark: typeof light = {
   overlay: 'rgba(0, 0, 0, 0.6)',
   bar: 'rgba(22, 22, 23, 0.82)',
   barSolid: '#161617',
+  testBanner: '#E0A800',
+  onTestBanner: '#111111',
 };
 
 export type ThemeColors = typeof light;

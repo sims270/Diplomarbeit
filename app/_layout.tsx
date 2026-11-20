@@ -7,6 +7,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
+import { TestEnvironmentBanner } from "@/components/TestEnvironmentBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { AuthProvider } from "@/app/context/AuthContext";
@@ -42,6 +43,8 @@ function RootContent() {
 
   return (
     <ThemeProvider value={navigationTheme}>
+      {/* Erscheint nur in Vorschau und lokal (EXPO_PUBLIC_APP_ENV=test). */}
+      <TestEnvironmentBanner />
       <Stack
         screenOptions={{
           headerShown: false,
