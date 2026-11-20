@@ -15,8 +15,10 @@ import { showAlert, showConfirm } from '@/lib/alert';
 import { timestampToGerman } from '@/lib/dateFormat';
 import { openDownloadUrl } from '@/lib/download';
 import { pickFile } from '@/lib/filePicker';
+import type { PickedFile } from '@/lib/filePickerShared';
+import { CmrScanner } from '@/components/CmrScanner';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 export interface OrderDocumentsProps {
   orderId: string;
@@ -61,6 +63,10 @@ export function OrderDocuments({
   const [loadError, setLoadError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Der Scanner rechnet im Browser (CmrScanner.web.tsx); nativ gibt es ihn nicht.
+  const canScan = canUpload && Platform.OS === 'web';
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -89,7 +95,11 @@ export function OrderDocuments({
     }
 
     if (!picked) return;
+    await uploadPicked(picked);
+  };
 
+  // Gemeinsamer Weg für ausgewählte Dateien und das PDF aus dem Scanner.
+  const uploadPicked = async (picked: PickedFile) => {
     setIsUploading(true);
     try {
       await uploadOrderDocument(orderId, picked);
@@ -213,6 +223,27 @@ export function OrderDocuments({
         </FluidPressable>
       ) : null}
 
+      {canScan ? (
+        <>
+          <FluidPressable
+            style={[styles.scanButton, isUploading && styles.uploadButtonDisabled]}
+            onPress={() => setIsScannerOpen(true)}
+            disabled={isUploading}
+          >
+            <MaterialIcons name="document-scanner" style={styles.scanButtonIcon} />
+            <Text style={styles.scanButtonText}>{t('orderDocuments', 'scanButton')}</Text>
+          </FluidPressable>
+          <CmrScanner
+            visible={isScannerOpen}
+            onCancel={() => setIsScannerOpen(false)}
+            onDone={(file) => {
+              setIsScannerOpen(false);
+              uploadPicked(file);
+            }}
+          />
+        </>
+      ) : null}
+
       {note ? <Text style={styles.noteText}>{note}</Text> : null}
     </View>
   );
@@ -303,6 +334,15 @@ const createStyles = (theme: AppTheme) => {
     uploadButton: u.primaryButton,
     uploadButtonDisabled: u.disabled,
     uploadButtonText: u.primaryButtonText,
+    scanButton: {
+      ...u.secondaryButton,
+      marginTop: Spacing.xs,
+    },
+    scanButtonIcon: {
+      fontSize: 22,
+      color: c.text,
+    },
+    scanButtonText: u.secondaryButtonText,
     noteText: {
       ...u.hint,
       marginTop: Spacing.sm,

@@ -40,8 +40,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 // toDataURL statt toBlob: läuft ohne Rückruf und damit in jedem Browser
 // gleich (toBlob blieb in Tests mit mehreren Seiten hängen).
-function canvasToJpeg(canvas: HTMLCanvasElement): Uint8Array {
-  const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+export function canvasToJpeg(canvas: HTMLCanvasElement, quality = JPEG_QUALITY): Uint8Array {
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
   const binary = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -79,8 +79,12 @@ async function renderPage(pageXhtml: string, css: string): Promise<Uint8Array> {
  * unverändert hinein (Filter DCTDecode), es braucht also keine Kompression.
  * Aufbau: Objekte hintereinander, am Ende die Tabelle mit ihren
  * Byte-Positionen (xref) — daran findet ein PDF-Programm jedes Objekt.
+ *
+ * Exportiert, weil der CMR-Scanner (components/CmrScanner.web.tsx) seine
+ * entzerrten Seiten genauso als A4-Blätter ablegt. Alle Seiten müssen dafür
+ * dieselbe Pixelgröße haben.
  */
-function writePdf(pages: Uint8Array[], widthPx: number, heightPx: number): Blob {
+export function writePdf(pages: Uint8Array[], widthPx: number, heightPx: number): Blob {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [];
