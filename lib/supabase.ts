@@ -12,6 +12,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Localhost-Sperre: Im Entwicklungsmodus (npx expo start) darf die App nur
+// mit dem Test-Projekt sprechen. Sonst landet ein lokaler Versuch, etwa ein
+// Testauftrag oder eine Rechnung, im echten Betrieb und verbraucht dort
+// Belegnummern. Fertige Builds (Vercel, Production wie Preview) haben
+// __DEV__ = false und sind davon nicht betroffen. Die Ref ist öffentlich, sie
+// steht ohnehin in jedem ausgelieferten Bundle. Siehe PLAN_TESTUMGEBUNG.md.
+const TEST_PROJECT_REF = "xwygtudluxcxrdhupcfw";
+
+if (__DEV__ && new URL(supabaseUrl).hostname !== `${TEST_PROJECT_REF}.supabase.co`) {
+  throw new Error(
+    "Lokal ist nur die Test-Datenbank erlaubt. In .env muss " +
+      `EXPO_PUBLIC_SUPABASE_URL=https://${TEST_PROJECT_REF}.supabase.co stehen ` +
+      "(Vorlage: .env.example). Danach mit `npx expo start -c` neu starten."
+  );
+}
+
 // This app builds with `web.output: "static"`, so screens are pre-rendered
 // server-side in Node before ever reaching a browser. AsyncStorage's web
 // implementation reaches for `window.localStorage`, which doesn't exist in

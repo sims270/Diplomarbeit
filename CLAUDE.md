@@ -12,7 +12,8 @@ Fuhrunternehmen — Aufträge, Fahrer, Fuhrpark, Tankliste, Rechnungen, plus
 - **Backend: nur Supabase** — Postgres mit RLS, Auth, Storage, Deno Edge Functions.
   Kein eigener Server; Sicherheit hängt an RLS-Policies und Edge Functions.
 - Env: `.env` nach `.env.example` (`EXPO_PUBLIC_SUPABASE_URL`, `..._ANON_KEY`,
-  optional Offline-Fallback). `EXPO_PUBLIC_*` landet öffentlich im Bundle.
+  `EXPO_PUBLIC_APP_ENV`, optional Offline-Fallback). `EXPO_PUBLIC_*` landet öffentlich
+  im Bundle. Lokal immer Test-Projekt, siehe „Umgebungen“.
 - Pfad-Alias `@/` = Projektwurzel. Lint: `npm run lint`. Keine Tests.
 
 ## Rollen & Auth
@@ -52,7 +53,34 @@ Fuhrunternehmen — Aufträge, Fahrer, Fuhrpark, Tankliste, Rechnungen, plus
   Fassungen aktualisieren.
 - Migrationen und Functions werden von Hand im Supabase-Dashboard eingespielt.
 - `.github/workflows/`: Keep-Alive-Ping alle 3 Tage, damit das Free-Tier-Projekt
-  nicht pausiert.
+  nicht pausiert (bisher nur das Echtprojekt).
+
+## Umgebungen (Echtbetrieb und Test)
+Das Unternehmen arbeitet produktiv; getestet wird getrennt davon. Details und offene
+Punkte: `PLAN_TESTUMGEBUNG.md`.
+
+| | Echtbetrieb | Test |
+|---|---|---|
+| Branch | `main` | `test` und alle anderen Branches |
+| Adresse | `lsc-itsolutions.net` | Vercel-Vorschau, fest: `diplomarbeit-git-<branch>-sims270s-projects.vercel.app` |
+| Vercel-Env | Production (echte Werte) | Preview + Development (Test-Werte, `EXPO_PUBLIC_APP_ENV=test`) |
+| Supabase | bestehendes Projekt | Test-Projekt `xwygtudluxcxrdhupcfw` |
+
+- **Push auf `main` deployt sofort den Echtbetrieb.** Neue Arbeit auf `test` (oder einem
+  Feature-Branch) committen und erst nach Prüfung auf der Vorschau nach `main` mergen.
+- **Localhost-Sperre:** `lib/supabase.ts` bricht im Entwicklungsmodus (`__DEV__`) ab,
+  wenn die URL nicht das Test-Projekt ist. Fertige Builds sind nicht betroffen.
+- **Banner:** `components/TestEnvironmentBanner.tsx` zeigt bei `EXPO_PUBLIC_APP_ENV=test`
+  oben „TESTUMGEBUNG“.
+- **Testdaten:** `npm run seed:test` (`scripts/seed-test.mjs`) löscht alles im
+  Test-Projekt und legt Testkonten `testchef`, `testfahrer1`, `testfahrer2`, `testfremd`
+  samt Daten neu an. Zugangsdaten nur lokal in `.env.test.local`. Läuft nur, wenn die
+  Tabelle `public.test_environment_marker` existiert, die es bewusst nur im Test-Projekt
+  gibt (in keiner Migration).
+- **Schema abgleichen:** `supabase/test-setup/02–04_*.sql` in beiden Projekten
+  ausführen und vergleichen (nur lesend).
+- **Release-Reihenfolge:** Migrationen und Functions zuerst im Test-Projekt einspielen
+  und prüfen, dann im Echtprojekt, dann `test` nach `main` mergen.
 
 ## Konventionen
 - Neue Chef-Unterseite: Datei/Ordner unter `app/chef/` **und** `Stack.Screen` in
@@ -108,7 +136,8 @@ Diese Fehler sind hier schon passiert oder wären fast passiert. Vor jeder Ände
 **Abschluss und Übergabe**
 - Es gibt keine Tests: `npx tsc --noEmit`, `npm run lint` und `npx expo export -p web`
   ausführen und klar sagen, was nicht getestet wurde.
-- „Im Code behoben“ ist nicht „eingespielt“: Migrationen und Functions muss Simon einspielen.
+- „Im Code behoben“ ist nicht „eingespielt“: Migrationen und Functions muss Simon einspielen,
+  und zwar in **beide** Supabase-Projekte (erst Test, dann Echt).
 - Die Reihenfolge nennen: Migrationen, dann Functions, dann App. Liest die App eine Spalte,
   die noch fehlt, kann das den Login blockieren.
 - Der SQL Editor zeigt nur das Ergebnis der letzten Abfrage: Prüf-Abfragen einzeln ausgeben.
