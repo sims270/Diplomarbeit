@@ -9,8 +9,10 @@ import {
   enhanceScan,
   loadScaledImage,
   type Point,
+  PREVIEW_MAX_SIDE,
   type Quad,
   rotateQuad,
+  scaledCopy,
   SCAN_HEIGHT_PX,
   SCAN_WIDTH_PX,
   warpToA4,
@@ -40,6 +42,11 @@ interface EditingPhoto {
 
 // Etwas Qualität opfern: Ein CMR mit fünf Seiten soll keine 5 MB haben.
 const SCAN_JPEG_QUALITY = 0.8;
+
+// Lupe beim Eckenziehen: Durchmesser und Abstand in Bildschirm-Pixeln.
+const LOUPE_SIZE = 128;
+const LOUPE_GAP = 48;
+const LOUPE_ZOOM = 3;
 
 /**
  * Wie lib/filePicker.web.ts, nur mit capture="environment": Am Handy öffnet
@@ -103,6 +110,11 @@ function QuadEditor({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragIndex = useRef<number | null>(null);
+  // Lupe beim Ziehen: Der Finger verdeckt genau die Ecke, die er schiebt.
+  // Größe des Bildes am Bildschirm wird beim Greifen gemerkt.
+  const [loupe, setLoupe] = useState<{ index: number; boxWidth: number; boxHeight: number } | null>(
+    null
+  );
 
   const toImagePoint = (event: ReactPointerEvent): Point | null => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -136,6 +148,8 @@ function QuadEditor({
     if (nearestDistance > Math.max(width, height) * 0.2) return;
     dragIndex.current = nearest;
     event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = event.currentTarget.getBoundingClientRect();
+    setLoupe({ index: nearest, boxWidth: rect.width, boxHeight: rect.height });
     moveCorner(nearest, point);
   };
 
@@ -147,9 +161,87 @@ function QuadEditor({
 
   const stopDrag = () => {
     dragIndex.current = null;
+    setLoupe(null);
   };
 
   const handleRadius = Math.max(width, height) * 0.025;
+
+  const renderLoupe = () => {
+    if (!loupe) return null;
+    const corner = quad[loupe.index];
+    const { boxWidth, boxHeight } = loupe;
+    // Ecke in Bildschirm-Pixeln innerhalb des Bildes.
+    const px = (corner.x / width) * boxWidth;
+    const py = (corner.y / height) * boxHeight;
+
+    // Über dem Finger anzeigen; ist dort kein Platz (Ecke oben), daneben
+    // auf der Seite zur Bildmitte hin.
+    let left = px - LOUPE_SIZE / 2;
+    let top = py - LOUPE_SIZE - LOUPE_GAP;
+    if (top < 0) {
+      top = py - LOUPE_SIZE / 2;
+      left = px < boxWidth / 2 ? px + LOUPE_GAP : px - LOUPE_GAP - LOUPE_SIZE;
+    }
+    left = Math.min(Math.max(left, 0), Math.max(boxWidth - LOUPE_SIZE, 0));
+    top = Math.min(Math.max(top, 0), Math.max(boxHeight - LOUPE_SIZE, 0));
+
+    // Ausschnitt in Bildkoordinaten, der in der Lupe LOUPE_ZOOM-fach groß erscheint.
+    const viewWidth = (LOUPE_SIZE / LOUPE_ZOOM) * (width / boxWidth);
+    const viewHeight = (LOUPE_SIZE / LOUPE_ZOOM) * (height / boxHeight);
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          left,
+          top,
+          width: LOUPE_SIZE,
+          height: LOUPE_SIZE,
+          borderRadius: '50%',
+          overflow: 'hidden',
+          border: `3px solid ${color}`,
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+          backgroundColor: '#000',
+          pointerEvents: 'none',
+        }}
+      >
+        <svg
+          viewBox={`${corner.x - viewWidth / 2} ${corner.y - viewHeight / 2} ${viewWidth} ${viewHeight}`}
+          preserveAspectRatio="none"
+          style={{ width: '100%', height: '100%', display: 'block' }}
+        >
+          <image href={previewUrl} x={0} y={0} width={width} height={height} preserveAspectRatio="none" />
+          <polygon
+            points={quad.map((p) => `${p.x},${p.y}`).join(' ')}
+            fill="none"
+            stroke={color}
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1={corner.x - viewWidth / 2}
+            y1={corner.y}
+            x2={corner.x + viewWidth / 2}
+            y2={corner.y}
+            stroke="white"
+            strokeWidth={1}
+            strokeOpacity={0.8}
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1={corner.x}
+            y1={corner.y - viewHeight / 2}
+            x2={corner.x}
+            y2={corner.y + viewHeight / 2}
+            stroke="white"
+            strokeWidth={1}
+            strokeOpacity={0.8}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -213,6 +305,7 @@ function QuadEditor({
           />
         ))}
       </svg>
+      {renderLoupe()}
     </div>
   );
 }
@@ -256,9 +349,10 @@ export function CmrScanner({ visible, onCancel, onDone }: CmrScannerProps) {
       await nextFrame();
       const source = await loadScaledImage(file);
       const quad = detectDocumentCorners(source);
-      // Vorschau aus dem verkleinerten Canvas: steht damit sicher richtig
-      // herum, egal wie der Browser EXIF im <img> behandelt.
-      const previewUrl = jpegUrl(canvasToJpeg(source, 0.85));
+      // Vorschau aus dem Canvas: steht damit sicher richtig herum, egal wie
+      // der Browser EXIF im <img> behandelt. Kleiner als die Quelle, die
+      // volle Auflösung braucht nur das Geradeziehen.
+      const previewUrl = jpegUrl(canvasToJpeg(scaledCopy(source, PREVIEW_MAX_SIDE), 0.85));
       setEditing({ source, previewUrl, quad });
       setIsBusy(false);
     } catch {
