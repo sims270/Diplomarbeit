@@ -287,6 +287,21 @@ export async function completeOrder(
   return rowToOrder(data);
 }
 
+// Zwischenstand der Kilometerstände eines offenen Auftrags, damit sie beim
+// Verlassen der Seite nicht verloren gehen (20261126100000). Fehlende
+// Stände als null; abgeschlossen wird weiter mit completeOrder.
+export async function saveOrderOdometer(orderId: string, odometer: OdometerReadings): Promise<Order> {
+  const { data, error } = await supabase.rpc('save_order_odometer', {
+    order_id: orderId,
+    start_odometer: odometer.startOdometer,
+    loading_odometer: odometer.loadingOdometer,
+    unloading_odometer: odometer.unloadingOdometer,
+  });
+
+  if (error) throw new Error(error.message);
+  return rowToOrder(data);
+}
+
 // Abladestand des letzten erledigten Auftrags mit dem LKW des angemeldeten
 // Fahrers — oder null, wenn es noch keinen gibt.
 export async function getSuggestedStartOdometer(): Promise<number | null> {

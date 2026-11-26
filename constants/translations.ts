@@ -792,7 +792,10 @@ export const translations = {
       unloadingOdometerLabel: 'Kilometerstand Abladen',
       unloadingOdometerPlaceholder: 'Tachostand an der Entladestelle, z. B. 100500',
       kmHint:
-        'Alle drei Stände werden zum Abschließen gebraucht. Leer- und Frachtkilometer werden daraus berechnet. Beim Beilader entfallen sie.',
+        'Die Stände werden automatisch gespeichert und können nach und nach eingetragen werden. Zum Abschließen werden alle drei gebraucht; Leer- und Frachtkilometer werden daraus berechnet. Beim Beilader entfallen sie.',
+      kmDraftSaving: 'Wird gespeichert …',
+      kmDraftSaved: 'Kilometerstände gespeichert',
+      kmDraftError: 'Kilometerstände konnten nicht gespeichert werden. Bitte Verbindung prüfen.',
       kmBeilader: 'Beilader — keine Kilometer zu erfassen',
       alertKmRequired: 'Bitte alle drei Kilometerstände eintragen',
       alertKmInvalid: 'Kilometerstände bitte als ganze Zahl eintragen',
@@ -1953,7 +1956,10 @@ export const translations = {
       unloadingOdometerLabel: 'Odometer at unloading',
       unloadingOdometerPlaceholder: 'Reading at the unloading site, e.g. 100500',
       kmHint:
-        'All three readings are required to complete the order. Empty and freight kilometres are calculated from them. Not needed for a part load.',
+        'Readings are saved automatically and can be entered one at a time. All three are required to complete the order; empty and freight kilometres are calculated from them. Not needed for a part load.',
+      kmDraftSaving: 'Saving …',
+      kmDraftSaved: 'Odometer readings saved',
+      kmDraftError: 'Odometer readings could not be saved. Please check your connection.',
       kmBeilader: 'Part load — no kilometres to record',
       alertKmRequired: 'Please enter all three odometer readings',
       alertKmInvalid: 'Please enter odometer readings as whole numbers',

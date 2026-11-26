@@ -3,6 +3,7 @@ import {
   completeOrder,
   getOrderById,
   getSuggestedStartOdometer,
+  saveOrderOdometer,
   type OdometerReadings,
   type Order,
 } from '@/app/services/orderService';
@@ -17,7 +18,7 @@ import { showAlert, showConfirm } from '@/lib/alert';
 import { isoToGerman, timestampToGerman } from '@/lib/dateFormat';
 import { formatTimeWindow } from '@/lib/pdfLayout';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -39,6 +40,20 @@ function parseOdometer(value: string): number | null {
 
 const formatKm = (km: number | null) => (km === null ? '' : `${km.toLocaleString('de-DE')} km`);
 
+// Gespeicherter Stand als Text fürs Eingabefeld.
+const odometerText = (km: number | null) => (km === null ? '' : String(km));
+
+// Nach so vielen Millisekunden ohne Tippen wird der Zwischenstand gespeichert.
+const DRAFT_SAVE_DELAY_MS = 800;
+
+type DraftStatus = 'idle' | 'saving' | 'saved' | 'error' | 'invalid' | 'order' | 'tooHigh';
+
+interface OdometerDraft {
+  start: string;
+  loading: string;
+  unloading: string;
+}
+
 export default function DriverOrderDetailScreen() {
   const styles = useThemedStyles(createStyles);
   const { c, scheme } = useAppTheme();
@@ -53,6 +68,11 @@ export default function DriverOrderDetailScreen() {
   const [startOdometer, setStartOdometer] = useState('');
   const [loadingOdometer, setLoadingOdometer] = useState('');
   const [unloadingOdometer, setUnloadingOdometer] = useState('');
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle');
+  // Was zuletzt in der Datenbank steht bzw. gerade unterwegs ist — damit
+  // unveränderte Stände nicht bei jedem Anlass neu gespeichert werden.
+  const savedDraft = useRef<OdometerDraft | null>(null);
+  const pendingDraft = useRef<OdometerDraft | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -63,7 +83,21 @@ export default function DriverOrderDetailScreen() {
         if (cancelled) return;
         // A driver may only open orders assigned to them — the id comes
         // straight from the URL, so it can't be trusted on its own.
-        setOrder(found && found.assignedTo === user?.id ? found : null);
+        const visible = found && found.assignedTo === user?.id ? found : null;
+        // Zwischenstand der Kilometerstände (save_order_odometer) wieder in
+        // die Felder holen.
+        if (visible && visible.cargoType === 'komplett' && visible.status !== 'completed') {
+          const draft: OdometerDraft = {
+            start: odometerText(visible.startOdometer),
+            loading: odometerText(visible.loadingOdometer),
+            unloading: odometerText(visible.unloadingOdometer),
+          };
+          savedDraft.current = draft;
+          setStartOdometer(draft.start);
+          setLoadingOdometer(draft.loading);
+          setUnloadingOdometer(draft.unloading);
+        }
+        setOrder(visible);
       })
       .catch(() => {
         if (!cancelled) setOrder(null);
@@ -100,6 +134,88 @@ export default function DriverOrderDetailScreen() {
   const startValue = parseOdometer(startOdometer);
   const loadingValue = parseOdometer(loadingOdometer);
   const unloadingValue = parseOdometer(unloadingOdometer);
+
+  // Zwischenstand speichern: Den Ladestand trägt der Fahrer an der
+  // Ladestelle ein, den Abladestand oft erst Tage später — dazwischen darf
+  // nichts verloren gehen. Unvollständige Stände sind erlaubt, nur was
+  // eingetragen ist, muss passen.
+  const saveDraft = async () => {
+    if (!order || !needsOdometer || !savedDraft.current) return;
+    const draft: OdometerDraft = {
+      start: startOdometer.trim(),
+      loading: loadingOdometer.trim(),
+      unloading: unloadingOdometer.trim(),
+    };
+    const same = (other: OdometerDraft | null) =>
+      other !== null &&
+      other.start === draft.start &&
+      other.loading === draft.loading &&
+      other.unloading === draft.unloading;
+    if (same(savedDraft.current) || same(pendingDraft.current)) return;
+
+    const texts = [draft.start, draft.loading, draft.unloading];
+    const values = [startValue, loadingValue, unloadingValue];
+    if (texts.some((text, i) => text !== '' && values[i] === null)) {
+      setDraftStatus('invalid');
+      return;
+    }
+    const present = values.filter((value): value is number => value !== null);
+    if (present.some((value, i) => i > 0 && present[i - 1] > value)) {
+      setDraftStatus('order');
+      return;
+    }
+    if (startValue !== null && unloadingValue !== null && unloadingValue - startValue > 10000) {
+      setDraftStatus('tooHigh');
+      return;
+    }
+
+    pendingDraft.current = draft;
+    setDraftStatus('saving');
+    try {
+      await saveOrderOdometer(order.id, {
+        startOdometer: startValue,
+        loadingOdometer: loadingValue,
+        unloadingOdometer: unloadingValue,
+      });
+      savedDraft.current = draft;
+      setDraftStatus('saved');
+    } catch (error) {
+      // Feste Kennungen aus 20261126100000_save_order_odometer.sql.
+      const message = error instanceof Error ? error.message : '';
+      setDraftStatus(
+        message === 'ORDER_KM_ORDER' ? 'order' : message === 'ORDER_KM_TOO_HIGH' ? 'tooHigh' : 'error'
+      );
+    } finally {
+      if (pendingDraft.current === draft) pendingDraft.current = null;
+    }
+  };
+
+  // Timer und Aufräumen brauchen die Fassung mit den neuesten Eingaben.
+  const saveDraftRef = useRef(saveDraft);
+  useEffect(() => {
+    saveDraftRef.current = saveDraft;
+  });
+
+  // Kurz nach dem Tippen speichern …
+  useEffect(() => {
+    const timer = setTimeout(() => void saveDraftRef.current(), DRAFT_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [startOdometer, loadingOdometer, unloadingOdometer]);
+
+  // … und spätestens beim Verlassen der Seite.
+  useEffect(() => () => void saveDraftRef.current(), []);
+
+  const draftStatusText: Record<DraftStatus, string> = {
+    idle: '',
+    saving: t('driverOrderDetail', 'kmDraftSaving'),
+    saved: t('driverOrderDetail', 'kmDraftSaved'),
+    error: t('driverOrderDetail', 'kmDraftError'),
+    invalid: t('driverOrderDetail', 'alertKmInvalid'),
+    order: t('driverOrderDetail', 'alertKmOrder'),
+    tooHigh: t('driverOrderDetail', 'alertKmTooHigh'),
+  };
+  const draftStatusIsProblem =
+    draftStatus === 'error' || draftStatus === 'invalid' || draftStatus === 'order' || draftStatus === 'tooHigh';
   const previewEmptyKm =
     startValue !== null && loadingValue !== null && loadingValue >= startValue
       ? loadingValue - startValue
@@ -340,6 +456,7 @@ export default function DriverOrderDetailScreen() {
                 style={styles.kmInput}
                 value={startOdometer}
                 onChangeText={setStartOdometer}
+                onBlur={() => void saveDraft()}
                 placeholder={t('driverOrderDetail', 'startOdometerPlaceholder')}
                 keyboardType="numeric"
                 editable={!isCompleting}
@@ -352,6 +469,7 @@ export default function DriverOrderDetailScreen() {
                 style={styles.kmInput}
                 value={loadingOdometer}
                 onChangeText={setLoadingOdometer}
+                onBlur={() => void saveDraft()}
                 placeholder={t('driverOrderDetail', 'loadingOdometerPlaceholder')}
                 keyboardType="numeric"
                 editable={!isCompleting}
@@ -364,6 +482,7 @@ export default function DriverOrderDetailScreen() {
                 style={styles.kmInput}
                 value={unloadingOdometer}
                 onChangeText={setUnloadingOdometer}
+                onBlur={() => void saveDraft()}
                 placeholder={t('driverOrderDetail', 'unloadingOdometerPlaceholder')}
                 keyboardType="numeric"
                 editable={!isCompleting}
@@ -372,6 +491,12 @@ export default function DriverOrderDetailScreen() {
               {previewEmptyKm !== null || previewFreightKm !== null ? (
                 <Text style={styles.kmPreview}>
                   {`${t('driverOrderDetail', 'emptyKmLabel')}: ${formatKm(previewEmptyKm) || EMPTY} · ${t('driverOrderDetail', 'freightKmLabel')}: ${formatKm(previewFreightKm) || EMPTY}`}
+                </Text>
+              ) : null}
+
+              {draftStatus !== 'idle' ? (
+                <Text style={[styles.kmNote, draftStatusIsProblem && styles.kmDraftProblem]}>
+                  {draftStatusText[draftStatus]}
                 </Text>
               ) : null}
 
@@ -524,6 +649,9 @@ const createStyles = (theme: AppTheme) => {
     kmNote: {
       ...u.hint,
       marginTop: 0,
+    },
+    kmDraftProblem: {
+      color: c.danger,
     },
     kmPreview: {
       ...Typography.subhead,
