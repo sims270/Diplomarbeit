@@ -3,9 +3,10 @@
  * Blatt im Foto finden, gerade ziehen, nach Scan aussehen lassen.
  *
  * Bewusst ohne OpenCV.js: Das wären rund 10 MB, ein weiterer Host in der
- * CSP (vercel.json) und 'wasm-unsafe-eval'. Für "helles Blatt auf
- * dunklerem Untergrund" reicht ein Schwellwert mit größter heller Fläche;
- * liegt die Erkennung daneben, schiebt der Fahrer die Ecken von Hand.
+ * CSP (vercel.json) und 'wasm-unsafe-eval'. Stattdessen mehrere einfache
+ * Merkmale (Helligkeit, Papierfarbe, Sättigung, Kanten), von denen das am
+ * besten bewertete Viereck gewinnt (detectCornersInPixels); liegt die
+ * Erkennung trotzdem daneben, schiebt der Fahrer die Ecken von Hand.
  *
  * Nur für Web, und nur aus Event-Handlern aufrufen — beim statischen
  * Vorrendern gibt es weder document noch Image.
@@ -97,9 +98,17 @@ export function defaultQuad(width: number, height: number): Quad {
 }
 
 // Otsu: der Schwellwert, der Hell und Dunkel im Histogramm am saubersten trennt.
-function otsuThreshold(gray: Uint8ClampedArray): number {
+// Mit "above" zählen nur Werte darüber (feiner Schwellwert in
+// detectCornersInPixels).
+function otsuThreshold(gray: Uint8ClampedArray, above = -1): number {
   const histogram = new Array<number>(256).fill(0);
-  for (let i = 0; i < gray.length; i++) histogram[gray[i]]++;
+  let total = 0;
+  for (let i = 0; i < gray.length; i++) {
+    if (gray[i] > above) {
+      histogram[gray[i]]++;
+      total++;
+    }
+  }
 
   let sumAll = 0;
   for (let i = 0; i < 256; i++) sumAll += i * histogram[i];
@@ -107,11 +116,11 @@ function otsuThreshold(gray: Uint8ClampedArray): number {
   let sumBack = 0;
   let weightBack = 0;
   let best = 0;
-  let threshold = 127;
+  let threshold = above >= 0 ? above : 127;
   for (let t = 0; t < 256; t++) {
     weightBack += histogram[t];
     if (weightBack === 0) continue;
-    const weightFore = gray.length - weightBack;
+    const weightFore = total - weightBack;
     if (weightFore === 0) break;
     sumBack += t * histogram[t];
     const meanBack = sumBack / weightBack;
@@ -287,36 +296,22 @@ function refineQuad(xs: number[], ys: number[], rough: Quad, width: number, heig
   return clamped;
 }
 
-/**
- * Sucht das Blatt im Foto und liefert seine vier Ecken in Koordinaten des
- * übergebenen Canvas. Vorgehen: verkleinern, Graustufen, weichzeichnen,
- * Otsu-Schwellwert, größte helle Fläche suchen. Grobe Ecken sind die Punkte
- * mit kleinster/größter Summe bzw. Differenz von x und y; danach werden an
- * die vier Blattseiten Geraden angepasst (refineQuad).
- */
-export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
-  const small = scaledCopy(source, DETECT_SIDE);
-  const scale = small.width / source.width;
-  const { width, height } = small;
-  const { data } = context2d(small).getImageData(0, 0, width, height);
+interface Components {
+  labels: Int32Array;
+  /** Fläche je Label (Index 0 ist frei, Labels beginnen bei 1). */
+  areas: number[];
+  /** Stößt die Fläche an alle vier Bildränder? */
+  touchesAll: boolean[];
+}
 
-  const grayRaw = new Uint8ClampedArray(width * height);
-  for (let i = 0, p = 0; i < grayRaw.length; i++, p += 4) {
-    grayRaw[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
-  }
-  const gray = boxBlur(grayRaw, width, height, 2);
-  const threshold = otsuThreshold(gray);
-
-  // Zusammenhängende helle Flächen (4er-Nachbarschaft) beschriften.
+/** Zusammenhängende Flächen (4er-Nachbarschaft) in einer 0/1-Maske beschriften. */
+function labelComponents(mask: Uint8Array, width: number, height: number, stack: Int32Array): Components {
   const labels = new Int32Array(width * height);
-  const stack = new Int32Array(width * height);
-  let bestLabel = 0;
-  let bestArea = 0;
-  let bestEdgeLabel = 0;
-  let bestEdgeArea = 0;
+  const areas = [0];
+  const touchesAll = [false];
   let nextLabel = 0;
   for (let start = 0; start < labels.length; start++) {
-    if (labels[start] !== 0 || gray[start] <= threshold) continue;
+    if (labels[start] !== 0 || mask[start] === 0) continue;
     nextLabel++;
     let area = 0;
     let touchesLeft = false;
@@ -335,65 +330,145 @@ export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
       if (x === width - 1) touchesRight = true;
       if (y === 0) touchesTop = true;
       if (y === height - 1) touchesBottom = true;
-      const neighbours = [
-        x > 0 ? index - 1 : -1,
-        x < width - 1 ? index + 1 : -1,
-        y > 0 ? index - width : -1,
-        y < height - 1 ? index + width : -1,
-      ];
-      for (const n of neighbours) {
-        if (n >= 0 && labels[n] === 0 && gray[n] > threshold) {
-          labels[n] = nextLabel;
-          stack[top++] = n;
-        }
+      if (x > 0 && labels[index - 1] === 0 && mask[index - 1] === 1) {
+        labels[index - 1] = nextLabel;
+        stack[top++] = index - 1;
+      }
+      if (x < width - 1 && labels[index + 1] === 0 && mask[index + 1] === 1) {
+        labels[index + 1] = nextLabel;
+        stack[top++] = index + 1;
+      }
+      if (y > 0 && labels[index - width] === 0 && mask[index - width] === 1) {
+        labels[index - width] = nextLabel;
+        stack[top++] = index - width;
+      }
+      if (y < height - 1 && labels[index + width] === 0 && mask[index + width] === 1) {
+        labels[index + width] = nextLabel;
+        stack[top++] = index + width;
       }
     }
-    // Eine Fläche, die an alle vier Bildränder stößt, ist oft ein heller
-    // Tisch o. Ä. — oder das Blatt füllt das Foto fast ganz aus. Deshalb nur
-    // nachrangig nehmen, wenn es keine andere große helle Fläche gibt.
-    const touchesAllEdges = touchesLeft && touchesRight && touchesTop && touchesBottom;
-    if (touchesAllEdges) {
-      if (area > bestEdgeArea) {
-        bestEdgeArea = area;
-        bestEdgeLabel = nextLabel;
-      }
-    } else if (area > bestArea) {
-      bestArea = area;
-      bestLabel = nextLabel;
-    }
+    areas.push(area);
+    touchesAll.push(touchesLeft && touchesRight && touchesTop && touchesBottom);
   }
+  return { labels, areas, touchesAll };
+}
 
-  const minArea = labels.length * 0.2;
-  const label = bestArea >= minArea ? bestLabel : bestEdgeArea >= minArea ? bestEdgeLabel : 0;
-  if (label === 0) return defaultQuad(source.width, source.height);
-
-  // Hintergrund, der vom Bildrand aus erreichbar ist. Löcher in der Fläche
-  // (Schrift, Stempel, Linien) gehören nicht dazu — ihre Ränder sind keine
-  // Blattkante und würden die Geraden in refineQuad nach innen ziehen.
-  const outside = new Uint8Array(width * height);
+/**
+ * Flutet vom Bildrand aus alle Pixel mit allowed = 1. Liefert eine Maske
+ * mit 1 für jeden erreichten Pixel.
+ */
+function floodFromBorder(allowed: Uint8Array, width: number, height: number, stack: Int32Array): Uint8Array {
+  const reached = new Uint8Array(width * height);
   let top = 0;
-  const pushOutside = (index: number) => {
-    if (outside[index] === 0 && labels[index] !== label) {
-      outside[index] = 1;
+  const push = (index: number) => {
+    if (reached[index] === 0 && allowed[index] === 1) {
+      reached[index] = 1;
       stack[top++] = index;
     }
   };
   for (let x = 0; x < width; x++) {
-    pushOutside(x);
-    pushOutside((height - 1) * width + x);
+    push(x);
+    push((height - 1) * width + x);
   }
   for (let y = 0; y < height; y++) {
-    pushOutside(y * width);
-    pushOutside(y * width + width - 1);
+    push(y * width);
+    push(y * width + width - 1);
   }
   while (top > 0) {
     const index = stack[--top];
     const x = index % width;
-    if (x > 0) pushOutside(index - 1);
-    if (x < width - 1) pushOutside(index + 1);
-    if (index >= width) pushOutside(index - width);
-    if (index < (height - 1) * width) pushOutside(index + width);
+    if (x > 0) push(index - 1);
+    if (x < width - 1) push(index + 1);
+    if (index >= width) push(index - width);
+    if (index < (height - 1) * width) push(index + width);
   }
+  return reached;
+}
+
+/**
+ * Größte Fläche, die nicht an alle vier Bildränder stößt. So eine Fläche ist
+ * oft ein heller Tisch o. Ä. — oder das Blatt füllt das Foto fast ganz aus.
+ * Deshalb nur nachrangig, wenn es keine andere große Fläche gibt.
+ */
+function pickLargest({ areas, touchesAll }: Components, minArea: number): number {
+  let best = 0;
+  let bestEdge = 0;
+  for (let label = 1; label < areas.length; label++) {
+    if (touchesAll[label]) {
+      if (areas[label] > areas[bestEdge]) bestEdge = label;
+    } else if (areas[label] > areas[best]) {
+      best = label;
+    }
+  }
+  if (areas[best] >= minArea) return best;
+  if (areas[bestEdge] >= minArea) return bestEdge;
+  return 0;
+}
+
+/** Fläche, die den mittleren Bildausschnitt am stärksten bedeckt. */
+function pickCenter({ labels, areas }: Components, width: number, height: number): number {
+  const counts = new Array<number>(areas.length).fill(0);
+  for (let y = Math.floor(height * 0.4); y < Math.ceil(height * 0.6); y++) {
+    for (let x = Math.floor(width * 0.4); x < Math.ceil(width * 0.6); x++) {
+      counts[labels[y * width + x]]++;
+    }
+  }
+  let best = 0;
+  for (let label = 1; label < counts.length; label++) {
+    if (counts[label] > counts[best]) best = label;
+  }
+  return best;
+}
+
+interface Candidate {
+  quad: Quad;
+  score: number;
+}
+
+/** Anteil der Punkte, die höchstens tolerance von einer Seite des Vierecks entfernt liegen. */
+function fractionNearQuad(xs: number[], ys: number[], quad: Quad, tolerance: number): number {
+  if (xs.length === 0) return 0;
+  let near = 0;
+  for (let i = 0; i < xs.length; i++) {
+    for (let side = 0; side < 4; side++) {
+      const a = quad[side];
+      const b = quad[(side + 1) % 4];
+      const vx = b.x - a.x;
+      const vy = b.y - a.y;
+      const lengthSq = vx * vx + vy * vy;
+      if (lengthSq === 0) continue;
+      const t = Math.min(Math.max(((xs[i] - a.x) * vx + (ys[i] - a.y) * vy) / lengthSq, 0), 1);
+      if (Math.hypot(xs[i] - (a.x + t * vx), ys[i] - (a.y + t * vy)) <= tolerance) {
+        near++;
+        break;
+      }
+    }
+  }
+  return near / xs.length;
+}
+
+/**
+ * Viereck zu einer gefundenen Fläche: grobe Ecken sind die Punkte mit
+ * kleinster/größter Summe bzw. Differenz von x und y, danach werden an die
+ * vier Blattseiten Geraden angepasst (refineQuad). Dazu eine Bewertung, wie
+ * sehr das Ergebnis nach Blatt aussieht: Füllt die Fläche das Viereck aus,
+ * und liegt ihr Rand auf dessen Seiten?
+ */
+function sheetFromComponent(
+  labels: Int32Array,
+  label: number,
+  width: number,
+  height: number,
+  stack: Int32Array
+): Candidate | null {
+  // Hintergrund, der vom Bildrand aus erreichbar ist. Löcher in der Fläche
+  // (Schrift, Stempel, Linien) gehören nicht dazu — ihre Ränder sind keine
+  // Blattkante und würden die Geraden in refineQuad nach innen ziehen.
+  const notSheet = new Uint8Array(width * height);
+  for (let index = 0; index < labels.length; index++) {
+    if (labels[index] !== label) notSheet[index] = 1;
+  }
+  const outside = floodFromBorder(notSheet, width, height, stack);
 
   // Grobe Ecken und gleichzeitig die Randpunkte der Fläche sammeln
   // (Pixelmitte, daher +0.5).
@@ -403,7 +478,9 @@ export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
   let bl = { x: 0, y: 0, v: Infinity };
   const edgeXs: number[] = [];
   const edgeYs: number[] = [];
+  let filledArea = 0;
   for (let index = 0; index < labels.length; index++) {
+    if (outside[index] === 0) filledArea++;
     if (labels[index] !== label) continue;
     const x = index % width;
     const y = (index - x) / width;
@@ -429,6 +506,7 @@ export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
       edgeYs.push(py);
     }
   }
+  if (edgeXs.length === 0) return null;
 
   const rough: Quad = [
     { x: tl.x, y: tl.y },
@@ -436,7 +514,250 @@ export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
     { x: br.x, y: br.y },
     { x: bl.x, y: bl.y },
   ];
-  const quad = refineQuad(edgeXs, edgeYs, rough, width, height) ?? rough;
+  const refined = refineQuad(edgeXs, edgeYs, rough, width, height);
+  const quad = refined ?? rough;
+
+  const quadSize = Math.abs(quadArea(quad));
+  const coverage = quadSize / (width * height);
+  if (coverage < 0.15) return null;
+  const fill = Math.min(filledArea, quadSize) / Math.max(filledArea, quadSize, 1);
+  const fit = fractionNearQuad(edgeXs, edgeYs, quad, 0.01 * Math.hypot(width, height));
+  let score = fill * fit;
+  if (!refined) score *= 0.5;
+  // Fast das ganze Foto: meist ist Blatt und Untergrund zusammengelaufen
+  // und das "Viereck" ist nur der Bildrand.
+  if (coverage > 0.9) score *= 0.5;
+  return { quad, score };
+}
+
+/** Median eines Kanals im mittleren Bildausschnitt (dort liegt fast immer das Blatt). */
+function centerMedian(channel: Uint8ClampedArray, width: number, height: number): number {
+  const histogram = new Array<number>(256).fill(0);
+  let count = 0;
+  for (let y = Math.floor(height * 0.35); y < Math.ceil(height * 0.65); y++) {
+    for (let x = Math.floor(width * 0.35); x < Math.ceil(width * 0.65); x++) {
+      histogram[channel[y * width + x]]++;
+      count++;
+    }
+  }
+  let seen = 0;
+  for (let value = 0; value < 256; value++) {
+    seen += histogram[value];
+    if (seen * 2 >= count) return value;
+  }
+  return 255;
+}
+
+// Wie stark Farbunterschiede gegenüber Helligkeit zählen ("Sättigung
+// hochdrehen"): Ein leicht beiger Tisch hebt sich so von weißem Papier ab.
+const COLOR_GAIN = 3;
+// Höchstens so viele feine Stufen je Merkmal (jede kostet ~20 ms).
+const FINE_LEVELS = 4;
+// Um so viel muss ein späteres Merkmal besser bewertet sein, um zu gewinnen.
+const SWITCH_MARGIN = 0.05;
+
+/**
+ * Sucht das Blatt in Pixeldaten (RGBA wie aus getImageData) und liefert
+ * seine vier Ecken in deren Koordinaten. Mehrere Merkmale werden probiert,
+ * jedes liefert ein Viereck, das am besten bewertete gewinnt:
+ *
+ * 1. Helligkeit: größte helle Fläche (Otsu-Schwellwert) — helles Blatt auf
+ *    dunklem Untergrund; mit zweitem, feinerem Schwellwert auch weißes
+ *    Papier auf etwas weniger weißem Tisch.
+ * 2. Farbabstand zur Papierfarbe aus der Bildmitte, Farbe dreifach
+ *    gewichtet, ebenfalls grob und fein — helles Blatt auf leicht farbigem
+ *    Untergrund, auch farbige CMR-Durchschläge.
+ * 3. Sättigung: Papier ist fast farblos, der Untergrund oft nicht.
+ * 4. Kanten: der feine Schatten am Blattrand — weiß auf weiß.
+ *
+ * Bei 2–4 ist das Blatt alles, was der Untergrund vom Bildrand aus nicht
+ * erreicht. So stören Tabellenlinien und Schrift im Formular nicht.
+ */
+export function detectCornersInPixels(data: Uint8ClampedArray, width: number, height: number): Quad {
+  const size = width * height;
+  const rawR = new Uint8ClampedArray(size);
+  const rawG = new Uint8ClampedArray(size);
+  const rawB = new Uint8ClampedArray(size);
+  for (let i = 0, p = 0; i < size; i++, p += 4) {
+    rawR[i] = data[p];
+    rawG[i] = data[p + 1];
+    rawB[i] = data[p + 2];
+  }
+  const r = boxBlur(rawR, width, height, 2);
+  const g = boxBlur(rawG, width, height, 2);
+  const b = boxBlur(rawB, width, height, 2);
+
+  // Helligkeit und zwei Farbachsen (rot–grün, gelb–blau).
+  const gray = new Uint8ClampedArray(size);
+  const red = new Float32Array(size);
+  const yellow = new Float32Array(size);
+  const chroma = new Uint8ClampedArray(size);
+  for (let i = 0; i < size; i++) {
+    gray[i] = 0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i];
+    red[i] = r[i] - g[i];
+    yellow[i] = (r[i] + g[i]) / 2 - b[i];
+    chroma[i] = Math.max(r[i], g[i], b[i]) - Math.min(r[i], g[i], b[i]);
+  }
+
+  const stack = new Int32Array(size);
+
+  // Ein späteres Merkmal muss deutlich besser sein: Die Reihenfolge geht von
+  // genau (Helligkeit) zu robust (Kanten — deren Rand liegt ein paar Pixel
+  // außerhalb, weil eine Kante mehrere Pixel breit ist).
+  const pick: { best: Candidate | null } = { best: null };
+  const consider = (candidate: Candidate | null) => {
+    if (candidate && (!pick.best || candidate.score > pick.best.score + SWITCH_MARGIN)) {
+      pick.best = candidate;
+    }
+  };
+  // Mehr als 1 gibt die Bewertung nicht her: Ab hier kann kein späteres
+  // Merkmal mehr gewinnen, der Rest wird gar nicht erst gerechnet.
+  const settled = () => pick.best !== null && pick.best.score + SWITCH_MARGIN >= 1;
+
+  // Blatt = alles, was vom Bildrand über Untergrund-Pixel nicht erreichbar ist.
+  const enclosedCandidate = (background: Uint8Array) => {
+    const reached = floodFromBorder(background, width, height, stack);
+    const sheet = new Uint8Array(size);
+    for (let i = 0; i < size; i++) sheet[i] = reached[i] === 1 ? 0 : 1;
+    const components = labelComponents(sheet, width, height, stack);
+    const label = pickCenter(components, width, height);
+    return label === 0 ? null : sheetFromComponent(components.labels, label, width, height, stack);
+  };
+
+  // Untergrund = Wert höchstens threshold (heller bzw. ähnlicher ist Blatt).
+  const belowCandidate = (values: Uint8ClampedArray, threshold: number) => {
+    const background = new Uint8Array(size);
+    for (let i = 0; i < size; i++) background[i] = values[i] <= threshold ? 1 : 0;
+    return enclosedCandidate(background);
+  };
+
+  // Feine Schwellwerte: Otsu trennt immer die größte Lücke — zuerst Schrift
+  // von allem Hellen, dann z. B. Schatten vom Rest. Deshalb Stufe für Stufe
+  // nur noch die Werte darüber teilen; auf einer der Stufen liegt die Grenze
+  // zwischen Papier und einem fast gleich hellen Tisch. Stufen, die mitten
+  // durchs Papier schneiden, fallen bei der Bewertung durch.
+  const fineCandidates = (values: Uint8ClampedArray, coarse: number) => {
+    let threshold = coarse;
+    for (let level = 0; level < FINE_LEVELS && !settled(); level++) {
+      const next = otsuThreshold(values, threshold);
+      if (next <= threshold || next >= 254) break;
+      threshold = next;
+      consider(belowCandidate(values, threshold));
+    }
+  };
+
+  // 1. Helligkeit, grob und fein.
+  {
+    const threshold = otsuThreshold(gray);
+    const bright = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bright[i] = gray[i] > threshold ? 1 : 0;
+    const components = labelComponents(bright, width, height, stack);
+    const label = pickLargest(components, size * 0.2);
+    consider(label === 0 ? null : sheetFromComponent(components.labels, label, width, height, stack));
+    fineCandidates(gray, threshold);
+  }
+
+  // 2. Farbabstand zur Papierfarbe
+  if (!settled()) {
+    const paperGray = centerMedian(gray, width, height);
+    const paperR = centerMedian(r, width, height);
+    const paperG = centerMedian(g, width, height);
+    const paperB = centerMedian(b, width, height);
+    const paperRed = paperR - paperG;
+    const paperYellow = (paperR + paperG) / 2 - paperB;
+    const similarity = new Uint8ClampedArray(size);
+    for (let i = 0; i < size; i++) {
+      const distance = Math.hypot(
+        gray[i] - paperGray,
+        COLOR_GAIN * (red[i] - paperRed),
+        COLOR_GAIN * (yellow[i] - paperYellow)
+      );
+      similarity[i] = 255 - Math.min(255, distance);
+    }
+    const threshold = otsuThreshold(similarity);
+    consider(belowCandidate(similarity, threshold));
+    fineCandidates(similarity, threshold);
+  }
+
+  // 3. Sättigung
+  if (!settled()) {
+    const threshold = otsuThreshold(chroma);
+    const background = new Uint8Array(size);
+    for (let i = 0; i < size; i++) background[i] = chroma[i] > threshold ? 1 : 0;
+    consider(enclosedCandidate(background));
+  }
+
+  // 4. Kanten (Sobel über Helligkeit und Farbe)
+  if (!settled()) {
+    const gradient = new Float32Array(size);
+    const histogram = new Array<number>(256).fill(0);
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const i = y * width + x;
+        let sumSq = 0;
+        for (const [channel, weight] of [
+          [gray, 1],
+          [red, COLOR_GAIN / 2],
+          [yellow, COLOR_GAIN / 2],
+        ] as const) {
+          const gx =
+            channel[i - width + 1] + 2 * channel[i + 1] + channel[i + width + 1] -
+            channel[i - width - 1] - 2 * channel[i - 1] - channel[i + width - 1];
+          const gy =
+            channel[i + width - 1] + 2 * channel[i + width] + channel[i + width + 1] -
+            channel[i - width - 1] - 2 * channel[i - width] - channel[i - width + 1];
+          sumSq += (weight * weight * (gx * gx + gy * gy)) / 16;
+        }
+        gradient[i] = Math.sqrt(sumSq);
+        histogram[Math.min(255, Math.round(gradient[i]))]++;
+      }
+    }
+    // Schwelle über dem Bildrauschen: Der Median ist fast nur glatte Fläche.
+    let seen = 0;
+    let median = 0;
+    const inner = (width - 2) * (height - 2);
+    while (median < 255 && (seen += histogram[median]) * 2 < inner) median++;
+    const threshold = Math.max(3, median * 3);
+
+    // Kanten um einen Pixel verbreitern, damit kleine Lücken im Blattrand
+    // den Untergrund nicht ins Blatt laufen lassen.
+    const edge = new Uint8Array(size);
+    for (let i = 0; i < size; i++) if (gradient[i] > threshold) edge[i] = 1;
+    const background = new Uint8Array(size);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let isEdge = false;
+        for (let dy = -1; dy <= 1 && !isEdge; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= height) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx;
+            if (xx >= 0 && xx < width && edge[yy * width + xx] === 1) {
+              isEdge = true;
+              break;
+            }
+          }
+        }
+        background[y * width + x] = isEdge ? 0 : 1;
+      }
+    }
+    consider(enclosedCandidate(background));
+  }
+
+  return pick.best ? pick.best.quad : defaultQuad(width, height);
+}
+
+/**
+ * Sucht das Blatt im Foto und liefert seine vier Ecken in Koordinaten des
+ * übergebenen Canvas. Gerechnet wird auf einer kleinen Kopie
+ * (detectCornersInPixels), die Ecken werden hochgerechnet.
+ */
+export function detectDocumentCorners(source: HTMLCanvasElement): Quad {
+  const small = scaledCopy(source, DETECT_SIDE);
+  const scale = small.width / source.width;
+  const { width, height } = small;
+  const { data } = context2d(small).getImageData(0, 0, width, height);
+  const quad = detectCornersInPixels(data, width, height);
   return quad.map((p) => ({ x: p.x / scale, y: p.y / scale })) as Quad;
 }
 
